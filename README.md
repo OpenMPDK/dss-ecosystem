@@ -15,7 +15,7 @@ To leverage this tool, the following prerequisites apply:
 Obtain a local copy of the repository using the following git command with any directory that is convenient:
 
 ```
-git clone https://github.com/wasabi-tech/s3-benchmark.git
+git clone --recursive git@MSL-DC-GITLAB.SSI.SAMSUNG.COM:ssd/nkv-s3benchmark.git s3-bench
 ```
 
 You should see the following files in the s3-benchmark directory.
@@ -26,16 +26,16 @@ executable s3-benchmark.ubuntu will run the benchmark testing without having to 
 
 Otherwise, to build the s3-benchmark executable, you must issue this following command:
 
-cd /root/s3-benchmark
-export GO111MODULE=off
-export GOPATH=/root/gopath
-export PATH=$PATH:$GOPATH/bin:/root/go/bin
+*	cd /root/s3-benchmark
+*	export GO111MODULE=off
+*	export GOPATH=/root/gopath
+*	export PATH=$PATH:$GOPATH/bin:/root/go/bin
 
-go get -u github.com/aws/aws-sdk-go/aws/...
-go get -u github.com/aws/aws-sdk-go/service/...
-go get -u github.com/pivotal-golang/bytefmt/...
+*	go get -u github.com/aws/aws-sdk-go/aws/...
+*	go get -u github.com/aws/aws-sdk-go/service/...
+*	go get -u github.com/pivotal-golang/bytefmt/...
 
-go build
+*	go build
  
 # Command Line Arguments
 Below are the command line arguments to the program (which can be displayed using -help):
@@ -53,6 +53,10 @@ Below are the command line arguments to the program (which can be displayed usin
         Secret key
   -t int
         Number of threads to run (default 1)
+  -n int
+        Number of IOs per thread
+  -o int
+        Type of io, 0 = put,get,del, 1 = put, 2 = get, 3 = del
   -u string
         URL for host with method prefix (default "http://s3.wasabisys.com")
   -z string
@@ -72,6 +76,28 @@ Loop 1: PUT time 60.1 secs, objects = 5484, speed = 91.3MB/sec, 91.3 operations/
 Loop 1: GET time 60.1 secs, objects = 5483, speed = 91.3MB/sec, 91.3 operations/sec.
 Loop 1: DELETE time 1.9 secs, 2923.4 deletes/sec.
 Benchmark completed.
+
+./s3-benchmark -a minio -b som4 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 10M -n 100 -o 1
+Wasabi benchmark program v2.0
+Parameters: url=http://10.1.51.21:9000, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=1, loops=1, size=10M
+2021/01/05 18:22:52 WARNING: createBucket som4 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
+        status code: 409, request id: 1657835058733E40, host id:
+Loop 1: PUT time 38.9 secs, objects = 10000, speed = 2.5GB/sec, 257.1 operations/sec. Slowdowns = 0
+
+./s3-benchmark -a minio -b som4 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 10M -n 100 -o 2
+Wasabi benchmark program v2.0
+Parameters: url=http://10.1.51.21:9000, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=2, loops=1, size=10M
+2021/01/05 18:23:39 WARNING: createBucket som4 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
+        status code: 409, request id: 1657835B38D61A94, host id:
+Loop 1: GET time 14.9 secs, objects = 10000, speed = 6.6GB/sec, 672.1 operations/sec. Slowdowns = 0
+
+./s3-benchmark -a minio -b som4 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 10M -n 100 -o 3
+Wasabi benchmark program v2.0
+Parameters: url=http://10.1.51.21:9000, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=3, loops=1, size=10M
+2021/01/05 18:24:04 WARNING: createBucket som4 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
+        status code: 409, request id: 16578360FD53602A, host id:
+Loop 1: DELETE time 4.3 secs, 2342.4 deletes/sec. Slowdowns = 0
+
 ```
 
 # Note
