@@ -1,0 +1,19 @@
+{
+ "tess_clients_ip":["10.1.51.238"],
+  "master": {
+    "workers": 2,
+    "set_size": 100
+  },
+  "client": {
+    "workers": 2,
+    "files": 5
+  },
+ "nfs_config":{
+               "10.1.51.54":["/bird","/dog","/cat"]
+              },
+  "s3_storage": {
+    "minio": {"url": "10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"}
+  },
+  "operations": ["PUT","GET","DEL","LIST"],
+  "logging_path": "/var/log"
+}
