@@ -20,14 +20,17 @@ class Worker:
     self.id = kwargs.get("id", None)
     self.task_queue=kwargs.get("task_queue", None)
     self.index_data_queue = kwargs.get("index_data_queue", None)
-    self.logger_queue = kwargs.get("logger_queue", None)  # A multiprocessing queue
-
+    self.logger_queue = kwargs.get("logger_queue", None)  # A multiprocessing logger queue
     self.operation_status_queue = kwargs.get("status_queue", None)  # Used by only client Application
 
     self.status = Value('i', 1)
     self.lock = Lock()
     self.process = None
-    #print(kwargs)
+    #self.index_data_count = kwargs.get("index_data_count", None)
+
+    # Keep track of progress of indexing : Used by Master Application only.
+    self.progress_of_indexing = kwargs.get("progress_of_indexing", {} )
+    self.progress_of_indexing_lock = kwargs.get("progress_of_indexing_lock", None)
 
   def __del__(self):
 
@@ -58,11 +61,13 @@ class Worker:
     self.lock.release()
 
     # Make sure process is stopped
-    while self.process.is_alive() :
-      time.sleep(1)
-    #self.logger_lock.acquire()
+    if self.process.is_alive() :
+      time.sleep(5)
+      try:
+        self.process.terminate()
+      except Exception as e:
+        print("EXCEPTION: Unable to terminate Worker-{} - {}".format(self.id, e))
     self.logger_queue.put("INFO: Worker-{} stopped!".format(self.id))
-    #self.logger_lock.release()
 
 
   def get_status(self):
@@ -94,8 +99,8 @@ class Worker:
 
       if self.task_queue and self.task_queue.qsize():
         try:
-          print("DEBUG: TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(), self.id))
-          self.logger_queue.put("DEBUG: TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(),self.id))
+          #print("DEBUG: TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(), self.id))
+          #self.logger_queue.put("DEBUG: TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(),self.id))
           task = self.task_queue.get()
         except Exception as e:
           print("EXCEPTION:WORKER-{}:{}".format(self.id, e))
@@ -104,16 +109,18 @@ class Worker:
         pass
 
       if task:
-        print("DEBUG: Task-{} is being processed by worker-{}".format(task.id, self.id))
-        self.logger_queue.put("DEBUG: Task-{} is being processed by worker-{}".format(task.id, self.id))
+        #print("DEBUG: Task-{} is being processed by worker-{}".format(task.id, self.id))
+        #self.logger_queue.put("DEBUG: Task-{} is being processed by worker-{}".format(task.id, self.id))
+        # Start Task - May be a PUT,LIST,DEL,GET or indexing operation
         task.start(task_queue=self.task_queue,
                    index_data_queue=self.index_data_queue,
                    status_queue=self.operation_status_queue,
-                   logger_queue=self.logger_queue)  # Start Task - May a PUT,LIST,DEL,GET operation
+                   logger_queue=self.logger_queue,
+                   progress_of_indexing=self.progress_of_indexing,
+                   progress_of_indexing_lock=self.progress_of_indexing_lock
+                   )
 
-        # Worker update the
-      time.sleep(2)  # 1 second delay
-      #logger_queue.put("WWWWWWWW ---->>> INFO: WORKER: sample debug output from worker-{}".format(self.id))
+      time.sleep(1)  # 1 second delay
 
 
 

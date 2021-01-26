@@ -26,11 +26,12 @@ class NFSCluster:
                     else:
                         self.logger_queue.put("DEBUG: Un-mounted local NFS mount {}".format(local_mount))
 
-
-
-
     @exception
     def mount_all(self):
+        """
+        Mount all the NFS shares from each cluster specified in configuration file.
+        :return: None
+        """
         if self.config:
             # perform mounting for each cluster
             for cluster_ip in self.config:
@@ -39,7 +40,6 @@ class NFSCluster:
                 for nfs_share in self.config[cluster_ip]:
                     ret,console = self.mount(cluster_ip, nfs_share)
                     if ret == 0:
-                        #print("INFO:Mounted {}".format(nfs_share))
                         mounted_nfs_shares.append(nfs_share)
                         local_nfs_mount_paths.append(nfs_share)
                     else:
@@ -56,13 +56,21 @@ class NFSCluster:
 
     @exception
     def mount(self,cluster_ip, nfs_share):
+        """
+        Mount a NFS share from a cluster.
+        :param cluster_ip: NFS cluster IP (Required)
+        :param nfs_share: NFS share (Required) ex: /data
+        :return:
+        ret : a integer value. 0 to indicate success.
+        console: STDOUT message
+        """
         # Create local directory
         if not os.path.isdir(nfs_share):
             os.mkdir(nfs_share)
         command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share)
 
         #print("DEBUG: Mount Command - {}".format(command))
-        self.logger_queue.put("DEBUG: Mount Command - {}".format(command))
+        #self.logger_queue.put("DEBUG: Mount Command - {}".format(command))
         ret, console = exec_cmd(command, True, True)
         return ret,console
 
@@ -72,7 +80,6 @@ class NFSCluster:
         Un-mount all the mounted local NFS paths.
         :return:
         """
-        self.logger_queue.put("GOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOal: {}".format(self.local_mounts))
         for cluster_ip in self.local_mounts:
             local_mounts = []
             self.logger_queue.put("{}:{}".format(cluster_ip, self.local_mounts[cluster_ip]))
@@ -82,12 +89,12 @@ class NFSCluster:
                     print("ERROR: Failed to un-mount  {} path ".format(local_mount))
                     self.logger_queue.put("ERROR: Failed to un-mount  {} path ".format(local_mount))
                 else:
-                    print("DEBUG: Un-mounted local NFS mount {}".format(local_mount))
-                    self.logger_queue.put("DEBUG: Un-mounted local NFS mount {}".format(local_mount))
+                    #print("DEBUG: Un-mounted local NFS mount {}".format(local_mount))
+                    #self.logger_queue.put("DEBUG: Un-mounted local NFS mount {}".format(local_mount))
                     local_mounts.append(local_mount)
 
-            print("DEBUG: Un-mounted local NFS mount {}".format(local_mounts))
-            self.logger_queue.put("DEBUG: Un-mounted local NFS mount {}".format(local_mounts))
+            print("INFO: Un-mounted local NFS mount => NFS Cluster-{}:{}".format(cluster_ip, local_mounts))
+            self.logger_queue.put("INFO: Un-mounted local NFS mount => NFS Cluster-{}:{}".format(cluster_ip, local_mounts))
 
         self.mounted = False
 

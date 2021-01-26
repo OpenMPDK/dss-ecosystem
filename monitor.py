@@ -4,7 +4,8 @@ import os,sys
 import time
 import  zmq
 from multiprocessing import Process,Queue,Value, Lock
-
+from datetime import datetime
+import json
 
 """
 Monitor the progress of operation.
@@ -28,6 +29,14 @@ class Monitor:
         self.status_queue = Queue()
         self.status_lock  = Lock()
         self.stop_status_poller = Value('i', 0)
+        self.index_data_count = Value('i', 0)
+
+        self.all_index_data_distributed = Value('i', 0)
+
+        # Monitor termination
+        self.monitor_index_data_sender = Value('i', 0)
+        self.monitor_status_poller = Value('i', 0)
+        self.monitor_progress_status = Value('i', 0)
 
 
     def start(self):
@@ -81,9 +90,15 @@ class Monitor:
     def message_handler_index(self):
         """
         The "message_handler_index" function send index information to all the clients in round-robin fashion.
-        It stop processing when either all index is processed and thus "index_data_generation_complete" is set to 1
-        or forcefully stopped through "stop_status_poller" by setting it to 1.
-        :return:
+        message data = {"dir":"/bird/bird1", "files":[], "nfs_cluster":"10.1.51.54"}
+        Stop Processing:
+          Gracefully shut down monitor
+          - All indexed is processed and thus "index_data_generation_complete" is set to 1
+          - The "index_data_queue" has sent all outstanding messages to client application.
+          Forcefully: If process is terminated
+          - Forcefully stopped through "stop_status_poller" by setting it to 1.
+
+        :return: None
         """
 
         context = zmq.Context()
@@ -91,74 +106,125 @@ class Monitor:
         for client in self.clients:
             client.socket_index = context.socket(zmq.REQ)
             print("INFO:Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
+            self.logger_queue.put("INFO:Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
             client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
 
+        # Buffer to store prefix index and file count  {"prefix":<file count>}
+        prefix_index_data = {}
+
         while True:
-            # Condition to break the loop:
-            # - Check all index data is processed.
-            # - Shutdown of application - forcefully.
 
             # Forcefully stop the process
             self.status_lock.acquire()
             stop = self.stop_status_poller.value
             self.status_lock.release()
-
-            self.index_data_lock.acquire()
-            indexing_completed = self.index_data_generation_complete.value
-            self.index_data_lock.release()
-
-            if stop or indexing_completed == 1 :
+            if stop :
+                self.logger_queue.put("ERROR: Forcefully shutting down Monitor-index!")
                 break
 
             previous_client_operation_status = 1
+            data = {}
             # Send index data to each client in round-robin fashion
             for client in self.clients:
-
-                data = {}
                 # Get data from shared index queue, if the previous client processed data successfully
                 if previous_client_operation_status:
-                    self.index_data_lock.acquire()
+                    data = {}
                     if not self.index_data_queue.empty():
                         data = self.index_data_queue.get()
-                    self.index_data_lock.release()
+                # Send data to ClientApplication running on a  Client-Physical Node
                 if data:
-                    # Send index data
-                    client.socket_index.send_json(data)
-                    print("===>>INFO: Sending index data - {}:{} -> {}".format(client.ip,client.port_index, data))
-
-                    # Use to check that data has been reached to client. Otherwise resend same data.
-                    status = client.socket_index.recv_json()
-                    #print("===>>: INDEX -- Received data - {}".format(status))
-
-                    # status = {"success": 1} or {"success": 0}  for failure, try second time
-                    if status.get("success", False) and status["success"] == 1:
-                        previous_client_operation_status = 1
-                        print("===>>>INFO: INDEX Send/Recv is good")
+                    #print("FFFFFFFFFFFFFFF:client{}:{}".format(client.id, data))
+                    # Buffer prefix_index_data for persistent storage
+                    if data["dir"] in prefix_index_data:
+                        prefix_index_data[data["dir"]] += len(data["files"])
                     else:
-                        # Re-try for sending data once.
-                        client.socket_index.send_json(data)
-                        status = client.socket_index.recv_json()
+                        prefix_index_data[data["dir"]] = len(data["files"])
 
-                        if status["success"] == 0:
-                            previous_client_operation_status = 0
+                    #print("===>>INFO: Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
+                    if self.send_index_data(client.socket_index, data):
+                        self.index_data_count.value += len(data.get("files", []))
+                        previous_client_operation_status = 1
+                    else: # Re-send once again
+                        previous_client_operation_status = 0
+                        if self.send_index_data(client.socket_index, data):
+                            self.index_data_count.value += len(data.get("files", []))
+                            previous_client_operation_status = 1
 
-        self.logger_queue.put("Closing Monitor - MessageHandler -Index")
+            if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
+                self.logger_queue.put("INFO: Indexed data distribution is completed!")
+                self.all_index_data_distributed.value = 1
+                # Inform all the client applications running on different nodes
+                for client in self.clients:
+                    data = {"indexing_done": 1}
+                    if not self.send_index_data(client.socket_index, data):
+                        if not self.send_index_data(client.socket_index, data):
+                            self.logger_queue.put("ERROR: Unable to send indexing completion message to client-{}".format(client.id))
+                    print("INFO: Indexed data distribution is completed, Notifying client application {}:{} -> {}".format(client.ip, client.port_index, data))
+                break
+
         # Closing all socket connection
-        for client in self.clients:
-            client.socket_index.close()
+        try:
+            for client in self.clients:
+                client.socket_index.close()
+        except Exception as e:
+            self.logger_queue.put("EXCEPTION:{}: monitor-index, {}".format(e))
+
+        # Update MasterApplication about termination of Monitor
+        self.monitor_index_data_sender.value = 1
+
+        # Storing prefix index data to persistent storage
+        prefix_storage_file = "/var/log/prefix_index_data.json"
+        print("INFO: Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
+        with open(prefix_storage_file, "w") as persistent_storage:
+            json.dump(prefix_index_data, persistent_storage)
+
+        print("INFO: Monitor-Index-Distribution is terminated")
+        self.logger_queue.put("INFO: Monitor-Index-Distribution is terminated! ")
+
+
+
+    def send_index_data(self, socket, data):
+        """
+        Send index data for a socket client. On failure, resend once.
+        :param socket: client socket
+        :param data: index data
+        :return: success/failure 1/0
+        """
+        status = {}
+        try:
+            socket.send_json(data) # Send index data
+            # Wait (3sec) for ClientApplication's response on operation. Otherwise re-send index data.
+            received_response = socket.poll(timeout=2000)  # Wait 3 secs
+            if received_response:
+                status = socket.recv_json()
+                #print("DEBUG: Monitor-INDEX -- ClientApp response - {}".format(status))
+            else:
+                print("WARNING: Monitor-Index -- RSP not received from ClientApp - {}".format(status))
+        except Exception as e:
+            self.logger_queue.put("EXCEPTION: Monitor-Index -{}".format(e))
+            print("EXCEPTION: Monitor-Index -{}".format(e))
+
+        # status = {"success": 1} or {"success": 0}  for failure, try second time
+        if status.get("success", False) and status["success"] == 1:
+            return 1
+
+        return 0
+
 
     def message_handler_poller(self):
         """
+        Monitor: Status Poller
         Collect the status from all the clients and add status to status_queue
         :return:
         """
-        print("INFO: Poller Started ....")
+        #print("INFO: Poller Started ....")
         context = zmq.Context()
 
         for client in self.clients:
             # print("Client IP: {}, PORT Index-{}, PORT Status-{}".format(client.ip, client.port_index, client.port_status))
             client.socket_status = context.socket(zmq.PULL)
-            print("Connecting to STATUS MessageHandler tcp://{}:{}".format(client.ip, client.port_status))
+            print("INFO: Monitor-Poller, Connecting to client-app tcp://{}:{}".format(client.ip, client.port_status))
+            self.logger_queue.put("DEBUG: Monitor-Poller Connecting to client-app STATUS MsgHandler tcp://{}:{}".format(client.ip, client.port_status))
             client.socket_status.connect("tcp://{}:{}".format(client.ip, client.port_status))
 
         while True:
@@ -166,8 +232,6 @@ class Monitor:
             ## Condition to break the loop:
             # - Received a status from all clients that all the status have been processed.
             # - Received a signal from master to shutdown
-
-            # Forcefully stop the process
             self.status_lock.acquire()
             stop = self.stop_status_poller.value
             self.status_lock.release()
@@ -179,27 +243,43 @@ class Monitor:
             # Send index data to each client in round-robin fashion
             for client in self.clients:
                 # Use to check that data has been reached to client. Otherwise resend same data.
-                print("++++++++++++>>INFO: POLLER - Waiting to receive data from client-{}".format(client.id))
-                status = client.socket_status.recv_json()
-                print("+++++++++>>MSG Handler: Status - {}".format(status))
-                self.status_lock.acquire()
-                self.status_queue.put(status)
-                self.status_lock.release()
-        self.logger_queue.put("Closing Monitor - MessageHandler -Status")
+                #print("++++++++++++>>INFO: POLLER - Waiting to receive data from client-{}".format(client.id))
+                try:
+                    received_response = client.socket_status.poll(timeout=1000)  # Wait 1 secs
+                    if received_response:
+                        status = client.socket_status.recv_json()
+                        #print("++++DEBUG: Monitor-Poller Operation Status client-{}, Status - {}".format(client.id, status))
+                        self.logger_queue.put("DEBUG: Monitor-Poller Operation Status for client-{}, Status - {}".format(client.id, status))
+                        self.status_queue.put(status)
+                except Exception as e:
+                    print("EXCEPTION: Monitor-Status-Poller {} ".format(e))
 
         # Closing all socket connection
-        for client in self.clients:
-            client.socket_status.close()
+        try:
+            for client in self.clients:
+                client.socket_status.close()
+        except Exception as e:
+            self.logger_queue.put("EXCEPTION:{}: minitor-poller, {}".format(e))
+
+        self.status_lock.acquire()
+        self.monitor_status_poller.value = 1
+        self.status_lock.release()
+        print("INFO: Monitor-Status-Poller terminated gracefully! ")
+        self.logger_queue.put("INFO: Monitor-Status-Poller terminated gracefully! ")
 
 
 
     def operation_progress(self):
         """
+        Monitor: Operation Progress
         Process the status result and update the progress.
         #TODO
         :return:
         """
-
+        file_index_count = 0
+        operation_success_count = 0
+        operation_failure_count = 0
+        display_percentage = 10
         while True:
             # Condition to break the loop:
             # If status poller has stopped  and status_queue is empty
@@ -207,23 +287,48 @@ class Monitor:
             # Forcefully stop the process
             self.status_lock.acquire()
             status = self.stop_status_poller.value
-            is_status_queue_empty =  self.status_queue.empty()
             self.status_lock.release()
-            if status == 1 and is_status_queue_empty:
+
+            if status == 1 and self.status_queue.empty():
                 break
 
 
-            if not is_status_queue_empty:
+            if not self.status_queue.empty():
                 status = self.status_queue.get()
-                print("*****>>Operation Status: {}".format(status))
+                operation_success_count += status.get("success", 0)
+                operation_failure_count += status.get("failure", 0)
 
-                # Process status means display
-                # - Check total file index
-                # - Add status count
-                # - Make a difference and return result.
+                # Progress calculation, the value of index_data_count increases as indexing at progresses.
+                # The file_index_count increases as response received from client application.
+                #print("*****DEBUG: Monitor-Progress operation progress status - Total Files-{}, Success-{}, Failure-{}".format(self.index_data_count.value, operation_success_count, operation_failure_count))
+                file_index_count = operation_success_count + operation_failure_count
+                #upload_parcentage = (file_index_count / self.index_data_count.value) * 100
+                #print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
+                #self.logger_queue.put("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
+
+            if self.all_index_data_distributed.value:
+                upload_percentage = (file_index_count / self.index_data_count.value) * 100
+                if upload_percentage > display_percentage:
+                    print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
+                    self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
+                    display_percentage +=10
+
+            ## All index data distributed to clients and received all operation status back from clients.
+            if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
+                self.status_lock.acquire()
+                self.stop_status_poller.value = 1   # This will stop Monitor-Poller
+                self.status_lock.release()
 
 
+        self.monitor_progress_status.value = 1
 
-
-if __name__ == "__main__":
-    monitor = Monitor()
+        print("***** Operation Statistics *****")
+        if operation_success_count:
+            success_percentage = (operation_success_count / self.index_data_count.value) * 100
+            print("Total Operation: {},  Operation Success:{} - {}%".format(self.index_data_count.value, operation_success_count, success_percentage))
+        if operation_failure_count:
+            failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
+            print("Total Operation:{}, Operation Failure:{} - {}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
+        now = datetime.now()
+        print("INFO: Monitor-Progress-Status terminated! at {}".format(now.strftime("%H:%M:%S")))
+        self.logger_queue.put("INFO: Monitor-Progress-Status terminated! ")
