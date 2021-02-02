@@ -134,10 +134,8 @@ class Monitor:
                     data = {}
                     if not self.index_data_queue.empty():
                         data = self.index_data_queue.get()
-                #print("YYYYYYYYYYYYY: New_list Data: Client-{}, MSG-{}".format(client.id, data))
                 # Send data to ClientApplication running on a  Client-Physical Node
                 if data:
-                    #print("FFFFFFFFFFFFFFF:client{}:{}".format(client.id, data))
                     # Buffer prefix_index_data for persistent storage only to be used during PUT
                     if self.operation.upper() == "PUT":
                         object_prefix_key = data["dir"][1:] + "/"
@@ -165,7 +163,10 @@ class Monitor:
                     if not self.send_index_data(client.socket_index, data):
                         if not self.send_index_data(client.socket_index, data):
                             self.logger_queue.put("ERROR: Unable to send indexing completion message to client-{}".format(client.id))
-                    print("INFO: Indexed data distribution is completed, Notifying client application {}:{} -> {}".format(client.ip, client.port_index, data))
+                    print("INFO: Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
+
+                now = datetime.now()
+                print("INFO: {} INDEXING Completed in {} seconds".format(self.operation,(now - self.operation_start_time).seconds))
                 break
 
         # Closing all socket connection
