@@ -98,6 +98,34 @@ Supported operations are PUT/DEL/GET
   ```
   If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
   
-  
+ # NFS Cluster Setup
+ ##Server Setup:
+ ```
+Installation 
+	“yum –y install nfs-utils libnfsidmap”
+o	Start the services:
+	“systemctl enable rpcbind”
+	“systemctl enable nfs-server”
+	“systemctl start rpcbind”
+	“systemctl start nfs-server”
+o	The NFS server require to provide access of NFS shares to the client nodes.
+	“/etc/exports” file has to be updated as below.
+<NFS Shared Directory> <Client IP>(opt1,opt2…)
+	Restart export “exportfs –r”
+	Show shared mount paths “exportfs -v”
+	Client Setup:
+o	Installation:
+	“yum –y install nfs-utils libnfsidmap”
+o	Start the service
+    systemctl enable rpcbind
+	systemctl start rpcbind
+o	All client node should mount them before accessing shared directory.
+	Create local directory to be mapped to remote directory.(optional)
+    sudo mkdir /nfs-shared1”
+	Mount the remote shared paths as below.
+    mount <nfs node ip address>:/<nfs Shared Directoyr>  /nfs-shaed1”
+	Show the remote mounts “df –kh”
+```
+ 
   
 
