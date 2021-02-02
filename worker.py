@@ -7,7 +7,7 @@ import argparse
 import platform
 from multiprocessing import Process,Queue,Value, Lock
 import time
-from task import Task, upload,get,delete
+from task import Task
 
 """
 TODO:
@@ -31,6 +31,10 @@ class Worker:
     # Keep track of progress of indexing : Used by Master Application only.
     self.progress_of_indexing = kwargs.get("progress_of_indexing", {} )
     self.progress_of_indexing_lock = kwargs.get("progress_of_indexing_lock", None)
+
+    # Listing variables
+    self.listing_progress= kwargs.get("listing_progress", None)
+    self.listing_progress_lock = kwargs.get("listing_progress_lock", None)
 
   def __del__(self):
 
@@ -117,7 +121,9 @@ class Worker:
                    status_queue=self.operation_status_queue,
                    logger_queue=self.logger_queue,
                    progress_of_indexing=self.progress_of_indexing,
-                   progress_of_indexing_lock=self.progress_of_indexing_lock
+                   progress_of_indexing_lock=self.progress_of_indexing_lock,
+                   listing_progress = self.listing_progress,
+                   listing_progress_lock = self.listing_progress_lock
                    )
 
       time.sleep(1)  # 1 second delay

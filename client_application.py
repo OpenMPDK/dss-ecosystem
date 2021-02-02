@@ -6,7 +6,7 @@ from utils.utility import exception
 from logger import MultiprocessingLogger
 from multiprocessing import Process,Queue,Value, Lock, Manager
 from worker import Worker
-from task import Task,upload
+from task import Task
 from nfs_cluster import NFSCluster
 import time
 import zmq
@@ -26,6 +26,7 @@ class ClientApplication:
         self.client_config = config.get("client",{})
         self.s3_config = config.get("s3_storage",{})
         self.host_name = socket.gethostname()
+        self.operation = config["operation"]
 
         # Message communication
         self.operation_data_queue = Queue()  # Hold file index data
@@ -35,11 +36,13 @@ class ClientApplication:
         self.index_data_receive_completed = Value('i', 0)
         self.index_data_receive_completed_lock = Lock()
         self.operation_status_send_completed = Value('i', 0)
+
         #self.operation_status_send_completed_lock = Lock()
         # Task
         self.task_queue = mgr.Queue()
         self.task_lock = Lock()
         self.task_id = 0
+        self.create_task_completed = Value('i', 0)
 
         # Workers
         self.workers = []
@@ -229,45 +232,63 @@ class ClientApplication:
         while True:
 
             # Check messaging flag  and break the  , generally multiprocessing Queue and value is thread/process safe.
-            #self.message_lock.acquire()
             stop_messaging = self.stop_messaging.value
             #self.message_lock.release()
             if stop_messaging == 0:
                 break
 
             # Index Msg: {"dir":<>, "files":["f1","f2"]}
-            self.logger_queue.put("DEBUG: Client-{}, Waiting to receive INDEX the message - ".format(self.id))
+            self.logger_queue.put("DEBUG: Client-{}, Waiting to receive INDEX the message".format(self.id))
             message = {}
             ####
             try:
                 received_response = socket.poll(timeout=1000)  # Wait 1 secs
                 if received_response:
                     message = socket.recv_json()
-                    self.logger_queue.put("DEBUG: Received index message - {}".format(message))
+                    #self.logger_queue.put("DEBUG: Received index message - {}".format(message))
                     # Check the end message arrived, exit loop
                     if "indexing_done" in message and message["indexing_done"]:
                         self.logger_queue.put("INFO: Receiving Index-data completed. Closing Monitor-Index-Receiver! ")
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
-
-                    ## Message validation, NFS Mounting if not already mounted on client node
-                    if "nfs_cluster" in message and "dir" in message:
-                        if self.nfs_mount(message["nfs_cluster"], message["dir"]):
-                            self.operation_data_queue.put(message) ## Add index to operation_data_queue
-                            socket.send_json({"success": 1})  # Send response back to MasterApp
-                            ## TODO
-                            ## Create a Shared dictionary to check progress of upload/list/del operation
-                            if message["dir"] in index_buffer:
-                                index_buffer[message["dir"]] += len(message["files"])
+                    self.logger_queue.put("DEBUG: Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message))
+                    is_index_data_added = False #
+                    # Add indexing data to the "operation_data_queue".
+                    if self.operation.upper() == "PUT":
+                        ## Message validation, NFS Mounting if not already mounted on client node
+                        if "nfs_cluster" in message and "dir" in message:
+                            if self.nfs_mount(message["nfs_cluster"], message["dir"]):
+                                self.operation_data_queue.put(message) ## Add index to operation_data_queue
+                                socket.send_json({"success": 1})  # Send response back to MasterApp
+                                ## TODO
+                                ## Create a Shared dictionary to check progress of upload/list/del operation
+                                #if message["dir"] in index_buffer:
+                                #    index_buffer[message["dir"]] += len(message["files"])
+                                #else:
+                                #    index_buffer[message["dir"]] = len(message["files"])
+                                is_index_data_added = True
                             else:
-                                index_buffer[message["dir"]] = len(message["files"])
+                                self.logger_queue.put("ERROR: Issue with mounting! ")
+                                socket.send_json({"success": 0, "ERROR": "Client-{} , Failed NFS -{} mounting".format(self.id,  message["dir"])}) ## Send the success/failure status to master
                         else:
-                            self.logger_queue.put("ERROR: Issue with mounting! ")
-                            socket.send_json({"success": 0, "ERROR": "Client-{} , Failed NFS -{} mounting".format(self.id,  message["dir"])}) ## Send the success/failure status to master
-                    else:
-                        self.logger_queue.put("ERROR: Bad formed message -{}".format(message))
-                        socket.send_json({"success": 0, "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id,  message)})
+                            self.logger_queue.put("ERROR: Bad formed message -{}".format(message))
+                            socket.send_json({"success": 0, "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id,  message)})
+
+                    elif self.operation.upper() == "DEL":
+                        self.logger_queue.put("Client for DELETE operation:{}".format(message))
+                        self.operation_data_queue.put(message)  ## Add index to operation_data_queue
+                        socket.send_json({"success": 1})  # Send response back to MasterApp
+                        is_index_data_added = True
+
+
+                    if is_index_data_added:
+                        ## Create a Shared dictionary to check progress of PUT/DEL/GET operation
+                        if message["dir"] in index_buffer:
+                            index_buffer[message["dir"]] += len(message["files"])
+                        else:
+                            index_buffer[message["dir"]] = len(message["files"])
+
 
             except Exception as e:
                 self.logger_queue.put("EXCEPTION: Monitor-Index - {}".format(e))
@@ -275,8 +296,7 @@ class ClientApplication:
             time.sleep(1)
 
         socket.close()
-        #print("Closing index socket ...")
-        self.logger_queue.put("TTTTTTTTTTTTTTTTTTTTTT Indexing :{} ".format(index_buffer))
+        #self.logger_queue.put("TTTTTTTTTTTTTTTTTTTTTT Indexing :{} ".format(index_buffer))
         self.logger_queue.put("INFO: Monitor-Index-Receiver terminated gracefully !")
 
     def message_server_status(self):
@@ -300,7 +320,7 @@ class ClientApplication:
                     status_message = self.operation_status_queue.get()  ## {"success": <>, "failure":<>}
                 # Send response after adding data to operation data_queue as success
                 if status_message:
-                    self.logger_queue.put("PUSH: Sending message - {}".format(status_message))
+                    self.logger_queue.put("DEBUG: PUSH - Sending message - {}".format(status_message))
                     socket.send_json(status_message)
                     # Decrement index_buffer as those files have been processed.
                     if status_message["dir"] in index_buffer:
@@ -308,6 +328,7 @@ class ClientApplication:
 
                 # TODO - Optimization required.
                 if self.index_data_receive_completed.value:
+                    #self.logger_queue.put("YYYYYYYY -INDEX BUFFER:{}".format(index_buffer))
                     for dir_prefix, processed_file_count in index_buffer.items():
                         if processed_file_count == 0:
                             del index_buffer[dir_prefix]
@@ -332,7 +353,7 @@ class ClientApplication:
 
         socket.close()
         self.logger_queue.put("INFO: Monitor-StatusHandler is terminated gracefully !")
-        self.logger_queue.put("XXXXXXXXXXXXXXX- index_buffer {}".format(index_buffer))
+        #self.logger_queue.put("XXXXXXXXXXXXXXX- index_buffer {}".format(index_buffer))
 
     @exception
     def nfs_mount(self, nfs_cluster_ip=None, path=None):
@@ -425,7 +446,7 @@ class ClientApplication:
             # Received index data {"dir": "/dir1/dir11", "files":["f1","f2"]}
             if index_data and "dir" in index_data and "files" in index_data:
                 #index_data = index_data["index"]  # remove this
-                self.logger_queue.put("====>TASK started index data - {}".format(index_data))
+                self.logger_queue.put("====>TASK started index data - {}:{}".format(index_data,self.operation))
                 print("CreateTask:{}".format(index_data))
 
                 index =0
@@ -433,7 +454,7 @@ class ClientApplication:
                     try:
                         #task = Task(self.task_id, put, index_data[index:index+2], self.logger_queue)
                         task_data = {"dir": index_data["dir"], "files": index_data["files"][index:index + self.client_config.get("max_index_size", 2)]}
-                        task = Task(operation="upload",
+                        task = Task(operation=self.operation,
                                     data=task_data,
                                     s3config=self.s3_config)
                         self.task_queue.put(task)  # Enqueue task to TaskQ
@@ -449,9 +470,10 @@ class ClientApplication:
             ## index_data receive is completed and  operation_data_queue is empty.
             if self.index_data_receive_completed.value and self.operation_data_queue.empty():
                 self.logger_queue.put("INFO: Tasks have been created for all received index_data from master.")
+                self.create_task_completed.value = 1
                 break
 
-        self.logger_queue.put("INFO: Create Task Monitor is terminated!")
+        self.logger_queue.put("INFO: Create Task Monitor is terminated gracefully!")
 
 
 
@@ -486,14 +508,10 @@ if __name__ == "__main__":
     print(config)
 
     ca = ClientApplication(params.get("id", 1), config)
-
-
-    ca.logger_queue.put("INFO: Created client application ...")
-    print("INFO: Created client application ... ")
+    ca.logger_queue.put("CONFIG:{}".format(config))
+    ca.logger_queue.put("INFO: Starting client application ...")
+    #print("INFO: Created client application ... ")
     ca.start()
-    #time.sleep(30)
-    #ca.stop()
-
 
     while True:
         if ca.index_data_receive_completed.value and ca.operation_status_send_completed.value:
@@ -511,7 +529,7 @@ if __name__ == "__main__":
             ca.logger_queue.put("INFO: Terminated all message handler !")
 
             # Stop create process, if not stopped yet
-            if ca.process_task.is_alive():
+            if ca.create_task_completed.value == 0 and ca.process_task.is_alive():
                 time.sleep(1)
                 try:
                     ca.process_task.terminate()

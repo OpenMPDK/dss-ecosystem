@@ -100,8 +100,9 @@ def commandLineArgumentParser():
 
 def ClientApplicationArgumentParser():
     parser = argparse.ArgumentParser(description='TESS Copy a NFS data mover tool!')
-    parser.add_argument("--client_id", "-id", type=int, default=1, required=False,
+    parser.add_argument("--client_id", "-id", type=int, default=1, required=True,
                             help='Specify client node IP address ')
+    parser.add_argument("--operation", "-op", type=str, required=True, help='Specify operation such as PUT,LIST,DEL,GET')
     parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
     options = vars(parser.parse_args())

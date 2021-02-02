@@ -56,7 +56,7 @@ class MultiprocessingLogger:
 
         ## DEBUG - Remove letter
         self.logger_lock.acquire()
-        self.queue.put("INFO:LOGGER: Stopping logging!")
+        self.queue.put("INFO: LOGGER Stopping logging!")
         self.logger_lock.release()
 
         self.stop_lock.acquire()
@@ -71,7 +71,7 @@ class MultiprocessingLogger:
                 except Exception as e:
                     print("EXCEPTION: LOGGER - {}".format(e))
 
-        print("LOGGER: Stopped !!!")
+        print("INFO: LOGGER Stopped !!!")
 
     def status(self):
         self.stop_lock.acquire()

@@ -2,14 +2,17 @@
  "tess_clients_ip":["10.1.51.91", "10.1.51.132", "10.1.51.107"],
   "master": {
     "workers": 10,
-    "max_index_size": 100
+    "max_index_size": 100,
+    "size": "1GB"
   },
   "client": {
-    "workers": 50,
-    "max_index_size": 50
+    "workers": 5,
+    "max_index_size": 50,
+    "user_id": "root",
+    "password": "msl-ssg"
   },
  "nfs_config":{
-               "10.1.51.54":["/dog"]
+               "10.1.51.54":["/bird"]
               },
   "s3_storage": {
     "minio": {"url": "10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},

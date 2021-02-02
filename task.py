@@ -3,6 +3,7 @@ import os,sys
 from utils.utility import exception
 from multiprocessing import Value,Manager
 from minio_client import MinioClient
+import json
 
 task_id = Value('i', 1)
 
@@ -15,7 +16,7 @@ ds = mgr.dict()
 Need to be updated 
 """
 @exception
-def upload(params, status_queue , logger_queue):
+def put(params, status_queue , logger_queue):
     index_data = params.get("data",{})
     s3config   = params["s3config"]
     minio_config = s3config.get("minio",{})
@@ -50,15 +51,149 @@ def upload(params, status_queue , logger_queue):
     status_queue.put(status_message)
 
 @exception
-def list(index, logger_queue):
-    for i in index:
-        logger_queue.put("List files for object keys - {}".format(i))
+def list(params, task_queue,index_data_queue, logger_queue, listing_progress, listing_progress_lock):
+    max_index_size = params["max_index_size"]
+
+    prefix_index_data_file = "/var/log/prefix_index_data.json"
+    with open(prefix_index_data_file, "r") as prefix_index_data_handler:
+        prefix_index_data = json.load(prefix_index_data_handler)
+    #print(prefix_index_data)
+    prefix = None
+    if params.get("data", {}) and params["data"].get("prefix", None):
+        prefix = (params["data"]["prefix"]).strip()
+
+    # That mean lowest level of directory.
+    s3config = params["s3config"]
+    minio_config = s3config.get("minio", {})
+    minio_url = minio_config["url"]
+    minio_access_key = minio_config["access_key"]
+    minio_secret_key = minio_config["secret_key"]
+    minio_bucket = s3config.get("bucket", "bucket")
+
+    mc = MinioClient(minio_url, minio_access_key, minio_secret_key)
+
+    #if prefix not in listing_progress:
+    #    listing_progress[prefix] = 0
+
+    if prefix in prefix_index_data:
+        #print("*****Prefix:{}".format(prefix))
+        object_keys_iterator = mc.list(minio_bucket, prefix)
+        if object_keys_iterator:
+            lowest_level_directory= True
+            for result in list_object_keys(object_keys_iterator, prefix_index_data,max_index_size):
+                if "object_keys" in result:
+                    index_data_message ={"dir": prefix, "files": result["object_keys"]}
+                    #print("=====>>> TASK-INFO: Index Data Message - {}".format(index_data_message))
+                    index_data_queue.put(index_data_message)
+                else:
+                    task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
+                    task_queue.put(task)
+                    # Keep track of progress of listing
+                    lowest_level_directory = False
+                    if prefix in listing_progress:
+                        listing_progress[prefix] +=1
+                    else:
+                        listing_progress[prefix] = 1
+            if lowest_level_directory:
+                listing_progress[prefix] = 0
+                check_listing_progress(listing_progress,listing_progress_lock,prefix, logger_queue)
+        else:
+            logger_queue.put("ERROR: No object keys belongs to the prefix-{}".format(prefix))
+    else:
+        object_keys = mc.list(minio_bucket, prefix)
+        if object_keys:
+            for obj_key in object_keys:
+                if prefix in listing_progress:
+                    listing_progress[prefix] += 1
+                else:
+                    listing_progress[prefix] = 1
+                task = Task(operation="list", data={"prefix":obj_key.object_name}, s3config=params["s3config"], max_index_size=max_index_size)
+                task_queue.put(task)
+        else:
+            logger_queue.put("ERROR: No object keys belongs to the prefix-{}".format(prefix))
+            print("ERROR: No object keys belongs to the prefix-{}".format(prefix))
+
+
+
+def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size):
+
+    object_keys = []
+    for obj_key in object_keys_iterator:
+        # To handle a scenario in which directory has both file and directory
+        if obj_key.object_name in prefix_index_data:
+            yield {"prefix": obj_key.object_name}
+        else:
+            if len(object_keys) == max_index_size:
+                #print("++++++=============>ObjectKey-:{}".format(object_keys))
+                yield {"object_keys": object_keys}
+                object_keys = [obj_key.object_name]
+            else:
+                object_keys.append(obj_key.object_name)
+    if object_keys:
+        yield {"object_keys": object_keys}
+
+
+def check_listing_progress(listing_progress,listing_progress_lock, prefix, logger_queue):
+    if prefix in listing_progress:
+        try:
+            listing_progress_lock.acquire()
+            if listing_progress[prefix] > 0:
+                listing_progress[prefix] -= 1
+            listing_progress_lock.release()
+            if listing_progress[prefix] == 0 and len(prefix.split("/")) > 2:
+                # Check parent node with parent_hash_key
+                parent_prefix = "/".join(prefix.split("/")[:-2]) + "/"
+                # Remove non-top directory
+                #print("TTTTTTTTTTTTTTTT:{}=>{}".format(prefix, listing_progress[prefix]))
+                listing_progress_lock.acquire()
+                if parent_prefix in listing_progress:
+                    del listing_progress[prefix]
+                listing_progress_lock.release()
+
+                if parent_prefix in listing_progress:
+                    #print("KKKKKKKKKKK:{}=>{}".format(parent_prefix, listing_progress[parent_prefix]))
+                    check_listing_progress(listing_progress,listing_progress_lock, parent_prefix, logger_queue)
+
+        except Exception as e:
+            logger_queue.put("EXCEPTION:{}: {} =={}".format(__file__, e, listing_progress))
+            print("EXCEPTION:{}: {} =={} ".format(__file__, e, listing_progress))
+
 @exception
 def get():
     print("Download functionality ")
 @exception
-def delete():
-    print("Remove files")
+def delete(params, status_queue , logger_queue):
+    #print("Remove files")
+    #logger_queue.put("+++++++++++++++++++++++++++ Finally DELETE {}".format(params))
+    object_keys = params.get("data", {})
+    s3config = params["s3config"]
+    minio_config = s3config.get("minio", {})
+    minio_url = minio_config["url"]
+    minio_access_key = minio_config["access_key"]
+    minio_secret_key = minio_config["secret_key"]
+    minio_bucket = s3config.get("bucket", "bucket")
+
+    success = 0
+    mc = MinioClient(minio_url, minio_access_key, minio_secret_key)
+    removed_objects = []
+    object_keys = params["data"]
+    if mc.client:
+        for object_key in object_keys["files"]:
+            #logger_queue.put("TASK: Going to removed object key {}".format(object_key))
+            if mc.delete(minio_bucket, object_key):
+                #logger_queue.put("TASK: Removed object key {}".format(object_key))
+                removed_objects.append(object_key)
+                success += 1
+    else:
+        logger_queue.put("ERROR: Unable to connect to Minio for upload with {}".format(minio_config))
+
+    #logger_queue.put("DEBUG: DELETED object keys-{}".format(removed_objects ))
+    # Update following section for upload status.
+    status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
+    logger_queue.put("DEBUG: Task DELETE Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
+    status_queue.put(status_message)
+
+
 
 
 class Task:
@@ -69,19 +204,24 @@ class Task:
     kwargs.pop("operation")
     self.params = kwargs
     #self.data = kwargs["data"]
+    #print("Params:{}".format(self.params))
 
   def start(self, **queue):
     self.logger_queue = queue["logger_queue"]
     self.task_queue   = queue["task_queue"]
     self.index_data_queue = queue["index_data_queue"]
 
-    #self.logger_queue.put("====>>INFO: TASK: Started task ...!")
+    #self.logger_queue.put("====>>INFO: TASK: Started task for operation-{}".format(self.operation))
     #print("====>>INFO: TASK: Started task ...! {}".format(self.params))
     try:
       self.params["logger_queue"] = self.logger_queue
-      if self.operation == "upload":
-        upload(self.params, queue["status_queue"], self.logger_queue)
-      elif self.operation == "indexing":
+      if self.operation.lower() == "put":
+        put(self.params, queue["status_queue"], self.logger_queue)
+      elif self.operation.lower() == "list":
+        list(self.params, queue["task_queue"], queue["index_data_queue"] , self.logger_queue,queue["listing_progress"], queue["listing_progress_lock"])
+      elif self.operation.lower() == "del":
+        delete(self.params, queue["status_queue"], self.logger_queue)
+      elif self.operation.lower() == "indexing":
         indexing(data=self.params["data"],
                  nfs_cluster=self.params["nfs_cluster"],
 				 task_queue=queue["task_queue"],
@@ -163,7 +303,7 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
         A               A=2
         |-B           B=0 C=0
         |-C
-        The numeric value beside, dir name shows number of children of A. B, C are two leaf directories and
+        The numeric value beside the dir name shows number of children of A. B, C are two leaf directories and
         contains only files. Hence, their value is set to 0.
         preogress_of_indexing = {"/A":2,"/B":0,"/C":0}
         As B,C finishes indexing through iterator, it decrement values of its parent. The parent is found from hash key.

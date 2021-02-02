@@ -17,12 +17,12 @@ Monitor the progress of operation.
 
 class Monitor:
 
-    def  __init__(self, clients, index_data_queue, index_data_lock, index_data_generation_complete, logger_queue, logger_lock):
+    def  __init__(self, clients, index_data_queue, index_data_lock, index_data_generation_complete, logger_queue, logger_lock, operation):
         self.clients = clients
         self.index_data_queue=index_data_queue
         self.index_data_lock = index_data_lock
         self.index_data_generation_complete = index_data_generation_complete
-
+        self.operation = operation
         self.logger_queue = logger_queue
         self.logger_lock  = logger_lock
 
@@ -37,6 +37,9 @@ class Monitor:
         self.monitor_index_data_sender = Value('i', 0)
         self.monitor_status_poller = Value('i', 0)
         self.monitor_progress_status = Value('i', 0)
+
+        self.operation_start_time = datetime.now()
+
 
 
     def start(self):
@@ -105,8 +108,8 @@ class Monitor:
 
         for client in self.clients:
             client.socket_index = context.socket(zmq.REQ)
-            print("INFO:Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
-            self.logger_queue.put("INFO:Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
+            print("INFO: Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
+            self.logger_queue.put("INFO: Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
             client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
 
         # Buffer to store prefix index and file count  {"prefix":<file count>}
@@ -131,14 +134,17 @@ class Monitor:
                     data = {}
                     if not self.index_data_queue.empty():
                         data = self.index_data_queue.get()
+                #print("YYYYYYYYYYYYY: New_list Data: Client-{}, MSG-{}".format(client.id, data))
                 # Send data to ClientApplication running on a  Client-Physical Node
                 if data:
                     #print("FFFFFFFFFFFFFFF:client{}:{}".format(client.id, data))
-                    # Buffer prefix_index_data for persistent storage
-                    if data["dir"] in prefix_index_data:
-                        prefix_index_data[data["dir"]] += len(data["files"])
-                    else:
-                        prefix_index_data[data["dir"]] = len(data["files"])
+                    # Buffer prefix_index_data for persistent storage only to be used during PUT
+                    if self.operation.upper() == "PUT":
+                        object_prefix_key = data["dir"][1:] + "/"
+                        if data["dir"] in prefix_index_data:
+                            prefix_index_data[object_prefix_key] += len(data["files"])
+                        else:
+                            prefix_index_data[object_prefix_key] = len(data["files"])
 
                     #print("===>>INFO: Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
                     if self.send_index_data(client.socket_index, data):
@@ -173,13 +179,14 @@ class Monitor:
         self.monitor_index_data_sender.value = 1
 
         # Storing prefix index data to persistent storage
-        prefix_storage_file = "/var/log/prefix_index_data.json"
-        print("INFO: Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
-        with open(prefix_storage_file, "w") as persistent_storage:
-            json.dump(prefix_index_data, persistent_storage)
+        if self.operation.upper() == "PUT":
+            prefix_storage_file = "/var/log/prefix_index_data.json"
+            print("INFO: Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
+            with open(prefix_storage_file, "w") as persistent_storage:
+                json.dump(prefix_index_data, persistent_storage)
 
-        print("INFO: Monitor-Index-Distribution is terminated")
-        self.logger_queue.put("INFO: Monitor-Index-Distribution is terminated! ")
+        print("INFO: Monitor-Index-Distribution is terminated gracefully!")
+        self.logger_queue.put("INFO: Monitor-Index-Distribution is terminated gracefully! ")
 
 
 
@@ -197,7 +204,6 @@ class Monitor:
             received_response = socket.poll(timeout=2000)  # Wait 3 secs
             if received_response:
                 status = socket.recv_json()
-                #print("DEBUG: Monitor-INDEX -- ClientApp response - {}".format(status))
             else:
                 print("WARNING: Monitor-Index -- RSP not received from ClientApp - {}".format(status))
         except Exception as e:
@@ -208,6 +214,7 @@ class Monitor:
         if status.get("success", False) and status["success"] == 1:
             return 1
 
+        print("ERROR: Monitor-INDEX -- ClientApp response - {}".format(status))
         return 0
 
 
@@ -307,11 +314,12 @@ class Monitor:
                 #self.logger_queue.put("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
 
             if self.all_index_data_distributed.value:
-                upload_percentage = (file_index_count / self.index_data_count.value) * 100
-                if upload_percentage > display_percentage:
-                    print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
-                    self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
-                    display_percentage +=10
+                if self.index_data_count.value:
+                    upload_percentage = (file_index_count / self.index_data_count.value) * 100
+                    if upload_percentage > display_percentage:
+                        print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
+                        self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
+                        display_percentage +=10
 
             ## All index data distributed to clients and received all operation status back from clients.
             if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
@@ -330,5 +338,6 @@ class Monitor:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
             print("Total Operation:{}, Operation Failure:{} - {}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
         now = datetime.now()
-        print("INFO: Monitor-Progress-Status terminated! at {}".format(now.strftime("%H:%M:%S")))
+        print("INFO: Operation {} completed in {} seconds ".format(self.operation, (now - self.operation_start_time).seconds))
+        print("INFO: Monitor-Progress-Status terminated!")
         self.logger_queue.put("INFO: Monitor-Progress-Status terminated! ")

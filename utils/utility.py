@@ -123,8 +123,19 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
 
 
 
+def get_s3_prefix(prefix):
+    """
+    Validate prefix for minio S3 and return the same.
+    :param prefix: s3 prefix
+    :return: s3 compatible prefix
+    """
+    prefix = prefix.strip()
+    if prefix.startswith("/"):
+        prefix = (prefix.strip())[1:]  # Remove first "/" from prefix key
+    if not prefix.endswith("/"):
+        prefix += "/"  # Add / to make a good prefix.
 
-
+    return prefix
 
 
 ## TODO
