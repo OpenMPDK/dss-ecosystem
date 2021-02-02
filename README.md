@@ -79,11 +79,14 @@ Specify NFS cluster information from configuration file.
 # Operation
 Supported operations are PUT/DEL/GET
 ## Operation PUT
-
+  The PUT operation upload files into S3 storage for all NFS shares. The indexing is done in MasterNode.
+  The actual upload is performed in client nodes. The index distribution is done through a IndexMonitor.
+  It distribute indexes in round-robin fashion in all the clients. The actual file upload is done at the
+  client node.
 ## Operation LIST
-  The LIST operation is performed by MasterApplication only. Each prefix is processed by independent
-  workers. Results are en-queued to IndexQueue for DEL/GET operation. 
-  Else, gets dumped into a local file (#TODO).
+  The LIST operation list all keys under a provided prefix. It is performed by MasterApplication
+  only. Each prefix is processed by independent workers. Results are en-queued to IndexQueue for
+  DEL/GET operation. Else, gets dumped into a local file (#TODO).
 ## Operation DEL
   The DEL operation is dependent on LIST operation. The LISTing operation distribute the object keys
   to the client nodes in a round-robin fashion. The actual DELETE operation is performed by ClientApplication.
@@ -91,6 +94,7 @@ Supported operations are PUT/DEL/GET
   The object prefix should be ended with forward slash (/) such as bird/ , bird/bird1/
   ```
     python3 master_application.py -op DEL -c 10.1.51.2 --prefix bird/
+    python3 master_application.py -op DEL -c 10.1.51.2 
   ```
   If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
   

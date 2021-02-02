@@ -446,8 +446,8 @@ class ClientApplication:
             # Received index data {"dir": "/dir1/dir11", "files":["f1","f2"]}
             if index_data and "dir" in index_data and "files" in index_data:
                 #index_data = index_data["index"]  # remove this
-                self.logger_queue.put("====>TASK started index data - {}:{}".format(index_data,self.operation))
-                print("CreateTask:{}".format(index_data))
+                #self.logger_queue.put("====>TASK started index data - {}:{}".format(index_data,self.operation))
+                #print("CreateTask:{}".format(index_data))
 
                 index =0
                 while index < len(index_data["files"]):
