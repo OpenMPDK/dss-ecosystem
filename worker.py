@@ -39,7 +39,7 @@ class Worker:
   def __del__(self):
 
     self.stop()
-    time.sleep(10)
+    #time.sleep(1)
 
   def start(self):
     """
@@ -59,14 +59,12 @@ class Worker:
     Stop the worker process
     :return: None
     """
-    self.lock.acquire()
     if self.status.value:
       self.status.value = 0
-    self.lock.release()
 
     # Make sure process is stopped
     if self.process.is_alive() :
-      time.sleep(5)
+      time.sleep(2)
       try:
         self.process.terminate()
       except Exception as e:
@@ -79,10 +77,7 @@ class Worker:
     Return the worker status!
     :return:
     """
-    self.lock.acquire()
-    status =  self.status.value
-    self.lock.release()
-    return status
+    return self.status.value
 
   def run(self):
     """
@@ -92,11 +87,7 @@ class Worker:
 
     while True:
       # Get the status of worker from a shared flag.
-      self.lock.acquire()
-      current_status = self.status.value
-      self.lock.release()
-
-      if not current_status:
+      if not self.status.value:
         break
       # Get the task from shared task_queue, shared among the workers.
       task = None

@@ -6,7 +6,7 @@
     "size": "1GB"
   },
   "client": {
-    "workers": 5,
+    "workers": 50,
     "max_index_size": 50,
     "user_id": "root",
     "password": "msl-ssg"
