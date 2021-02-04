@@ -101,30 +101,37 @@ Supported operations are PUT/DEL/GET
  # NFS Cluster Setup
  ##Server Setup:
  ```
-Installation 
-	“yum –y install nfs-utils libnfsidmap”
-o	Start the services:
-	“systemctl enable rpcbind”
-	“systemctl enable nfs-server”
-	“systemctl start rpcbind”
-	“systemctl start nfs-server”
-o	The NFS server require to provide access of NFS shares to the client nodes.
-	“/etc/exports” file has to be updated as below.
+NFS lib Installation 
+    yum –y install nfs-utils libnfsidmap
+    
+Start the services:
+        systemctl enable rpcbind
+        systemctl enable nfs-server
+        systemctl start rpcbind
+        systemctl start nfs-server
+The NFS server require to provide access of NFS shares to the client nodes.
+	“/etc/exports” file has to be updated as below.
 <NFS Shared Directory> <Client IP>(opt1,opt2…)
-	Restart export “exportfs –r”
-	Show shared mount paths “exportfs -v”
-	Client Setup:
-o	Installation:
-	“yum –y install nfs-utils libnfsidmap”
-o	Start the service
+
+/bird 10.1.51.2(rw,sync,no_subtree_check) 10.1.51.91(rw,sync,no_subtree_check) 10.1.51.132(rw,sync,no_subtree_check) 10.1.51.107(rw,sync,no_subtree_check) 10.1.51.238(rw,sync,no_subtree_check)
+/dog 10.1.51.2(rw,sync,no_subtree_check) 10.1.51.91(rw,sync,no_subtree_check) 10.1.51.132(rw,sync,no_subtree_check) 10.1.51.107(rw,sync,no_subtree_check) 10.1.51.238(rw,sync,no_subtree_check)
+/cat 10.1.51.2(rw,sync,no_subtree_check) 10.1.51.91(rw,sync,no_subtree_check) 10.1.51.132(rw,sync,no_subtree_check) 10.1.51.107(rw,sync,no_subtree_check) 10.1.51.238(rw,sync,no_subtree_check)
+
+
+o  Restart export “exportfs –r”
+o  Show shared mount paths “exportfs -v”
+Client Setup:
+o  NFS lib Installation:
+	yum –y install nfs-utils libnfsidmap
+o  Start the service
     systemctl enable rpcbind
 	systemctl start rpcbind
-o	All client node should mount them before accessing shared directory.
-	Create local directory to be mapped to remote directory.(optional)
-    sudo mkdir /nfs-shared1”
-	Mount the remote shared paths as below.
+o  All client node should mount them before accessing shared directory.
+   Create local directory to be mapped to remote directory.(optional)
+   sudo mkdir /nfs-shared1”
+o Mount the remote shared paths as below.
     mount <nfs node ip address>:/<nfs Shared Directoyr>  /nfs-shaed1”
-	Show the remote mounts “df –kh”
+o Show the remote mounts “df –kh”
 ```
  
   
