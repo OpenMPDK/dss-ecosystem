@@ -55,7 +55,8 @@ class ClientApplication:
         self.logger = None
 
         # Message handling
-        self.ip_address = socket.gethostbyname(self.host_name)
+        #self.ip_address = socket.gethostbyname(self.host_name)
+        self.ip_address = self.config["ip_address"]
         self.port_index = "6000"
         self.port_status = "6001"
         self.socket = None
@@ -228,6 +229,7 @@ class ClientApplication:
         socket_index_address = "tcp://{}:{}".format(self.ip_address, self.port_index)
         socket = context.socket(zmq.REP)
         socket.bind(socket_index_address)
+        self.logger_queue.put("INFO: Client Index-Monitor listening to - {}".format(socket_index_address))
 
         while True:
 
@@ -258,19 +260,19 @@ class ClientApplication:
                     if self.operation.upper() == "PUT":
                         ## Message validation, NFS Mounting if not already mounted on client node
                         if "nfs_cluster" in message and "dir" in message:
-                            if self.nfs_mount(message["nfs_cluster"], message["dir"]):
-                                self.operation_data_queue.put(message) ## Add index to operation_data_queue
+                            if self.config.get("master_node", None) and self.config["master_node"] == 1:
+                                self.operation_data_queue.put(message)  ## Add index to operation_data_queue
                                 socket.send_json({"success": 1})  # Send response back to MasterApp
-                                ## TODO
-                                ## Create a Shared dictionary to check progress of upload/list/del operation
-                                #if message["dir"] in index_buffer:
-                                #    index_buffer[message["dir"]] += len(message["files"])
-                                #else:
-                                #    index_buffer[message["dir"]] = len(message["files"])
                                 is_index_data_added = True
                             else:
-                                self.logger_queue.put("ERROR: Issue with mounting! ")
-                                socket.send_json({"success": 0, "ERROR": "Client-{} , Failed NFS -{} mounting".format(self.id,  message["dir"])}) ## Send the success/failure status to master
+                                if self.nfs_mount(message["nfs_cluster"], message["dir"]):
+                                    self.operation_data_queue.put(message) ## Add index to operation_data_queue
+                                    socket.send_json({"success": 1})  # Send response back to MasterApp
+                                    is_index_data_added = True
+                                else:
+                                    self.logger_queue.put("ERROR: Issue with mounting! ")
+                                    ## Send the success/failure status to master
+                                    socket.send_json({"success": 0, "ERROR": "Client-{} , Failed NFS -{} mounting".format(self.id,  message["dir"])})
                         else:
                             self.logger_queue.put("ERROR: Bad formed message -{}".format(message))
                             socket.send_json({"success": 0, "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id,  message)})
@@ -499,7 +501,7 @@ class ClientMessage:
 if __name__ == "__main__":
     params = ClientApplicationArgumentParser()
 
-    params["config"] = "/home/somnath.s/work/nkv-datamover/config/config.json"
+    params["config"] = "/usr/nkv-datamover/config/config.json"
     config_obj = Config(params)
     config = config_obj.get_config()
     client_config = config.get("client", {})

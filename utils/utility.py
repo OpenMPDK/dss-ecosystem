@@ -119,6 +119,41 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
         return client , stdin, stdout, stderr
 
 
+def uploadFile(dst_host, dst_path, src_path, username, password="msl-ssg"):
+    """
+    Remote upload of files
+    :param dst_host: Host IP address
+    :param dst_path: Destination path at Remote Host
+    :param src_path: Data source path at host
+    :param username: root
+    :return:
+    """
+    print("Uploading {} to {}:{}".format(src_path, dst_host, dst_path))
+
+    transport = paramiko.Transport((dst_host, 22))
+    transport.connect(username=username,password=password)
+
+    sftp = paramiko.SFTPClient.from_transport(transport)
+    print("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII- {}-{}".format(src_path, dst_path))
+
+    remote_directory_create_cmd = "sudo mkdir -p {}".format(os.path.dirname(dst_path))
+    print("Remote directory create command: {}".format(remote_directory_create_cmd))
+    remoteExecution(dst_host, username, password, remote_directory_create_cmd, True)
+
+    # TODO why does this always throw an exception
+    print("KKKKK--{}".format(os.path.dirname(dst_path)))
+    try:
+        sftp.put(src_path,dst_path)
+        remoteExecution(dst_host, username, password, "sudo tar -xvzf  {}".format(dst_path), True)
+        remoteExecution(dst_host, username, password, "sudo rm   {}".format(dst_path), True)
+    except Exception as e:
+        print("EXCEPTION---: {}-{}".format(__file__, e))
+
+    #remoteExecution(dst_host, username,password, "sudo chmod 777 {}".format(dst_path))
+    transport.close()
+    sftp.close()
+
+    #remoteExecution(dst_host, username, password, "sudo chmod 777 {}".format(os.path.dirname(dst_path)), True)
 
 
 

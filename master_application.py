@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import os,sys
-from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix
+from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, uploadFile
 from utils.config import Config, commandLineArgumentParser, CommandLineArgument
 from utils.signal_handler import SignalHandler
 
@@ -87,6 +87,7 @@ class Master:
 		# Stop clients
 		#self.stop_logging()
 		pass
+		# Remove local NFS share
 
 
 	def start(self):
@@ -174,7 +175,7 @@ class Master:
 		"""
 		index =0
 		for client_ip in self.client_ip_list:
-			client = Client(index, client_ip, self.operation, self.logger_queue, self.client_user_id, self.client_password)
+			client = Client(index, client_ip, self.operation, self.logger_queue, self.config["master"]["ip_address"],self.client_user_id, self.client_password)
 			client.start()
 			self.logger_queue.put("INFO: Started ClientApplication-{} at node - {}".format(client.id,client_ip))
 			self.clients.append(client)
@@ -283,12 +284,17 @@ class Master:
 					self.task_queue.put(task)
 
 
+	def remote_host_setup(self, ip_address):
+		pass
+		# Upload source code to Remote node
+
+	    # Install required Python libraries
 
 
 
 class Client:
 
-	def __init__(self, id, ip, operation, logger_queue, username="root", password="msl-ssg"):
+	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg"):
 		self.id = id
 		self.ip = ip
 		self.operation=operation
@@ -296,6 +302,7 @@ class Client:
 		self.password = password
 		self.status = None
 		self.ssh_client_handler = None
+		self.master_ip_address = master_ip
 
 		# Messaging service configuration
 		self.port_index = "6000"  # Need to configure from configuration file.
@@ -328,9 +335,16 @@ class Client:
         Remote execution of client application ("client_application.py")
         :return:
         """
+		# Setup
+		#self.setup()
 		print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
 		self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-		command = "python3 /home/somnath.s/work/nkv-datamover/client_application.py -id {} -op {}".format(self.id, self.operation)
+		if self.master_ip_address == self.ip:
+			command = "python3 /usr/nkv-datamover/client_application.py -id {} -op {} -ip {} -mn 1 ".format(self.id, self.operation, self.ip)
+		else:
+			command = "python3 /usr/nkv-datamover/client_application.py -id {} -op {} -ip {} ".format(self.id,
+																											self.operation,
+																											self.ip)
 		self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
 		self.remote_stdin = stdin
 		self.remote_stdout = stdout
@@ -391,6 +405,13 @@ class Client:
 			self.ssh_client_handler.close()
 			self.status = 0
 		self.ssh_client_handler = None
+
+	def setup(self):
+		remote_dest_path = "/usr/test/datamover.tgz"
+		username = "root"
+		password = "msl-ssg"
+		source_path = "/home/somnath.s/work/datamover.tgz"
+		uploadFile(self.ip, remote_dest_path, source_path, username, password )
 
 def process_put_operation(master):
 	workers_stopped = 0

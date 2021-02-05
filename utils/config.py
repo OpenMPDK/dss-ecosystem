@@ -103,6 +103,10 @@ def ClientApplicationArgumentParser():
     parser.add_argument("--client_id", "-id", type=int, default=1, required=True,
                             help='Specify client node IP address ')
     parser.add_argument("--operation", "-op", type=str, required=True, help='Specify operation such as PUT,LIST,DEL,GET')
+    parser.add_argument("--ip_address", "-ip", type=str, required=True,
+                        help='Specify Client Node IP address')
+    parser.add_argument("--master_node", "-mn", type=int, required=False,
+                        help='Is client running on same node of master?')
     parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
     options = vars(parser.parse_args())
