@@ -175,7 +175,14 @@ class Master:
 		"""
 		index =0
 		for client_ip in self.client_ip_list:
-			client = Client(index, client_ip, self.operation, self.logger_queue, self.config["master"]["ip_address"],self.client_user_id, self.client_password)
+			client = Client(index,
+							client_ip,
+							self.operation,
+							self.logger_queue,
+							self.config["master"]["ip_address"],
+							self.client_user_id,
+							self.client_password,
+							self.config["dryrun"])
 			client.start()
 			self.logger_queue.put("INFO: Started ClientApplication-{} at node - {}".format(client.id,client_ip))
 			self.clients.append(client)
@@ -294,7 +301,7 @@ class Master:
 
 class Client:
 
-	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg"):
+	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg", dryrun=False):
 		self.id = id
 		self.ip = ip
 		self.operation=operation
@@ -303,6 +310,7 @@ class Client:
 		self.status = None
 		self.ssh_client_handler = None
 		self.master_ip_address = master_ip
+		self.dryrun = dryrun
 
 		# Messaging service configuration
 		self.port_index = "6000"  # Need to configure from configuration file.
@@ -339,12 +347,16 @@ class Client:
 		#self.setup()
 		print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
 		self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
+		command = "python3 /usr/nkv-datamover/client_application.py -id {} -op {} -ip {} ".format(self.id,
+																								  self.operation,
+																								  self.ip)
 		if self.master_ip_address == self.ip:
-			command = "python3 /usr/nkv-datamover/client_application.py -id {} -op {} -ip {} -mn 1 ".format(self.id, self.operation, self.ip)
-		else:
-			command = "python3 /usr/nkv-datamover/client_application.py -id {} -op {} -ip {} ".format(self.id,
-																											self.operation,
-																											self.ip)
+			command += " -mn 1 "
+		if self.dryrun:
+			command += " --dryrun "
+
+		print(command)
+
 		self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
 		self.remote_stdin = stdin
 		self.remote_stdout = stdout
@@ -430,17 +442,17 @@ def process_put_operation(master):
 					indexing_done = False
 
 			## Stop workers
-			if indexing_done:
+			if indexing_done and master.index_data_generation_complete.value == 0:
 				# Shut down Monitor-Index at Master
 				master.index_data_lock.acquire()
 				master.index_data_generation_complete.value = 1
 				master.index_data_lock.release()
 
-				master.logger_queue.put("INFO: Indexed data distribution is completed!")
-				print("INFO: Indexed data distribution is completed!")
-				master.stop_workers()  ## Termination1
-				workers_stopped = 1
+				master.logger_queue.put("INFO: Indexed data generation is completed!")
+				print("INFO: Indexed data generation is completed!")
+				#master.stop_workers()  ## Termination1
 
+			if not unmounted_nfs_shares:
 				print("INFO: Un-mount all NFS shares at Master")
 				master.logger_queue.put("INFO: Un-mount all NFS shares at Master")
 				master.nfs_cluster_obj.umount_all()  ## Termination2
@@ -473,6 +485,12 @@ def process_put_operation(master):
 				master.monitor.monitor_progress_status.value:
 			monitors_stopped = 1
 		master.monitor.status_lock.release()
+
+		# Bring down workers.
+		if not workers_stopped  and master.monitor.monitor_index_data_sender.value:
+			master.stop_workers()
+			workers_stopped = 1
+
 		## Once all the response received from Client Applications, shut down 3 monitors
 		if workers_stopped and monitors_stopped and all_clients_completed:
 			break
@@ -486,6 +504,8 @@ def process_put_operation(master):
 			break
 
 		time.sleep(2)
+
+
 
 def process_list_operation(master):
 	master.start_listing()
@@ -535,13 +555,13 @@ def process_del_operation(master):
 		#print("NFS Share-{}:{}:{}".format(master.nfs_shares, master.listing_progress, listing_done))
 
 		if not workers_stopped:
-			if listing_done:
+			if listing_done and master.index_data_generation_complete.value == 0:
 				master.index_data_generation_complete.value = 1
-				master.logger_queue.put("INFO: Object-Keys distribution through listing is completed!")
-				print("INFO: Object-Keys distribution through listing is completed!")
+				master.logger_queue.put("INFO: Object-Keys generation through listing is completed!")
+				print("INFO: Object-Keys generation through listing is completed!")
 				# Shutdown workers
-				master.stop_workers()
-				workers_stopped = 1
+				#master.stop_workers()
+				#workers_stopped = 1
 
 
 		# Check all the ClientApplications once they are finished
@@ -560,6 +580,12 @@ def process_del_operation(master):
 				master.monitor.monitor_progress_status.value:
 			monitors_stopped = 1
 		master.monitor.status_lock.release()
+
+		# Bring down workers.
+		if not workers_stopped and master.monitor.monitor_index_data_sender.value:
+			master.stop_workers()
+			workers_stopped = 1
+
 		## Once all the response received from Client Applications, shut down 3 monitors
 		if workers_stopped and monitors_stopped and all_clients_completed:
 			break
@@ -585,13 +611,14 @@ if __name__ == "__main__":
 	# operation, params = commandLineArgumentParser()
 
 	# Add signal handler
-	signal_handler = SignalHandler()
-	signal_handler.initiate()
+	#signal_handler = SignalHandler()
+	#signal_handler.initiate()
 
 
 	params = cli.options
 	config_obj = Config(params)
 	config = config_obj.get_config()
+	print(config)
 
 	master = Master(cli.operation, config)
 	now = datetime.now()

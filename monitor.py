@@ -155,7 +155,7 @@ class Monitor:
                             previous_client_operation_status = 1
 
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
-                self.logger_queue.put("INFO: Indexed data distribution is completed!")
+                self.logger_queue.put("INFO: Indexed data distribution is completed! {}".format(self.index_data_queue.qsize()))
                 self.all_index_data_distributed.value = 1
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
@@ -313,7 +313,13 @@ class Monitor:
                 #upload_parcentage = (file_index_count / self.index_data_count.value) * 100
                 #print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
                 #self.logger_queue.put("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
-
+                if self.index_data_count.value:
+                    upload_percentage = (file_index_count / self.index_data_count.value) * 100
+                    if upload_percentage > display_percentage:
+                        print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
+                        self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
+                        display_percentage +=10
+            """
             if self.all_index_data_distributed.value:
                 if self.index_data_count.value:
                     upload_percentage = (file_index_count / self.index_data_count.value) * 100
@@ -321,6 +327,7 @@ class Monitor:
                         print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
                         self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
                         display_percentage +=10
+            """
 
             ## All index data distributed to clients and received all operation status back from clients.
             if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:

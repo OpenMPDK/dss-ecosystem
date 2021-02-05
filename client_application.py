@@ -27,6 +27,7 @@ class ClientApplication:
         self.s3_config = config.get("s3_storage",{})
         self.host_name = socket.gethostname()
         self.operation = config["operation"]
+        self.dryrun = config["dryrun"]
 
         # Message communication
         self.operation_data_queue = Queue()  # Hold file index data
@@ -458,7 +459,8 @@ class ClientApplication:
                         task_data = {"dir": index_data["dir"], "files": index_data["files"][index:index + self.client_config.get("max_index_size", 2)]}
                         task = Task(operation=self.operation,
                                     data=task_data,
-                                    s3config=self.s3_config)
+                                    s3config=self.s3_config,
+                                    dryrun=self.dryrun)
                         self.task_queue.put(task)  # Enqueue task to TaskQ
                     except Exception as e:
                         print("Exception: create_task - {}".format(e))

@@ -35,10 +35,18 @@ def put(params, status_queue , logger_queue):
         for file_name in index_data["files"]:
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
             if os.path.exists(file):
-                if mc.put(minio_bucket, file):
-                    #logger_queue.put("TASK: Uploaded file {}".format(file))
-                    uploaded_files.append(file_name)
+
+                if params.get("dryrun", False):
+                    # Read file for the purpose of testing
+                    with open(file, "rb") as FH:
+                        lines = FH.readlines()
+                        #logger_queue.put("FileName:{}, Lines-{}, Size-{}".format(file, (len(lines)), os.path.getsize(file)))
+                    lines = []
                     success +=1
+                else:
+                    if mc.put(minio_bucket, file):
+                        uploaded_files.append(file_name)
+                        success +=1
             else:
                 logger_queue.put("ERROR: Task-Upload: File-{} doesn't exist".format(file))
     else:
@@ -47,8 +55,8 @@ def put(params, status_queue , logger_queue):
     #logger_queue.put("DEBUG: Minio Uploaded files {}:{}".format(index_data["dir"], uploaded_files ))
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(index_data["files"]) - success) , "dir": index_data["dir"]}
-    logger_queue.put("DEBUG: Minio Upload Status - {}".format(status_message))
     status_queue.put(status_message)
+    logger_queue.put("DEBUG: Minio Upload Status - {} - {}".format(status_message, status_queue.qsize()))
 
 @exception
 def list(params, task_queue,index_data_queue, logger_queue, listing_progress, listing_progress_lock):
@@ -180,10 +188,15 @@ def delete(params, status_queue , logger_queue):
     if mc.client:
         for object_key in object_keys["files"]:
             #logger_queue.put("TASK: Going to removed object key {}".format(object_key))
-            if mc.delete(minio_bucket, object_key):
-                #logger_queue.put("TASK: Removed object key {}".format(object_key))
-                removed_objects.append(object_key)
-                success += 1
+            if params.get("dryrun", False):
+                # Dry run
+                success +=1
+            else:
+                # Actual operation
+                if mc.delete(minio_bucket, object_key):
+                    #logger_queue.put("TASK: Removed object key {}".format(object_key))
+                    removed_objects.append(object_key)
+                    success += 1
     else:
         logger_queue.put("ERROR: Unable to connect to Minio for upload with {}".format(minio_config))
 
@@ -273,8 +286,8 @@ def indexing(**kwargs):
         if "dir" in result and "files" in result:
             #print("Received Files: {}".format(result["files"]))
             msg = {"dir": result["dir"], "files": result["files"] , "nfs_cluster": nfs_cluster}
-            #print("Index-Data_Queue:MSG={}".format(msg))
             index_data_queue.put(msg)
+            logger_queue.put("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format( result["dir"], len(result["files"]) , index_data_queue.qsize()))
 
 
         elif "dir" in result:

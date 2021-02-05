@@ -108,6 +108,8 @@ def ClientApplicationArgumentParser():
     parser.add_argument("--master_node", "-mn", type=int, required=False,
                         help='Is client running on same node of master?')
     parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+    parser.add_argument("--dryrun", "-dr", required=False, action='store_true',
+                           help='Dry run - Just check operation is working , but does not actual upload')
 
     options = vars(parser.parse_args())
     return options
@@ -155,6 +157,8 @@ class CommandLineArgument:
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify operation type such as read=r write=w , wr...')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
+                               help='Dry run - Just check operation is working , but does not actual upload')
 
     def get(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -165,6 +169,8 @@ class CommandLineArgument:
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify operation type such as read=r write=w , wr...')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
+                               help='Dry run - Just check operation is working , but does not actual download')
 
     def list(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -175,6 +181,8 @@ class CommandLineArgument:
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                  help='Specify operation type such as read=r write=w , wr...')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
+                               help='Dry run - Just check operation is working , but does not actual listing')
     def delete(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
                                 help='Specify number of Jobs to be used for parallel processing. ')
@@ -184,5 +192,7 @@ class CommandLineArgument:
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify operation type such as read=r write=w , wr...')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
+                               help='Dry run - Just check operation is working , but does not actual delete')
     def get_operation(self):
         return sys.argv[1:2][0]
