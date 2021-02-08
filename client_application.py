@@ -255,7 +255,7 @@ class ClientApplication:
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
-                    self.logger_queue.put("DEBUG: Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message))
+                    self.logger_queue.put("DEBUG: Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, len(message["files"])))
                     is_index_data_added = False #
                     # Add indexing data to the "operation_data_queue".
                     if self.operation.upper() == "PUT":
@@ -279,7 +279,6 @@ class ClientApplication:
                             socket.send_json({"success": 0, "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id,  message)})
 
                     elif self.operation.upper() == "DEL":
-                        self.logger_queue.put("Client for DELETE operation:{}".format(message))
                         self.operation_data_queue.put(message)  ## Add index to operation_data_queue
                         socket.send_json({"success": 1})  # Send response back to MasterApp
                         is_index_data_added = True

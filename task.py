@@ -60,6 +60,17 @@ def put(params, status_queue , logger_queue):
 
 @exception
 def list(params, task_queue,index_data_queue, logger_queue, listing_progress, listing_progress_lock):
+    """
+    List the Object keys from lower level directory. If not then, create a task, so that can be processed by other
+    worker.
+    :param params:
+    :param task_queue: Holds the task
+    :param index_data_queue:  Holds the list index message to be distributed among the client nodes.
+    :param logger_queue: A shared queue used among the running processes
+    :param listing_progress: it holds the
+    :param listing_progress_lock:
+    :return:
+    """
     max_index_size = params["max_index_size"]
 
     prefix_index_data_file = "/var/log/prefix_index_data.json"
@@ -124,6 +135,13 @@ def list(params, task_queue,index_data_queue, logger_queue, listing_progress, li
 
 
 def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size):
+    """
+    Iterate over the object keys and generate a message which holds a prefix and object keys underneath of the prefix.
+    :param object_keys_iterator: Returned object keys iterator,
+    :param prefix_index_data: A shared dictionary
+    :param max_index_size:
+    :return:
+    """
 
     object_keys = []
     for obj_key in object_keys_iterator:

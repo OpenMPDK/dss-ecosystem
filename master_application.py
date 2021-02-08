@@ -426,6 +426,19 @@ class Client:
 		uploadFile(self.ip, remote_dest_path, source_path, username, password )
 
 def process_put_operation(master):
+	"""
+	Manage the Upload process.
+
+	Processes Stop Sequence:
+	- Index-Monitor
+	- Stop Workers if all index data distributed among client nodes.
+	- Stop Status Poller
+	- Stop Progress Tracer Monitor
+	- Unmount remote NFS mounts.
+	- Stop all clients
+	:param master:
+	:return:
+	"""
 	workers_stopped = 0
 	unmounted_nfs_shares = 0
 	monitors_stopped = 0
@@ -441,7 +454,7 @@ def process_put_operation(master):
 				if status:
 					indexing_done = False
 
-			## Stop workers
+			## Check if index generation is completed by the worker processes.
 			if indexing_done and master.index_data_generation_complete.value == 0:
 				# Shut down Monitor-Index at Master
 				master.index_data_lock.acquire()
@@ -450,20 +463,11 @@ def process_put_operation(master):
 
 				master.logger_queue.put("INFO: Indexed data generation is completed!")
 				print("INFO: Indexed data generation is completed!")
-				#master.stop_workers()  ## Termination1
-
-			if not unmounted_nfs_shares:
-				print("INFO: Un-mount all NFS shares at Master")
-				master.logger_queue.put("INFO: Un-mount all NFS shares at Master")
-				master.nfs_cluster_obj.umount_all()  ## Termination2
-				unmounted_nfs_shares = 1
 
 		master.progress_of_indexing_lock.release()
 
 		# Check all the ClientApplications once they are finished
 		all_clients_completed = 1
-
-
 		for client in master.clients:
 			#print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
 			if not client.status:
@@ -485,6 +489,15 @@ def process_put_operation(master):
 				master.monitor.monitor_progress_status.value:
 			monitors_stopped = 1
 		master.monitor.status_lock.release()
+
+		# Un-mount device once all monitors are stopped. Because, if ClientApp is launches at the same node of master, then
+		# un-mount should not happen.
+		if monitors_stopped and  not unmounted_nfs_shares:
+			print("INFO: Un-mount all NFS shares at Master")
+			master.logger_queue.put("INFO: Un-mount all NFS shares at Master")
+			master.nfs_cluster_obj.umount_all()  ## Termination2
+			unmounted_nfs_shares = 1
+
 
 		# Bring down workers.
 		if not workers_stopped  and master.monitor.monitor_index_data_sender.value:
