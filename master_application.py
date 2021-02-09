@@ -182,7 +182,8 @@ class Master:
 							self.config["master"]["ip_address"],
 							self.client_user_id,
 							self.client_password,
-							self.config["dryrun"])
+							self.config["dryrun"],
+							self.config["message"])
 			client.start()
 			self.logger_queue.put("INFO: Started ClientApplication-{} at node - {}".format(client.id,client_ip))
 			self.clients.append(client)
@@ -301,7 +302,7 @@ class Master:
 
 class Client:
 
-	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg", dryrun=False):
+	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg", dryrun=False, message_port={}):
 		self.id = id
 		self.ip = ip
 		self.operation=operation
@@ -313,8 +314,8 @@ class Client:
 		self.dryrun = dryrun
 
 		# Messaging service configuration
-		self.port_index = "6000"  # Need to configure from configuration file.
-		self.port_status = "6001"
+		self.port_index = message_port["port_index"]  # Need to configure from configuration file.
+		self.port_status = message_port["port_status"]
 		self.socket_index = None
 		self.socket_status = None
 
@@ -347,11 +348,14 @@ class Client:
 		#self.setup()
 		print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
 		self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-		command = "python3 /usr/nkv-datamover/client_application.py -id {} -op {} -ip {} ".format(self.id,
-																								  self.operation,
-																								  self.ip)
+		command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
+				                                                " --client_id {} ".format(self.id) + \
+		                                                        " --operation {} ".format(self.operation) + \
+		                                                        " --ip_address {} ".format(self.ip) + \
+			                                                    " --port_index {} ".format(self.port_index) + \
+			                                                    " --port_status {} ".format(self.port_status)
 		if self.master_ip_address == self.ip:
-			command += " -mn 1 "
+			command += " --master_node "
 		if self.dryrun:
 			command += " --dryrun "
 

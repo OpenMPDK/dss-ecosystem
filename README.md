@@ -37,6 +37,7 @@ NFS Cluster: 10.1.51.2
 Update master section in the config.json
 ```
  "master": {
+    "ip_address": "202.0.0.135", # Make sure master IP address is sepcified correctly
     "workers": <Specify no of workers>,
     "max_index_size": <Maximum no of indexes to be sent through a Message>,
     "size": <Overall Size of each set of message, say 1GB. Thats mean the message to be sent with 
@@ -47,7 +48,7 @@ Update master section in the config.json
   #TODO:
   - Incorporate size based indexing too. Support size based indexing if specified.
 ``` 
-##Client Nodes:
+## Client Nodes:
    The ClientApplication running in each client node performs the actual operation PUT/DEL/GET.
    Further, the received indexes are in divided in small tasks and added to TaskQ. Multiple workers 
    running on that client node, process each task independently and update status in a shared queue.
@@ -67,7 +68,18 @@ Update client section in config.json
   },
   
 ```
-
+## Message Communication
+   The data-mover application uses REQ/REP message pattern to distribute the indexing data to the
+   N ClientApplications running on the N client nodes. The operation status is sent back from the 
+   ClientNodes to MasterNode through PUSH/PULL message pattern. 
+### Message Communication Configuration:
+If the default message port doesn't work, then change it to some other ports.
+```
+"message": {
+    "port_index": 6000,
+    "port_status": 6001
+  },
+```   
 # NFS Cluster information
 Specify NFS cluster information from configuration file.
 ```

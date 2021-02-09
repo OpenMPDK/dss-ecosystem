@@ -1,6 +1,7 @@
 import os,sys
 from minio import Minio
 from minio.error import ResponseError, BucketAlreadyOwnedByYou, BucketAlreadyExists
+from datetime import datetime
 
 class MinioClient:
   def __init__(self, url, access_key="minio", secret_key="minio123"):
@@ -79,4 +80,30 @@ class MinioClient:
 
 
 
+if __name__=="__main__":
+  mc = MinioClient("202.0.0.137:9000")
+  # Example of uploading files
+  print("Uploading files")
+  directory = "/bird/bird1/"
+  uploaded_file_count = 0
+  now = datetime.now()
 
+  for file in os.listdir(directory):
+    file_path = directory + file
+    if mc.put("bucket", file_path):
+      uploaded_file_count += 1
+  print("Uploaded Files:{} , Time-{}".format(uploaded_file_count, (datetime.now() - now).seconds))
+
+  # Example of listing buckets.
+  #print("All Buckets: {}".format(mc.list()))
+
+  prefix = "bird/bird1/"
+  # List object keys
+  # print("List Object Keys: {}".format(s3.list_objects("bucket", "bird/")))
+
+  # Delete object
+  deleted_object_count = 0
+  for object in mc.list("bucket", prefix):
+    if mc.delete("bucket", object.object_name):
+      deleted_object_count += 1
+  print("Deleted Objects Count: {} for prefix-\"{}\"".format(deleted_object_count, prefix))

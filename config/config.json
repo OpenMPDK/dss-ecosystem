@@ -1,23 +1,28 @@
 {
- "tess_clients_ip":["202.0.0.136"],
+ "tess_clients_ip":[ "202.0.0.136", "202.0.0.135"],
   "master": {
     "ip_address": "202.0.0.135",
-    "workers": 5,
-    "max_index_size": 100,
+    "workers": 10,
+    "max_index_size": 1000,
     "size": "1GB"
   },
   "client": {
-    "workers": 30,
+    "workers": 5,
     "max_index_size": 100,
     "user_id": "root",
     "password": "msl-ssg"
   },
+  "message": {
+    "port_index": 6000,
+    "port_status": 6001
+  },
  "nfs_config":{
-               "202.0.0.137":["/bird"]
+               "202.0.0.137":["/dog"]
               },
   "s3_storage": {
     "minio": {"url": "202.0.0.137:9000", "access_key": "minio", "secret_key": "minio123"},
-    "bucket": "bucket"
+    "bucket": "bucket",
+    "client": "minio"
   },
   "operations": ["PUT","GET","DEL","LIST"],
   "logging_path": "/var/log"

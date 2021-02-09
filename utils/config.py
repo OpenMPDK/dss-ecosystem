@@ -105,11 +105,13 @@ def ClientApplicationArgumentParser():
     parser.add_argument("--operation", "-op", type=str, required=True, help='Specify operation such as PUT,LIST,DEL,GET')
     parser.add_argument("--ip_address", "-ip", type=str, required=True,
                         help='Specify Client Node IP address')
-    parser.add_argument("--master_node", "-mn", type=int, required=False,
+    parser.add_argument("--master_node", "-mn", required=False, action='store_true',
                         help='Is client running on same node of master?')
     parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
     parser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                            help='Dry run - Just check operation is working , but does not actual upload')
+    parser.add_argument("--port_index", "-pi", type=str, required=True, help='Specify index port')
+    parser.add_argument("--port_status", "-ps", type=str, required=True, help='Specify status port')
 
     options = vars(parser.parse_args())
     return options

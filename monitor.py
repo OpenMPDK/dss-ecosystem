@@ -231,8 +231,8 @@ class Monitor:
         for client in self.clients:
             # print("Client IP: {}, PORT Index-{}, PORT Status-{}".format(client.ip, client.port_index, client.port_status))
             client.socket_status = context.socket(zmq.PULL)
-            print("INFO: Monitor-Poller, Connecting to client-app tcp://{}:{}".format(client.ip, client.port_status))
-            self.logger_queue.put("DEBUG: Monitor-Poller Connecting to client-app STATUS MsgHandler tcp://{}:{}".format(client.ip, client.port_status))
+            print("INFO: Monitor-Poller, Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
+            self.logger_queue.put("INFO: Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
             client.socket_status.connect("tcp://{}:{}".format(client.ip, client.port_status))
 
         while True:

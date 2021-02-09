@@ -17,6 +17,8 @@ mgr = Manager()
 index_buffer = mgr.dict()
 
 
+BASE_DIR=os.path.dirname(__file__)
+
 class ClientApplication:
 
     def __init__(self, id, config):
@@ -58,8 +60,8 @@ class ClientApplication:
         # Message handling
         #self.ip_address = socket.gethostbyname(self.host_name)
         self.ip_address = self.config["ip_address"]
-        self.port_index = "6000"
-        self.port_status = "6001"
+        self.port_index = config["port_index"]
+        self.port_status = config["port_status"]
         self.socket = None
         self.stop_messaging = Value('i', 1)
         self.message_lock = Lock()
@@ -507,7 +509,7 @@ class ClientMessage:
 if __name__ == "__main__":
     params = ClientApplicationArgumentParser()
 
-    params["config"] = "/usr/nkv-datamover/config/config.json"
+    params["config"] = BASE_DIR + "/config/config.json"
     config_obj = Config(params)
     config = config_obj.get_config()
     client_config = config.get("client", {})
