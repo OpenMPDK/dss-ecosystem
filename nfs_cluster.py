@@ -64,14 +64,18 @@ class NFSCluster:
         ret : a integer value. 0 to indicate success.
         console: STDOUT message
         """
+        ret =0
+        console =None
         # Create local directory
         if not os.path.isdir(nfs_share):
             os.mkdir(nfs_share)
-        command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share)
-
-        #print("DEBUG: Mount Command - {}".format(command))
-        #self.logger_queue.put("DEBUG: Mount Command - {}".format(command))
-        ret, console = exec_cmd(command, True, True)
+        if os.path.ismount(nfs_share):
+            print("WARNING: NFS share \"{}\" already mounted!".format(nfs_share))
+            self.logger_queue.put("WARNING: NFS share {} already mounted!".format(nfs_share))
+        else:
+            command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share)
+            #self.logger_queue.put("DEBUG: Mount Command - {}".format(command))
+            ret, console = exec_cmd(command, True, True)
         return ret,console
 
     @exception
@@ -100,9 +104,20 @@ class NFSCluster:
 
     @exception
     def umount(self, local_mount):
-        command = "umount {}".format(local_mount)
-        ret, console = exec_cmd(command, True, True)
 
+        ret =0
+        console =None
+        if os.path.ismount(local_mount):
+            command = "umount {}".format(local_mount)
+            ret, console = exec_cmd(command, True, True)
+            # Remove directory
+            if ret == 0:
+                try:
+                    os.rmdir(local_mount)
+                except OSError as e:
+                    self.logger_queue.put("ERROR: Unable to remove directory {}, {} ".format(local_mount, e))
+        else:
+            self.logger_queue.put("WARNING: {} path is not a mounted path".format(local_mount))
         return ret,console
 
     def get_cluster(self):

@@ -249,8 +249,8 @@ class Master:
 		local_mounts = self.nfs_cluster_obj.get_mounts()
 		#print(local_mounts)
 		for ip_address, nfs_shares in local_mounts.items():
-			print("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
-			self.logger_queue.put("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
+			#print("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
+			self.logger_queue.put("INFO:NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
 			self.nfs_shares.extend(nfs_shares)
 			for nfs_share in nfs_shares:
 				print("DEBUG: Creating task for {}".format(nfs_share))
@@ -354,8 +354,6 @@ class Client:
 			command += " -mn 1 "
 		if self.dryrun:
 			command += " --dryrun "
-
-		print(command)
 
 		self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
 		self.remote_stdin = stdin

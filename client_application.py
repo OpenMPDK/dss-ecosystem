@@ -70,8 +70,13 @@ class ClientApplication:
 
 
     def __del__(self):
-        pass
         # TODO Stop all running process for abrupt shutdown
+
+        # Make sure all NFS shares are unounted and removed
+        while not self.nfs_share_list.empty():
+            nfs_share = self.nfs_share_list.get()
+            self.logger_queue.put("INFO: Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"],nfs_share["nfs_share"]))
+            self.nfs_cluster.umount(nfs_share["nfs_share"])
         """
         self.stop_workers()
         self.nfs_cluster.umount_all()  # Un-mount all mounted shares
