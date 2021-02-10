@@ -111,17 +111,17 @@ Supported operations are PUT/DEL/GET
   If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
   
  # NFS Cluster Setup
- ##Server Setup:
+ ## Server Setup:
  ```
-NFS lib Installation 
+# NFS lib Installation 
     yum –y install nfs-utils libnfsidmap
     
-Start the services:
+# Start the services:
         systemctl enable rpcbind
         systemctl enable nfs-server
         systemctl start rpcbind
         systemctl start nfs-server
-The NFS server require to provide access of NFS shares to the client nodes.
+# The NFS server require to provide access of NFS shares to the client nodes.
 	“/etc/exports” file has to be updated as below.
 <NFS Shared Directory> <Client IP>(opt1,opt2…)
 

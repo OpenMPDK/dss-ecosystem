@@ -3,7 +3,7 @@
 import os,sys
 import time
 import  zmq
-from multiprocessing import Process,Queue,Value, Lock
+from multiprocessing import Process,Queue,Value, Lock, Manager
 from datetime import datetime
 import json
 
@@ -13,7 +13,7 @@ Monitor the progress of operation.
 - Process result 
 - Display/Store result
 """
-
+manager = Manager()
 
 class Monitor:
 
@@ -30,6 +30,7 @@ class Monitor:
         self.status_lock  = Lock()
         self.stop_status_poller = Value('i', 0)
         self.index_data_count = Value('i', 0)
+        self.prefix_index_data = manager.dict()
 
         self.all_index_data_distributed = Value('i', 0)
 
@@ -113,7 +114,7 @@ class Monitor:
             client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
 
         # Buffer to store prefix index and file count  {"prefix":<file count>}
-        prefix_index_data = {}
+        first_index_distribution  = 0
 
         while True:
 
@@ -139,15 +140,20 @@ class Monitor:
                     # Buffer prefix_index_data for persistent storage only to be used during PUT
                     if self.operation.upper() == "PUT":
                         object_prefix_key = data["dir"][1:] + "/"
-                        if data["dir"] in prefix_index_data:
-                            prefix_index_data[object_prefix_key] += len(data["files"])
+                        if data["dir"] in self.prefix_index_data:
+                            self.prefix_index_data[object_prefix_key]["files"] += len(data["files"])
+                            self.prefix_index_data[object_prefix_key]["size"]  += data["size"]
                         else:
-                            prefix_index_data[object_prefix_key] = len(data["files"])
+                            self.prefix_index_data[object_prefix_key] = {"files": len(data["files"]), "size": data["size"]}
 
                     #print("===>>INFO: Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
                     if self.send_index_data(client.socket_index, data):
                         self.index_data_count.value += len(data.get("files", []))
                         previous_client_operation_status = 1
+                        # Just for OPERATION stats collection
+                        if first_index_distribution == 0:
+                            self.operation_start_time = datetime.now()
+                            first_index_distribution =1
                     else: # Re-send once again
                         previous_client_operation_status = 0
                         if self.send_index_data(client.socket_index, data):
@@ -157,6 +163,7 @@ class Monitor:
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
                 self.logger_queue.put("INFO: Indexed data distribution is completed! {}".format(self.index_data_queue.qsize()))
                 self.all_index_data_distributed.value = 1
+
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
                     data = {"indexing_done": 1}
@@ -164,9 +171,7 @@ class Monitor:
                         if not self.send_index_data(client.socket_index, data):
                             self.logger_queue.put("ERROR: Unable to send indexing completion message to client-{}".format(client.id))
                     print("INFO: Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
-
-                now = datetime.now()
-                print("INFO: {} INDEXING Completed in {} seconds".format(self.operation,(now - self.operation_start_time).seconds))
+                # Intimidated all the clients, exit the loop.
                 break
 
         # Closing all socket connection
@@ -184,7 +189,7 @@ class Monitor:
             prefix_storage_file = "/var/log/prefix_index_data.json"
             print("INFO: Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
             with open(prefix_storage_file, "w") as persistent_storage:
-                json.dump(prefix_index_data, persistent_storage)
+                json.dump(self.prefix_index_data.copy(), persistent_storage)
 
         print("INFO: Monitor-Index-Distribution is terminated gracefully!")
         self.logger_queue.put("INFO: Monitor-Index-Distribution is terminated gracefully! ")
@@ -280,7 +285,7 @@ class Monitor:
     def operation_progress(self):
         """
         Monitor: Operation Progress
-        Process the status result and update the progress.
+        Process the status result coming from different client nodes and update the progress.
         #TODO
         :return:
         """
@@ -288,6 +293,7 @@ class Monitor:
         operation_success_count = 0
         operation_failure_count = 0
         display_percentage = 10
+        failure_file_size_in_byte = 0
         while True:
             # Condition to break the loop:
             # If status poller has stopped  and status_queue is empty
@@ -304,7 +310,9 @@ class Monitor:
             if not self.status_queue.empty():
                 status = self.status_queue.get()
                 operation_success_count += status.get("success", 0)
-                operation_failure_count += status.get("failure", 0)
+                if status.get("failure", 0):
+                    operation_failure_count += status.get("failure", 0)
+                    failure_file_size_in_byte += status.get("size", 0)
 
                 # Progress calculation, the value of index_data_count increases as indexing at progresses.
                 # The file_index_count increases as response received from client application.
@@ -337,6 +345,21 @@ class Monitor:
 
 
         self.monitor_progress_status.value = 1
+        total_operation_time = (datetime.now() - self.operation_start_time).seconds
+
+        # Calculate operation BandWidth
+        if self.operation.upper() == "DEL" or self.operation.upper() == "GET":
+            prefix_index_data_file = "/var/log/prefix_index_data.json"
+            with open(prefix_index_data_file, "r") as prefix_index_data_handler:
+                prefix_index_data = json.load(prefix_index_data_handler)
+        else:
+            prefix_index_data = self.prefix_index_data
+        original_file_size_in_byte = 0
+        #print("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:{}".format(self.prefix_index_data))
+        for prefix,value in prefix_index_data.items():
+            original_file_size_in_byte += value["size"]
+
+        success_operation_size_in_byte= original_file_size_in_byte
 
         print("***** Operation Statistics *****")
         if operation_success_count:
@@ -345,7 +368,12 @@ class Monitor:
         if operation_failure_count:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
             print("Total Operation:{}, Operation Failure:{} - {}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
-        now = datetime.now()
-        print("INFO: Operation {} completed in {} seconds ".format(self.operation, (now - self.operation_start_time).seconds))
+            success_operation_size_in_byte -= failure_file_size_in_byte
+
+        bandwidth = success_operation_size_in_byte / ( 1024 * 1024 * total_operation_time)
+        operation_size_in_gb = success_operation_size_in_byte / ( 1024 * 1024 * 1024)
+
+        print("INFO: Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
+        print("INFO: Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
         print("INFO: Monitor-Progress-Status terminated!")
         self.logger_queue.put("INFO: Monitor-Progress-Status terminated! ")

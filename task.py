@@ -3,6 +3,7 @@ import os,sys
 from utils.utility import exception
 from multiprocessing import Value,Manager
 from minio_client import MinioClient
+from s3_client import S3
 import json
 
 task_id = Value('i', 1)
@@ -28,10 +29,14 @@ def put(params, status_queue , logger_queue):
     success = 0
     #logger_queue.put("TASK:Upload Minio Config {}".format(minio_config))
     mc = MinioClient(minio_url,minio_access_key,minio_secret_key)
+    s3 = S3({})
+    #logger_queue.put(" **************************** Based on S3")
     #print("Uploaded files dir:{}/{}".format(index_data["dir"], index_data["files"]))
-    #logger_queue.put("TASK:Uploaded files dir:{}/{}".format(index_data["dir"], index_data["files"]))
+    #logger_queue.put("TASK:PUT DATA  {}".format(index_data))
     uploaded_files = []
+    failure_files_size = 0
     if mc.client:
+    #if s3.s3_client:
         for file_name in index_data["files"]:
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
             if os.path.exists(file):
@@ -45,8 +50,11 @@ def put(params, status_queue , logger_queue):
                     success +=1
                 else:
                     if mc.put(minio_bucket, file):
+                    #if s3.upload_fileobj(minio_bucket, file):
                         uploaded_files.append(file_name)
                         success +=1
+                    else:
+                        failure_files_size += os.path.getsize(file)
             else:
                 logger_queue.put("ERROR: Task-Upload: File-{} doesn't exist".format(file))
     else:
@@ -54,7 +62,7 @@ def put(params, status_queue , logger_queue):
 
     #logger_queue.put("DEBUG: Minio Uploaded files {}:{}".format(index_data["dir"], uploaded_files ))
     # Update following section for upload status.
-    status_message = {"success": success, "failure": (len(index_data["files"]) - success) , "dir": index_data["dir"]}
+    status_message = {"success": success, "failure": (len(index_data["files"]) - success) , "dir": index_data["dir"] , "size" : failure_files_size}
     status_queue.put(status_message)
     logger_queue.put("DEBUG: Minio Upload Status - {} - {}".format(status_message, status_queue.qsize()))
 
@@ -138,7 +146,7 @@ def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size):
     """
     Iterate over the object keys and generate a message which holds a prefix and object keys underneath of the prefix.
     :param object_keys_iterator: Returned object keys iterator,
-    :param prefix_index_data: A shared dictionary
+    :param prefix_index_data: Data loaded from persistent storage  {"prefix": {"files": <file_count>, "size": <size under prefix>}}
     :param max_index_size:
     :return:
     """
@@ -302,8 +310,8 @@ def indexing(**kwargs):
 
         # If files a directory, then create a task
         if "dir" in result and "files" in result:
-            #print("Received Files: {}".format(result["files"]))
-            msg = {"dir": result["dir"], "files": result["files"] , "nfs_cluster": nfs_cluster}
+            #print("Received Files: {}".format(result))
+            msg = {"dir": result["dir"], "files": result["files"] , "size": result["size"], "nfs_cluster": nfs_cluster}
             index_data_queue.put(msg)
             logger_queue.put("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format( result["dir"], len(result["files"]) , index_data_queue.qsize()))
 
@@ -375,6 +383,7 @@ def iterate_dir(**kwargs):
 
     #file_count=10
     file_set = []
+    file_set_size = 0
     dir = kwargs["data"]
     logger_queue = kwargs["logger_queue"]
     max_index_size = kwargs["max_index_size"]
@@ -388,12 +397,14 @@ def iterate_dir(**kwargs):
             yield { "dir": path }
         else:
             if len(file_set) == max_index_size:
-                yield {"dir": dir, "files": file_set}
+                yield {"dir": dir, "files": file_set, "size": file_set_size}
                 #print("Files:{}".format(file_set))
                 file_set = [file]
+                file_set_size = os.path.getsize(path)
             else:
                 file_set.append(file)
+                file_set_size += os.path.getsize(path)
 
     # Remaining files to be added.
     if file_set:
-        yield {"dir": dir, "files": file_set}
+        yield {"dir": dir, "files": file_set, "size": file_set_size}

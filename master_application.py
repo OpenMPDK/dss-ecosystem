@@ -465,6 +465,7 @@ def process_put_operation(master):
 
 				master.logger_queue.put("INFO: Indexed data generation is completed!")
 				print("INFO: Indexed data generation is completed!")
+				print("INFO: {} INDEXING Completed in {} seconds".format(master.operation,(datetime.now() - master.operation_start_time).seconds))
 
 		master.progress_of_indexing_lock.release()
 
@@ -574,6 +575,8 @@ def process_del_operation(master):
 				master.index_data_generation_complete.value = 1
 				master.logger_queue.put("INFO: Object-Keys generation through listing is completed!")
 				print("INFO: Object-Keys generation through listing is completed!")
+				print("INFO: {} LISTING Completed in {} seconds".format(master.operation, (
+						datetime.now() - master.operation_start_time).seconds))
 				# Shutdown workers
 				#master.stop_workers()
 				#workers_stopped = 1
