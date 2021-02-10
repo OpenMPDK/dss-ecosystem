@@ -6,16 +6,14 @@ using namespace dss;
 namespace py = pybind11;
 
 PYBIND11_MODULE(dss, m) {
-	//m.def("init", &InitAwsAPI);
-    //m.def("fini", &FiniAwsAPI);
 	m.def("createClient", &Client::CreateClient);
 
     py::class_<Client>(m, "Client")
         .def(py::init<const std::string&, const std::string&, const std::string&>())
-        .def("putObject", &Client::PutObject)
-        .def("getObject", &Client::GetObject)
-        .def("deleteObject", &Client::DeleteObject)
-        .def("listObjects", &Client::ListObjects)
+        .def("putObject", &Client::PutObject,	"Upload object to dss cluster")
+        .def("getObject", &Client::GetObject,	"Download object from dss cluster")
+        .def("deleteObject", &Client::DeleteObject, "Delete object from dss cluster")
+        .def("listObjects", &Client::ListObjects, "List object keys with prefix", py::arg("prefix") = "")
         //.def("createBucket", &Client::CreateBucket)
         //.def("deleteBucket", &Client::DeleteBucket)
         //.def("listBuckets", &Client::ListBuckets)

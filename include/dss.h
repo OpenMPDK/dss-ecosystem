@@ -105,7 +105,7 @@ public:
 	Result HeadBucket(const Aws::String& bn);
 	Result CreateBucket(const Aws::String& bn);
 
-	Result ListObjects(const Aws::String& bn, std::set<std::string>& keys);
+	Result ListObjects(const Aws::String& bn, const Aws::String& prefix, std::set<std::string>& keys);
 
 #if 0
     int CreateBucket(const Aws::String& bucketName);
@@ -137,7 +137,7 @@ public:
 	Result CreateBucket();
     uint32_t GetID() { return m_id; }
 
-	Result ListObjects(std::set<std::string>& keys);
+	Result ListObjects(const Aws::String& prefix, std::set<std::string>& keys);
 
 	int InsertEndpoint(Client* c, const std::string& ip, uint32_t port);
 private:
@@ -216,7 +216,7 @@ public:
     int DeleteObject(const Aws::String& objectName);
 
     Objects *GetObjects() { return new Objects(m_cluster_map); };
-    std::set<std::string> ListObjects();
+    std::set<std::string> ListObjects(const Aws::String& prefix);
     std::set<std::string> ListBuckets();
 
 private:

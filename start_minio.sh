@@ -1,3 +1,5 @@
-~/jerry/minio/minio server --address :9001 /data/tenant1 &
-~/jerry/minio/minio server --address :9002 /data/tenant2 &
-~/jerry/minio/minio server --address :9003 /data/tenant3 &
+#!/bin/bash
+
+for i in {1..8}; do
+	~/jerry/minio/minio server --address :900${i} /tmp/tenant${i} &
+done

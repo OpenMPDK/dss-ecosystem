@@ -150,18 +150,18 @@ Endpoint::DeleteObject(const Aws::String& bn, const Aws::String& objectName)
 }
 
 Result
-Endpoint::ListObjects(const Aws::String& bn, std::set<std::string>& keys)
+Endpoint::ListObjects(const Aws::String& bn, const Aws::String& prefix, std::set<std::string>& keys)
 {
 	std::string token;
     S3::Model::ListObjectsV2Outcome out;
     S3::Model::ListObjectsV2Request req;
-    req.WithBucket(bn).SetMaxKeys(100);
+    req.WithBucket(bn).WithPrefix(prefix).SetMaxKeys(100);
 
     do {
         out = m_ses.ListObjectsV2(req);
         if (out.IsSuccess()) {
-            std::cout << "Objects in bucket '" << bn << "':"
-                      << std::endl;
+            //std::cout << "Objects in bucket '" << bn << "':"
+            //          << std::endl;
 
             Aws::Vector<Aws::S3::Model::Object> objects =
                                             out.GetResult().GetContents();
@@ -299,9 +299,9 @@ Cluster::DeleteObject(const Aws::String& objectName)
 }
 
 Result
-Cluster::ListObjects(std::set<std::string>& keys)
+Cluster::ListObjects(const Aws::String& prefix, std::set<std::string>& keys)
 {
-	return m_endpoints[0]->ListObjects(m_bucket, keys);
+	return m_endpoints[0]->ListObjects(m_bucket, prefix, keys);
 }
 
 Result
@@ -401,13 +401,13 @@ int Client::DeleteObject(const Aws::String& objectName)
 }
 
 std::set<std::string>
-Client::ListObjects()
+Client::ListObjects(const Aws::String& prefix)
 {
 	std::set<std::string> lists;
 	const std::vector<Cluster*> clusters = m_cluster_map->GetClusters();
 
 	for (auto c : clusters) {
-		Result r = c->ListObjects(lists);
+		Result r = c->ListObjects(prefix, lists);
 		if (!r.IsSuccess()) {
 			auto err = r.GetErrorType();
 	        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
@@ -507,7 +507,7 @@ int Objects::GetObjKeys()
 		return -1;
 	}
 
-	Result r = clusters[m_cur_id]->ListObjects(m_pages);
+	Result r = clusters[m_cur_id]->ListObjects("", m_pages);
 	if (r.IsSuccess()) {
 		m_cur_id++;
 		return 0;
@@ -558,6 +558,19 @@ int Objects::GetObjKeys()
 
 int InitAwsAPI() 
 {
+	char *c = NULL;
+	unsigned l = 0;
+
+	if ((c = getenv("DSS_AWS_LOG"))) {
+		l = *c - '0';
+
+		if (l > (int) Aws::Utils::Logging::LogLevel::Trace) {
+			pr_err("AWS log level out of range\n");
+			l = 0;
+		}
+	}
+
+    options.loggingOptions.logLevel = (Aws::Utils::Logging::LogLevel) l;
     Aws::InitAPI(options);
     return 0;
 }
@@ -573,6 +586,8 @@ int FiniAwsAPI()
 int main()
 {
     Aws::SDKOptions options;
+    //options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Trace;
+
     Aws::InitAPI(options);
     {
         const Aws::String object_name = "test_obj";
@@ -595,7 +610,7 @@ int main()
         //dss::Objects *objs = client->GetObjects();
         //while (!objs->GetObjKeys()) {;}
 
-		//client->ListObjects();
+		client->ListObjects("root/jerry/dummy_files/test5");
 
 		//client.DeleteBucket(bucket_name, true);
     }
