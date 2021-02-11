@@ -194,21 +194,18 @@ ClusterMap::DownloadClusterConf()
 	}
 
 	using json = nlohmann::json;
-    json conf = json::parse(r.GetIOStream());
 
-    auto start = std::chrono::steady_clock::now();
- 
-	for (auto &c : conf["clusters"]) {
-		Cluster* cluster = InsertCluster(c["id"]);
-		pr_debug("Adding cluster %u\n", (uint32_t)c["id"]);
-		for (auto &ep : c["endpoints"])
-			cluster->InsertEndpoint(m_client, ep["ipv4"], ep["port"]);
+	try {
+    	json conf = json::parse(r.GetIOStream());
+		for (auto &c : conf["clusters"]) {
+			Cluster* cluster = InsertCluster(c["id"]);
+			pr_debug("Adding cluster %u\n", (uint32_t)c["id"]);
+			for (auto &ep : c["endpoints"])
+				cluster->InsertEndpoint(m_client, ep["ipv4"], ep["port"]);
+		}
+	} catch (std::exception& e) {
+		throw DiscoverError("Parse conf.json error: " + Aws::String(e.what()));
 	}
-
-    auto end = std::chrono::steady_clock::now();
- 
-	pr_debug("Initing cluser map took %lu ms\n",
-			std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
 	return 0;
 }
