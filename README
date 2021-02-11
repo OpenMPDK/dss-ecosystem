@@ -1,0 +1,74 @@
+Build DSS client library:
+
+Platform requirements: CentOS 7.x, gcc that fully supports C++11, cmake 3.13 or above
+					   Python 3.8 or above
+Library dependencies: aws-cpp-sdk with core, S3 services enabled
+
+In source code tree, there is a build.sh that wraps CMakeLists.txt that automatically
+produces a C++ libdss.so file and a dss.cpython-XXXXXX.so which provides python interface
+under ./build directory.
+
+To validate the python extension, start python shell and run
+">>> import dss"
+and you should not see any errors
+
+Note: If you are working with a new dss clusters, you need to prime one of the cluster
+to contain a cluster config file for dss client to discover clustering topology. In order
+to do it, pick a cluster to create a bucket named "dss" and upload a file named "conf.json"
+to it. See conf.json in the source tree as example
+
+Setup build enviroment:
+
+The easiest way to setup the build env is to use Anaconda, and thru it you can
+use conda install gcc, cmake and etc..
+
+If you don't have a ready to use aws-cpp-sdk rpm, you can build it yourself
+
+Install Anaconda:
+wget https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
+chmod +X Anaconda3-2020.11-Linux-x86_64.sh
+./Anaconda3-2020.11-Linux-x86_64.sh
+
+Or if you can't use Anaconda, you can build gcc and cmake by youself
+
+Building gcc and install at /opt:
+yum install dnf
+dnf install libmpc-devel mpfr-devel gmp-devel zlib-devel*
+git clone https://gcc.gnu.org/git/gcc.git
+git checkout releases/gcc-9.3.0
+cd gcc
+./configure --with-system-zlib --disable-multilib --enable-languages=c,c++ --prefix=/opt/gcc
+make -j;make install
+create /etc/ld.so.conf.d/stdlibc_cxx.conf with the lines:
+/opt/gcc/lib
+/opt/gcc/lib64
+
+Build cmake and install /opt:
+git clone https://gitlab.kitware.com/cmake/cmake.git
+cd cmake
+git checkout v3.18.4
+./bootstrap --prefix=/opt/cmake
+
+Build aws-cpp-sdk:
+yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
+git clone https://github.com/aws/aws-sdk-cpp.git
+git checkout 1.8.99
+mkdir build
+cd build
+/opt/gcc/bin/g++ cmake ../ -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3"
+
+
+Install Anaconda:
+wget https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
+chmod +X Anaconda3-2020.11-Linux-x86_64.sh
+./Anaconda3-2020.11-Linux-x86_64.sh
+
+
+Build aws-cpp-sdk:
+yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
+git clone https://github.com/aws/aws-sdk-cpp.git
+git checkout 1.8.99
+mkdir build
+cd build
+/opt/gcc/bin/g++ cmake ../ -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3"
+
