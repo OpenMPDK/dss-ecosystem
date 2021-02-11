@@ -79,7 +79,6 @@ _pr_debug(const char *file, int line, const char *format, ...) {
 
     if (__LOG_LEVEL == INS_LOG_UINT) {
         if ( (s = getenv("DSS_DEBUG")) ) {
-        	printf("%s\n", file);
             __LOG_LEVEL = pr_env2level(file, s);
         }
     }

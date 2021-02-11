@@ -15,7 +15,28 @@ and you should not see any errors
 Note: If you are working with a new dss clusters, you need to prime one of the cluster
 to contain a cluster config file for dss client to discover clustering topology. In order
 to do it, pick a cluster to create a bucket named "dss" and upload a file named "conf.json"
-to it. See conf.json in the source tree as example
+to it. See conf.json in the source tree as example.
+
+Note: In case init'ing creating dss client feels slow, do export AWS_EC2_METADATA_DISABLED=true
+
+
+Debug DSS client:
+
+To enable aws-cpp-sdk logging, set env var DSS_AWS_LOG to the range between 0 and 6
+enum class LogLevel : int
+{
+	Off = 0,
+    Fatal = 1,
+    Error = 2,
+    Warn = 3,
+    Info = 4,
+    Debug = 5,
+    Trace = 6
+};
+
+To enable dss logging, set env var DSS_DEBUG to the source file names seperated by
+comma, e.g. DSS_DEBUG=/root/dss_client/src/dss_client.cpp python3 test/test.py
+
 
 Setup build enviroment:
 
