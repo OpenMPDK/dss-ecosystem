@@ -166,7 +166,7 @@ Endpoint::ListObjects(const Aws::String& bn, const Aws::String& prefix, std::set
             Aws::Vector<Aws::S3::Model::Object> objects =
                                             out.GetResult().GetContents();
             for (auto o : objects) {
-                std::cout << o.GetKey() << std::endl;
+                //std::cout << o.GetKey() << std::endl;
                 keys.insert(o.GetKey().c_str());
             }
         } else {
@@ -187,8 +187,9 @@ ClusterMap::DownloadClusterConf()
 		if (err == Aws::S3::S3Errors::NETWORK_CONNECTION)
 			throw NetworkError();
  
-		fprintf(stderr, "%s Error type %u\n",
-				r.GetErrorMsg().c_str(), (unsigned)r.GetErrorType());
+		//fprintf(stderr, "%s Error type %u\n",
+		//		r.GetErrorMsg().c_str(), (unsigned)r.GetErrorType());
+		throw DiscoverError("Failed to download conf.json: " + r.GetErrorMsg()); 	
 		return -1;
 	}
 

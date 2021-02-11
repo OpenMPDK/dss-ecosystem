@@ -36,6 +36,16 @@ public:
     const char* what() const noexcept {return "Key doesn't exist\n";}
 };
 
+class DiscoverError : std::exception {
+public:
+	DiscoverError(Aws::String msg) {
+		m_msg = "Discover failed: " + msg; 
+	}
+    const char* what() const noexcept { return m_msg.c_str(); }
+private:
+	Aws::String m_msg;
+};
+
 class NetworkError : std::exception {
 public:
     const char* what() const noexcept {return "Endpoint cannot be reached\n";}
@@ -44,7 +54,7 @@ public:
 class GenericError : std::exception {
 public:
     GenericError(std::string msg) : m_msg(msg) {}
-    const char* what() const noexcept {return "Endpoint cannot be reached\n";}
+    const char* what() const noexcept {return "Generic error\n";}
 private:
     std::string m_msg;
 };
@@ -80,7 +90,8 @@ public:
 	Result(bool success, Aws::S3::S3Error e) :
 		r_success(success),
 		r_err_type(e.GetErrorType()),
-		r_err_msg(e.GetExceptionName() + e.GetMessage()) {}
+		r_err_msg("Exception: " + e.GetExceptionName() +
+				  " Details: " + e.GetMessage()) {}
 
 	bool IsSuccess() { return r_success; }
 	Aws::IOStream& GetIOStream() { return r_object.GetBody(); }

@@ -25,6 +25,7 @@ PYBIND11_MODULE(dss, m) {
 	};
 
     static py::exception<NoSuchResouceError> NoSuchResourceExc(m, "NoSuchResouceError");
+ 	static py::exception<DiscoverError> DiscoverExc(m, "DiscoverError");
     static py::exception<NetworkError> NetworkExc(m, "NetworkError");
     static py::exception<GenericError> GenericExc(m, "GenericError");
     static py::exception<NoIterator> LastIterExc(m, "NoIterator");
@@ -34,6 +35,8 @@ PYBIND11_MODULE(dss, m) {
             if (p) std::rethrow_exception(p);
         } catch (const NoSuchResouceError &e) {
             NoSuchResourceExc(e.what());
+        } catch (const DiscoverError &e) {
+            DiscoverExc(e.what());
         } catch (const NetworkError &e) {
             NetworkExc(e.what());
         } catch (const GenericError &e) {
