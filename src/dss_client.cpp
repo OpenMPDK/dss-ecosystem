@@ -150,12 +150,18 @@ Endpoint::DeleteObject(const Aws::String& bn, const Aws::String& objectName)
 }
 
 Result
-Endpoint::ListObjects(const Aws::String& bn, const Aws::String& prefix, std::set<std::string>& keys)
+Endpoint::ListObjects(const Aws::String& bn, Objects *os, std::set<std::string>& keys)
 {
+	bool cont = false;
 	std::string token;
     S3::Model::ListObjectsV2Outcome out;
     S3::Model::ListObjectsV2Request req;
-    req.WithBucket(bn).WithPrefix(prefix).SetMaxKeys(100);
+
+    req.WithBucket(bn).WithPrefix(os->GetPrefix());
+    if (os->PageSizeSet())
+    	req.SetMaxKeys(os->GetPageSize());
+    if (os->TokenSet())
+    	req.SetContinuationToken(os->GetToken().c_str());
 
     do {
         out = m_ses.ListObjectsV2(req);
@@ -172,7 +178,20 @@ Endpoint::ListObjects(const Aws::String& bn, const Aws::String& prefix, std::set
         } else {
 			return Result(false, out.GetError());
         }
-    } while (out.GetResult().GetIsTruncated() &&
+
+        if (out.GetResult().GetIsTruncated()) {
+			if (os->PageSizeSet()) {
+				os->SetToken(out.GetResult().GetNextContinuationToken());
+				cont = false;
+			} else {
+				cont = true;
+			}
+		} else {
+			os->SetToken("");
+			cont = false;
+		}
+
+    } while (cont &&
     		 (req.SetContinuationToken(out.GetResult().GetNextContinuationToken().c_str()), true));
 
     return Result(true);
@@ -297,9 +316,9 @@ Cluster::DeleteObject(const Aws::String& objectName)
 }
 
 Result
-Cluster::ListObjects(const Aws::String& prefix, std::set<std::string>& keys)
+Cluster::ListObjects(Objects *objs, std::set<std::string>& keys)
 {
-	return m_endpoints[0]->ListObjects(m_bucket, prefix, keys);
+	return m_endpoints[0]->ListObjects(m_bucket, objs, keys);
 }
 
 Result
@@ -399,13 +418,14 @@ int Client::DeleteObject(const Aws::String& objectName)
 }
 
 std::set<std::string>
-Client::ListObjects(const Aws::String& prefix)
+Client::ListObjects(const std::string& prefix)
 {
-	std::set<std::string> lists;
+	std::set<std::string> list;
+	Objects* objs = GetObjects(prefix, 0);
 	const std::vector<Cluster*> clusters = m_cluster_map->GetClusters();
 
 	for (auto c : clusters) {
-		Result r = c->ListObjects(prefix, lists);
+		Result r = c->ListObjects(objs, list);
 		if (!r.IsSuccess()) {
 			auto err = r.GetErrorType();
 	        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
@@ -415,7 +435,7 @@ Client::ListObjects(const Aws::String& prefix)
 		}
 	}
 
-	return lists;
+	return list;
 }
 
 #if 0
@@ -494,9 +514,10 @@ int Client::DeleteBucket(const Aws::String& bucketName, bool force)
 
 int Objects::GetObjKeys() 
 {
+	bool cont = false;
 	const std::vector<Cluster*> clusters = m_cluster_map->GetClusters();
 
-	m_pages.clear();
+	m_page.clear();
 
 	if (m_cur_id == -1) {
 		m_cur_id = 0;
@@ -505,17 +526,30 @@ int Objects::GetObjKeys()
 		return -1;
 	}
 
-	Result r = clusters[m_cur_id]->ListObjects("", m_pages);
-	if (r.IsSuccess()) {
-		m_cur_id++;
-		return 0;
-	} else {
-		auto err = r.GetErrorType();
-		if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
-			throw NoSuchResouceError();
-        else
-            throw GenericError(r.GetErrorMsg().c_str());
-	}
+	do {
+		Result r = clusters[m_cur_id]->ListObjects(this, m_page);
+		if (r.IsSuccess()) {
+			m_cur_id++;
+			return 0;
+		} else {
+			auto err = r.GetErrorType();
+			if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
+				throw NoSuchResouceError();
+        	else
+            	throw GenericError(r.GetErrorMsg().c_str());
+		}
+
+		if (m_page.size() < GetPageSize()) {
+			m_cur_id += 1;
+			cont = true;
+			if ((unsigned long)m_cur_id == clusters.size()) {
+				m_cur_id = -1;
+				return -1;
+			}
+		} else {
+			cont = false;
+		}
+	} while (cont);
 
 #if 0
     S3::Model::ListObjectsV2Request request;
@@ -608,7 +642,9 @@ int main()
         //dss::Objects *objs = client->GetObjects();
         //while (!objs->GetObjKeys()) {;}
 
-		client->ListObjects("root/jerry/dummy_files/test5");
+		auto result = client->ListObjects("");
+		for (auto k : result)
+			printf("%s\n", k.c_str());
 
 		//client.DeleteBucket(bucket_name, true);
     }

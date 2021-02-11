@@ -25,6 +25,8 @@ using Credential = Aws::Auth::AWSCredentials;
 
 extern volatile bool dss_env_init;
 
+#define DSS_PAGINATION_DEFAULT	100UL
+
 struct Config {
 	std::string ip;
 	std::string user;
@@ -67,19 +69,28 @@ class ClusterMap;
 
 class Objects {
 public:
-    Objects(ClusterMap* map) :
-        m_cur_id(-1), m_cluster_map(map)  {}
+    Objects(ClusterMap* map, std::string prefix, uint32_t ps) :
+        m_cur_id(-1), m_cluster_map(map), m_prefix(prefix), m_pagesize(ps)  {}
+    const char *GetPrefix() { return m_prefix.c_str(); }
+	uint32_t GetPageSize() { return m_pagesize; }
     int GetObjKeys();
+
+	void SetToken(Aws::String str) { m_token = str; }
+	Aws::String& GetToken() { return m_token; }
+    bool TokenSet() { return m_token.size() != 0; }
+    bool PageSizeSet() { return m_pagesize != 0; }
+
 private:
 	int m_cur_id;
-	std::string m_token;
+	Aws::String m_token;
    	bool m_token_set;
-
 	ClusterMap* m_cluster_map;
-    std::set<std::string> m_pages;
+	std::string m_prefix;
+	uint32_t m_pagesize;
+    std::set<std::string> m_page;
 public:
-    decltype(m_pages.cbegin()) begin() const { return m_pages.cbegin(); }
-    decltype(m_pages.cend()) end() const { return m_pages.cend(); }
+    decltype(m_page.cbegin()) begin() const { return m_page.cbegin(); }
+    decltype(m_page.cend()) end() const { return m_page.cend(); }
 };
 
 class Result {
@@ -99,9 +110,9 @@ public:
 	Aws::String& GetErrorMsg() { return r_err_msg; }
 
 private:
-	bool			r_success;
-	Aws::S3::S3Errors r_err_type;
-	Aws::String		r_err_msg;
+	bool				r_success;
+	Aws::S3::S3Errors 	r_err_type;
+	Aws::String			r_err_msg;
 	Aws::S3::Model::GetObjectResult	r_object;
 };
 
@@ -116,7 +127,7 @@ public:
 	Result HeadBucket(const Aws::String& bn);
 	Result CreateBucket(const Aws::String& bn);
 
-	Result ListObjects(const Aws::String& bn, const Aws::String& prefix, std::set<std::string>& keys);
+	Result ListObjects(const Aws::String& bn, Objects *objs, std::set<std::string>& keys);
 
 #if 0
     int CreateBucket(const Aws::String& bucketName);
@@ -148,7 +159,7 @@ public:
 	Result CreateBucket();
     uint32_t GetID() { return m_id; }
 
-	Result ListObjects(const Aws::String& prefix, std::set<std::string>& keys);
+	Result ListObjects(Objects *objs, std::set<std::string>& keys);
 
 	int InsertEndpoint(Client* c, const std::string& ip, uint32_t port);
 private:
@@ -226,8 +237,10 @@ public:
     int PutObject(const Aws::String& objectName, const Aws::String& src_fn);
     int DeleteObject(const Aws::String& objectName);
 
-    Objects *GetObjects() { return new Objects(m_cluster_map); };
-    std::set<std::string> ListObjects(const Aws::String& prefix);
+    Objects *GetObjects(std::string prefix, uint32_t page_size = DSS_PAGINATION_DEFAULT) {
+    	return new Objects(m_cluster_map, prefix, page_size);
+    };
+    std::set<std::string> ListObjects(const std::string& prefix);
     std::set<std::string> ListBuckets();
 
 private:

@@ -9,20 +9,27 @@ PYBIND11_MODULE(dss, m) {
 	m.def("createClient", &Client::CreateClient);
 
     py::class_<Client>(m, "Client")
-        .def(py::init<const std::string&, const std::string&, const std::string&>())
+        //.def(py::init<const std::string&, const std::string&, const std::string&>())
         .def("putObject", &Client::PutObject,	"Upload object to dss cluster")
         .def("getObject", &Client::GetObject,	"Download object from dss cluster")
         .def("deleteObject", &Client::DeleteObject, "Delete object from dss cluster")
-        .def("listObjects", &Client::ListObjects, "List object keys with prefix", py::arg("prefix") = "")
-        //.def("createBucket", &Client::CreateBucket)
-        //.def("deleteBucket", &Client::DeleteBucket)
-        //.def("listBuckets", &Client::ListBuckets)
-		.def("getObjects", &Client::GetObjects);
+        .def("listObjects", &Client::ListObjects, "List object keys with prefix",
+        	 py::arg("prefix") = "")
+		.def("getObjects", &Client::GetObjects, "Create a iterable key list",
+			py::arg("prefix") = "",
+			py::arg("limit") = DSS_PAGINATION_DEFAULT);
 
 	class NoIterator : std::exception {
 	public:
     	const char* what() const noexcept {return "No iterator\n";}
 	};
+
+    py::class_<Objects>(m, "Objects")
+        .def("__iter__", [](Objects &objs) {
+        	if (objs.GetObjKeys() < 0)
+        		throw NoIterator();
+        	return py::make_iterator(objs.begin(), objs.end());
+        }, py::keep_alive<0, 1>());
 
     static py::exception<NoSuchResouceError> NoSuchResourceExc(m, "NoSuchResouceError");
  	static py::exception<DiscoverError> DiscoverExc(m, "DiscoverError");
@@ -45,15 +52,5 @@ PYBIND11_MODULE(dss, m) {
             LastIterExc(e.what());
         }
     });
-
-    py::class_<Objects>(m, "Objects")
-        .def("__iter__", [](Objects &objs) {
-        	if (objs.GetObjKeys() < 0)
-        		throw NoIterator();
-        	return py::make_iterator(objs.begin(), objs.end());
-        }, py::keep_alive<0, 1>());
-
-    //m.def("init", &InitAwsAPI);
-    //m.def("fini", &FiniAwsAPI);
 }
 
