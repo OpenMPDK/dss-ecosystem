@@ -6,13 +6,20 @@ using namespace dss;
 namespace py = pybind11;
 
 PYBIND11_MODULE(dss, m) {
-	m.def("createClient", &Client::CreateClient);
+	m.def("createClient", &Client::CreateClient,
+		py::arg("url"),
+		py::arg("username"),
+		py::arg("password"));
 
     py::class_<Client>(m, "Client")
-        //.def(py::init<const std::string&, const std::string&, const std::string&>())
-        .def("putObject", &Client::PutObject,	"Upload object to dss cluster")
-        .def("getObject", &Client::GetObject,	"Download object from dss cluster")
-        .def("deleteObject", &Client::DeleteObject, "Delete object from dss cluster")
+        .def("putObject", &Client::PutObject,	"Upload object to dss cluster",
+        	py::arg("key"),
+        	py::arg("file_path"))
+        .def("getObject", &Client::GetObject,	"Download object from dss cluster",
+        	py::arg("key"),
+        	py::arg("file_path"))
+        .def("deleteObject", &Client::DeleteObject, "Delete object from dss cluster",
+        	py::arg("key"))
         .def("listObjects", &Client::ListObjects, "List object keys with prefix",
         	 py::arg("prefix") = "")
 		.def("getObjects", &Client::GetObjects, "Create a iterable key list",
