@@ -2,7 +2,7 @@ Build DSS client library:
 
 Platform requirements: CentOS 7.x, gcc that fully supports C++11, cmake 3.13 or above
 					   Python 3.8 or above
-Library dependencies: aws-cpp-sdk with core, S3 services enabled
+Library dependencies: aws-cpp-sdk with core, S3 services enabled, pybind11
 
 In source code tree, there is a build.sh that wraps CMakeLists.txt that automatically
 produces a C++ libdss.so file and a dss.cpython-XXXXXX.so which provides python interface
@@ -43,6 +43,9 @@ Setup build enviroment:
 The easiest way to setup the build env is to use Anaconda, and thru it you can
 use conda install gcc, cmake and etc..
 
+Install pybind11
+pip3 install pybind11
+
 If you don't have a ready to use aws-cpp-sdk rpm, you can build it yourself
 
 Install Anaconda:
@@ -63,21 +66,13 @@ make -j;make install
 create /etc/ld.so.conf.d/stdlibc_cxx.conf with the lines:
 /opt/gcc/lib
 /opt/gcc/lib64
+then run ldconfig
 
 Build cmake and install /opt:
 git clone https://gitlab.kitware.com/cmake/cmake.git
 cd cmake
 git checkout v3.18.4
 ./bootstrap --prefix=/opt/cmake
-
-Build aws-cpp-sdk:
-yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
-git clone https://github.com/aws/aws-sdk-cpp.git
-git checkout 1.8.99
-mkdir build
-cd build
-/opt/gcc/bin/g++ cmake ../ -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3"
-
 
 Install Anaconda:
 wget https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
@@ -91,5 +86,5 @@ git clone https://github.com/aws/aws-sdk-cpp.git
 git checkout 1.8.99
 mkdir build
 cd build
-/opt/gcc/bin/g++ cmake ../ -DCMAKE_CXX_COMPILER=/opt/gcc/bin/g++ -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3"
+cmake ../ -DCMAKE_CXX_COMPILER=/opt/gcc/bin/g++ -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3"
 
