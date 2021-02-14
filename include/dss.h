@@ -23,8 +23,6 @@ namespace dss {
 
 using Credential = Aws::Auth::AWSCredentials;
 
-extern volatile bool dss_env_init;
-
 #define DSS_PAGINATION_DEFAULT	100UL
 
 struct Config {
@@ -61,8 +59,36 @@ private:
     std::string m_msg;
 };
 
-int InitAwsAPI();
-int FiniAwsAPI();
+/* __attribute__((destructor)) is only called after global var is
+   destructed, so if options is declared global, ShutdownAPI() would crash */
+class DSSInit {
+public:
+	DSSInit(): m_options() 
+	{
+		char *c = NULL;
+		unsigned l = 0;
+
+		if ((c = getenv("DSS_AWS_LOG"))) {
+			l = *c - '0';
+
+			if (l > (int) Aws::Utils::Logging::LogLevel::Trace) {
+				pr_err("AWS log level out of range\n");
+				l = 0;
+			}
+		}
+
+    	m_options.loggingOptions.logLevel = (Aws::Utils::Logging::LogLevel) l;
+    	Aws::InitAPI(m_options);
+	}
+
+	~DSSInit() 
+	{
+		Aws::ShutdownAPI(m_options);
+	}
+
+private:
+	Aws::SDKOptions m_options;
+};
 
 class Client;
 class ClusterMap;
@@ -129,24 +155,20 @@ public:
 
 	Result ListObjects(const Aws::String& bn, Objects *objs, std::set<std::string>& keys);
 
-#if 0
-    int CreateBucket(const Aws::String& bucketName);
-	int DeleteBucket(const Aws::String& bucketName, bool force=false);
-    Objects *GetObjects(std::string bucket) { return new Objects(this, bucket); };
-
-    std::set<std::string> ListObjects(const Aws::String& bucketName);
-    std::set<std::string> ListBuckets();
-
-    Aws::S3::S3Client* GetAwsClient() { return m_client; }; 
-#endif
 private:
 	Aws::S3::S3Client m_ses;
 };
 
 class Cluster {
 public:
-	Cluster(uint32_t id) : m_id(id), m_endpoints() {
-		m_bucket = Aws::String(DATA_BUCKET_PREFIX) + Aws::String(std::to_string(id).c_str());
+	Cluster(uint32_t id) :
+		m_id(id),
+		m_bucket(Aws::String(DATA_BUCKET_PREFIX) + Aws::String(std::to_string(id).c_str())) {}
+
+	~Cluster()
+	{
+		for (auto e : m_endpoints)
+			delete e;
 	}
 
     Result GetObject(const Aws::String& objectName);
@@ -173,6 +195,12 @@ private:
 class ClusterMap {
 public:
 	ClusterMap(Client *c) : m_client(c) {}
+
+	~ClusterMap()
+	{
+		for (auto c : m_clusters)
+			delete c;
+	}
 
 	Cluster* InsertCluster(uint32_t id)
 	{
@@ -218,13 +246,7 @@ private:
 
 class Client {
 public:
-	Client(const std::string& ip, const std::string& user, const std::string& pwd) {
-		if (__sync_bool_compare_and_swap(&dss_env_init, false, true))
-			InitAwsAPI();
-
-		m_cred = Aws::Auth::AWSCredentials(user.c_str(), pwd.c_str());
-		m_discover_ep = new Endpoint(m_cred, ip);
-	}
+	~Client();
 
     Result GetClusterConfig();
 	int InitClusterMap();
@@ -244,12 +266,16 @@ public:
     std::set<std::string> ListBuckets();
 
 private:
+	Client(const std::string& ip, const std::string& user, const std::string& pwd) {
+		m_cred = Aws::Auth::AWSCredentials(user.c_str(), pwd.c_str());
+		m_discover_ep = new Endpoint(m_cred, ip);
+	}
+
     friend class Objects;
 	Aws::Auth::AWSCredentials m_cred;
     Endpoint* m_discover_ep;
     ClusterMap* m_cluster_map;
 
-	/* Explicit cast is mandatory */
     static constexpr char* DISCOVER_BUCKET = (char *)"dss";
     static constexpr char* DISCOVER_CONFIG_KEY = (char *)"conf.json";
 };

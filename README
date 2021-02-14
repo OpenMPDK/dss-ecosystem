@@ -6,7 +6,8 @@ Library dependencies: aws-cpp-sdk with core, S3 services enabled, pybind11
 
 In source code tree, there is a build.sh that wraps CMakeLists.txt that automatically
 produces a C++ libdss.so file and a dss.cpython-XXXXXX.so which provides python interface
-under ./build directory.
+under ./build directory. Copy both SO libraries to your python path, so python can import
+dss module.
 
 To validate the python extension, start python shell and run
 ">>> import dss"
@@ -26,12 +27,12 @@ To enable aws-cpp-sdk logging, set env var DSS_AWS_LOG to the range between 0 an
 enum class LogLevel : int
 {
 	Off = 0,
-    Fatal = 1,
-    Error = 2,
-    Warn = 3,
-    Info = 4,
-    Debug = 5,
-    Trace = 6
+	Fatal = 1,
+	Error = 2,
+	Warn = 3,
+	Info = 4,
+	Debug = 5,
+	Trace = 6
 };
 
 To enable dss logging, set env var DSS_DEBUG to the source file names seperated by

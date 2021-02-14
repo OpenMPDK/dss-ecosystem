@@ -15,7 +15,6 @@
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketRequest.h>
 #include <aws/s3/model/HeadBucketRequest.h>
-
 #include <aws/s3/model/BucketLocationConstraint.h>
 
 #include "dss.h"
@@ -24,32 +23,7 @@ namespace dss {
 
 using namespace Aws;
 
-volatile bool dss_env_init = false;
-Aws::SDKOptions options;
-
-int
-Cluster::InsertEndpoint(Client* c, const std::string& ip, uint32_t port)
-{
-	Endpoint* ep = new Endpoint(c->GetCredential(), ip + ":" + std::to_string(port)); 
-	m_endpoints.push_back(ep);
-
-	pr_debug("Insert endpoint %s\n", (ip + ":" + std::to_string(port)).c_str());
-	
-	return 0;
-}
-
-Client*
-Client::CreateClient(const std::string& ip,
-					 const std::string& user, const std::string& pwd)
-{
-	Client *client = new Client(ip, user, pwd);
-	if (client->InitClusterMap() < 0) {
-		fprintf(stderr, "Failed to init cluster map\n");
-		return nullptr;
-	}
-
-	return client;
-}
+DSSInit dss_init;
 
 Endpoint::Endpoint(Aws::Auth::AWSCredentials& cred, const std::string& url)
 {
@@ -285,6 +259,17 @@ ClusterMap::GetCluster(const Aws::String& key)
 	return m_clusters[id];
 }
 
+int
+Cluster::InsertEndpoint(Client* c, const std::string& ip, uint32_t port)
+{
+	Endpoint* ep = new Endpoint(c->GetCredential(), ip + ":" + std::to_string(port)); 
+	m_endpoints.push_back(ep);
+
+	pr_debug("Insert endpoint %s\n", (ip + ":" + std::to_string(port)).c_str());
+	
+	return 0;
+}
+
 Result
 Cluster::HeadBucket()
 {
@@ -325,6 +310,25 @@ Result
 Client::GetClusterConfig()
 {
 	return m_discover_ep->GetObject(DISCOVER_BUCKET, DISCOVER_CONFIG_KEY);
+}
+
+Client*
+Client::CreateClient(const std::string& ip,
+					 const std::string& user, const std::string& pwd)
+{
+	Client *client = new Client(ip, user, pwd);
+	if (client->InitClusterMap() < 0) {
+		fprintf(stderr, "Failed to init cluster map\n");
+		return nullptr;
+	}
+
+	return client;
+}
+
+Client::~Client()
+{
+	delete m_discover_ep;
+	delete m_cluster_map;
 }
 
 int
@@ -438,80 +442,6 @@ Client::ListObjects(const std::string& prefix)
 	return list;
 }
 
-#if 0
-std::set<std::string>
-Client::ListBuckets()
-{
-	std::set<std::string> result;
-	Aws::S3::Model::ListBucketsOutcome outcome = m_client->ListBuckets();
-
-    if (outcome.IsSuccess()) {
-        Aws::Vector<Aws::S3::Model::Bucket> buckets =
-            outcome.GetResult().GetBuckets();
-
-        for (Aws::S3::Model::Bucket& bucket : buckets)
-            result.insert(std::string(bucket.GetName().c_str(), bucket.GetName().size()));
-    } else {
-        auto err = outcome.GetError();
-        if (err.GetErrorType() == Aws::S3::S3Errors::NETWORK_CONNECTION)
-            throw NetworkError();
-        else
-            throw GenericError(err.GetMessage().c_str());
-    }
-
-    return result;
-}
-
-int Client::DeleteObject(const Aws::String& objectKey, 
-    const Aws::String& fromBucket)
-{
-    Aws::S3::Model::DeleteObjectRequest request;
-
-    request.WithKey(objectKey)
-        .WithBucket(fromBucket);
-
-    Aws::S3::Model::DeleteObjectOutcome outcome = 
-        m_client->DeleteObject(request);
-
-    if (!outcome.IsSuccess()) {
-        auto err = outcome.GetError();
-        std::cout << "Error: DeleteObject: " <<
-            err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
-
-        return false;
-    } else {
-        return true;
-    }
-}
-
-int Client::DeleteBucket(const Aws::String& bucketName, bool force)
-{
-    Aws::S3::Model::DeleteBucketRequest request;
-    request.SetBucket(bucketName);
-
-	if (force) {
-        //Aws::Vector<Aws::S3::Model::Object> objects;
-        auto keys = ListObjects(bucketName);
-        for (auto key : keys)
-            DeleteObject(key.c_str(), bucketName);
-	}
-
-    S3::Model::DeleteBucketOutcome outcome =
-        m_client->DeleteBucket(request);
-
-    if (!outcome.IsSuccess()) {
-        auto err = outcome.GetError();
-        std::cout << "Error: DeleteBucket: " <<
-            err.GetExceptionName() << ": " << err.GetMessage() << std::endl;
-
-        return false;
-    }
-
-    return true;
-}
-
-#endif
-
 int Objects::GetObjKeys() 
 {
 	bool cont = false;
@@ -551,76 +481,13 @@ int Objects::GetObjKeys()
 		}
 	} while (cont);
 
-#if 0
-    S3::Model::ListObjectsV2Request request;
-    request.WithBucket(m_bucket.c_str());
-    request.SetMaxKeys(100);
-    if (m_token_set) {
-    	request.SetContinuationToken(m_token.c_str());
-    	m_pages.clear();
-    }
-
-    auto outcome = m_client->GetAwsClient()->ListObjectsV2(request);
-    if (outcome.IsSuccess()) {
-        std::cout << "GetObjKey listObject'" << m_bucket << "':"
-                  << std::endl;
-
-        Aws::Vector<Aws::S3::Model::Object> objects =
-                                        outcome.GetResult().GetContents();
-        for (auto obj : objects) {
-            std::cout << "Key " << obj.GetKey() << std::endl;
-            m_pages[m_pages.size()] = obj.GetKey().c_str();
-        }
-
-        if (outcome.GetResult().GetIsTruncated()) {
-            m_token.assign(outcome.GetResult().GetNextContinuationToken().c_str());
-            m_token_set = true;
-            return 0;
-        }
-    } else {
-        std::cout << "Error: ListObjects: " <<
-               outcome.GetError().GetMessage() << std::endl;
-	}
-
-	m_token.resize(0);
-	m_token_set = false;
-#endif
     return -1;
-}
-
-int InitAwsAPI() 
-{
-	char *c = NULL;
-	unsigned l = 0;
-
-	if ((c = getenv("DSS_AWS_LOG"))) {
-		l = *c - '0';
-
-		if (l > (int) Aws::Utils::Logging::LogLevel::Trace) {
-			pr_err("AWS log level out of range\n");
-			l = 0;
-		}
-	}
-
-    options.loggingOptions.logLevel = (Aws::Utils::Logging::LogLevel) l;
-    Aws::InitAPI(options);
-    return 0;
-}
-
-int FiniAwsAPI()
-{
-    Aws::ShutdownAPI(options);
-    return 0;
 }
 
 } // namespace dss
 
 int main()
 {
-    Aws::SDKOptions options;
-    //options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Trace;
-
-    Aws::InitAPI(options);
     {
         const Aws::String object_name = "test_obj";
         const Aws::String fname = "/root/jerry/dss_client/DSSClient.cpp";
@@ -646,10 +513,10 @@ int main()
 		for (auto k : result)
 			printf("%s\n", k.c_str());
 
+		delete client;
+
 		//client.DeleteBucket(bucket_name, true);
     }
-
-    Aws::ShutdownAPI(options);
 
     return 0;
 }
