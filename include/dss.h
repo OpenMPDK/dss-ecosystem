@@ -21,17 +21,12 @@
 
 namespace dss {
 
-using Credential = Aws::Auth::AWSCredentials;
+using Credentials = Aws::Auth::AWSCredentials;
+using Config = Aws::Client::ClientConfiguration;
 
 #define DSS_PAGINATION_DEFAULT	100UL
 
-struct Config {
-	std::string ip;
-	std::string user;
-	std::string& pwd;
-};
-
-class NoSuchResouceError : std::exception {
+class NoSuchResourceError : std::exception {
 public:
     const char* what() const noexcept {return "Key doesn't exist\n";}
 };
@@ -59,8 +54,9 @@ private:
     std::string m_msg;
 };
 
-/* __attribute__((destructor)) is only called after global var is
-   destructed, so if options is declared global, ShutdownAPI() would crash */
+/* Not using __attribute__((destructor)) b/c it is only called
+   after global var is destructed, so if options is declared
+   global, ShutdownAPI() would crash */
 class DSSInit {
 public:
 	DSSInit(): m_options() 
@@ -90,13 +86,67 @@ private:
 	Aws::SDKOptions m_options;
 };
 
+class Result;
 class Client;
 class ClusterMap;
+class Cluster;
+
+struct SesOptions {
+	SesOptions()
+	{
+		scheme = "http";
+    	useDualStack = false;
+    	maxConnections = 25;
+    	httpRequestTimeoutMs = 0;
+    	requestTimeoutMs = 3000;
+    	connectTimeoutMs = 1000;
+    	enableTcpKeepAlive = true;
+    	tcpKeepAliveIntervalMs = 30000;
+	}
+
+    std::string scheme;
+    bool useDualStack;
+    int maxConnections;
+    int httpRequestTimeoutMs; // CURLOPT_TIMEOUT_MS
+    int requestTimeoutMs;
+    int connectTimeoutMs;
+    int enableTcpKeepAlive;
+    int tcpKeepAliveIntervalMs;
+
+	static const std::string HTTP_SCHEME;
+	static const std::string HTTPS_SCHEME;
+};
+
+const std::string SesOptions::HTTP_SCHEME = "http";
+const std::string SesOptions::HTTPS_SCHEME = "https";
+
+struct Request {
+	typedef Result (Cluster::*Handler) (Request* r);
+
+	Request(const char* k)
+	{
+		key = k;
+	}
+
+	Request(const char* k, const char* f)
+	{
+		key = k;
+		file = f;
+	}
+
+	Result Submit(Handler h);
+
+	const char*	file;
+	const char*	key;
+	uint32_t	key_hash;
+	Cluster*	cluster;
+	std::shared_ptr<Aws::IOStream> io_stream;
+};
 
 class Objects {
 public:
     Objects(ClusterMap* map, std::string prefix, uint32_t ps) :
-        m_cur_id(-1), m_cluster_map(map), m_prefix(prefix), m_pagesize(ps)  {}
+        m_cur_id(-1), m_cluster_map(map), m_prefix(prefix), m_pagesize(ps) {}
     const char *GetPrefix() { return m_prefix.c_str(); }
 	uint32_t GetPageSize() { return m_pagesize; }
     int GetObjKeys();
@@ -144,10 +194,13 @@ private:
 
 class Endpoint {
 public:
-	Endpoint(Credential& cred, const std::string& url);
+	Endpoint(Credentials& cred, const std::string& url, Config& cfg);
 
+	Result GetObject(const Aws::String& bn, Request* req);
     Result GetObject(const Aws::String& bn, const Aws::String& objectName);
+	Result PutObject(const Aws::String& bn, Request* req);
     Result PutObject(const Aws::String& bn, const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream);
+	Result DeleteObject(const Aws::String& bn, Request* req);
     Result DeleteObject(const Aws::String& bn, const Aws::String& objectName);
 
 	Result HeadBucket(const Aws::String& bn);
@@ -171,10 +224,16 @@ public:
 			delete e;
 	}
 
+	Endpoint* GetEndpoint(Request* r) { return m_endpoints[r->key_hash % m_endpoints.size()]; }
+
     Result GetObject(const Aws::String& objectName);
     Result PutObject(const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream);
-
     Result DeleteObject(const Aws::String& objectName);
+
+    Result GetObject(Request* r);
+    Result PutObject(Request* r);
+    Result DeleteObject(Request* r);
+ 
     Result HeadBucket();
     Result HeadBucket(const Aws::String& bucketName);
 
@@ -212,19 +271,37 @@ public:
 		return c;
 	}
 
-	Cluster* GetCluster(const Aws::String& key);
+
+	void GetCluster(Request* req);
+	//Cluster* GetCluster(const Aws::String& key);
 	int DownloadClusterConf();
 	int VerifyClusterConf();
 
 	const std::vector<Cluster*>& GetClusters() { return m_clusters; }
-	unsigned GetCLWeight(unsigned i, uint64_t v)
+/*
+	unsigned GetCLWeight(unsigned i, Aws::Utils::ByteBuffer hash_bb)
 	{
-		Hash* h = (Hash*)&v;
+		static size_t cl_base = EP_SLOT_WIDTH / 8;
 
-		if (i >= MAX_SLOTS)
+		if (hash_bb.GetLength() != 256/8)
+			abort();
+
+		if (i >= CL_SLOT_MAX)
 			throw std::out_of_range("Cluster hash table");
 
-		return h->cl_slots & (SLOT_MASK << i);
+		uint8_t *hash = hash_bb.GetUnderlyingData();
+
+		return (hash[cl_base + (i/2)] >> ((i%2) * CL_SLOT_BITS)) & CL_SLOT_MASK;
+	}
+*/
+	unsigned GetCLWeight(unsigned i, const Aws::String& key)
+	{
+		return m_hash(std::to_string(i) + std::string(key.c_str()));
+	}
+
+	unsigned GetCLWeight(unsigned i, char* key)
+	{
+		return m_hash(std::to_string(i) + std::string(key));
 	}
 
 	unsigned GetEPWeight(unsigned i);
@@ -234,14 +311,16 @@ private:
 	std::hash<std::string> m_hash;
 	std::vector<Cluster*> m_clusters;
 
-	struct Hash {
-		uint32_t ep_slots;
-		uint32_t cl_slots;
-	};
+	static const uint64_t SLOT_TBL_SIZE = 8;
+	static const uint64_t EP_SLOT_BITS = 5; /**/
+	static const uint64_t EP_SLOT_MAX =  1ULL << EP_SLOT_BITS;
+	static const uint64_t EP_SLOT_MASK = (1ULL << EP_SLOT_BITS) - 1;
+	static const uint64_t EP_SLOT_WIDTH = EP_SLOT_MAX * EP_SLOT_BITS;
 
-	static const uint64_t SLOT_BITS = 4;
-	static const uint64_t SLOT_MASK = (1ULL << SLOT_BITS) - 1;
-	static const uint64_t MAX_SLOTS = sizeof (Hash::ep_slots) * 8 / SLOT_BITS;
+	static const uint64_t CL_SLOT_BITS = 4;
+	static const uint64_t CL_SLOT_MAX = 1ULL << CL_SLOT_BITS;
+	static const uint64_t CL_SLOT_MASK = (1ULL << CL_SLOT_BITS) - 1;
+	
 }; 
 
 class Client {
@@ -250,10 +329,12 @@ public:
 
     Result GetClusterConfig();
 	int InitClusterMap();
-	static Client* CreateClient(const std::string& ip,
-								const std::string& user, const std::string& pwd);
-
-	Credential& GetCredential() { return m_cred; }
+	static Client* CreateClient(const std::string& url, const std::string& user, const std::string& pwd,
+								const SesOptions& opts = SesOptions());
+	
+	Config ExtractOptions(const SesOptions& opts);
+	Credentials& GetCredential() { return m_cred; }
+	Config& GetConfig() { return m_cfg; }
 
     int GetObject(const Aws::String& objectName, const Aws::String& dest_fn);
     int PutObject(const Aws::String& objectName, const Aws::String& src_fn);
@@ -266,13 +347,17 @@ public:
     std::set<std::string> ListBuckets();
 
 private:
-	Client(const std::string& ip, const std::string& user, const std::string& pwd) {
+	Client(const std::string& url, const std::string& user, const std::string& pwd,
+			const SesOptions& opts) {
+		m_cfg = ExtractOptions(opts);
 		m_cred = Aws::Auth::AWSCredentials(user.c_str(), pwd.c_str());
-		m_discover_ep = new Endpoint(m_cred, ip);
+		m_discover_ep = new Endpoint(m_cred, url, m_cfg);
 	}
 
     friend class Objects;
-	Aws::Auth::AWSCredentials m_cred;
+	Credentials m_cred;
+	Config m_cfg;	
+
     Endpoint* m_discover_ep;
     ClusterMap* m_cluster_map;
 

@@ -6,11 +6,28 @@ using namespace dss;
 namespace py = pybind11;
 
 PYBIND11_MODULE(dss, m) {
-	m.def("createClient", &Client::CreateClient,
+    py::class_<SesOptions>(m, "clientOption")
+    	.def(py::init<>())
+		.def_readwrite("scheme", &SesOptions::scheme)
+		.def_readwrite("useDualStack", &SesOptions::useDualStack)
+		.def_readwrite("maxConnections", &SesOptions::maxConnections)
+		.def_readwrite("httpRequestTimeoutMs", &SesOptions::httpRequestTimeoutMs)
+		.def_readwrite("requestTimeoutMs", &SesOptions::requestTimeoutMs)
+		.def_readwrite("connectTimeoutMs", &SesOptions::connectTimeoutMs)
+		.def_readwrite("enableTcpKeepAlive", &SesOptions::enableTcpKeepAlive)
+		.def_readwrite("tcpKeepAliveIntervalMs", &SesOptions::tcpKeepAliveIntervalMs);
+#if 0
+	m.def("createClient", static_cast<Client* (Client::*)(const std::string&, const std::string&, const std::string&)>(&Client::CreateClient),
 		py::arg("url"),
 		py::arg("username"),
 		py::arg("password"));
-
+#endif
+	m.def("createClient", &Client::CreateClient,
+		py::arg("url"),
+		py::arg("username"),
+		py::arg("password"),
+		py::arg("options") = SesOptions());
+    
     py::class_<Client>(m, "Client")
         .def("putObject", &Client::PutObject,	"Upload object to dss cluster",
         	py::arg("key"),
@@ -31,14 +48,7 @@ PYBIND11_MODULE(dss, m) {
     	const char* what() const noexcept {return "No iterator\n";}
 	};
 
-    py::class_<Objects>(m, "Objects")
-        .def("__iter__", [](Objects &objs) {
-        	if (objs.GetObjKeys() < 0)
-        		throw NoIterator();
-        	return py::make_iterator(objs.begin(), objs.end());
-        }, py::keep_alive<0, 1>());
-
-    static py::exception<NoSuchResouceError> NoSuchResourceExc(m, "NoSuchResouceError");
+    static py::exception<NoSuchResourceError> NoSuchResourceExc(m, "NoSuchResouceError");
  	static py::exception<DiscoverError> DiscoverExc(m, "DiscoverError");
     static py::exception<NetworkError> NetworkExc(m, "NetworkError");
     static py::exception<GenericError> GenericExc(m, "GenericError");
@@ -47,7 +57,7 @@ PYBIND11_MODULE(dss, m) {
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p) std::rethrow_exception(p);
-        } catch (const NoSuchResouceError &e) {
+        } catch (const NoSuchResourceError &e) {
             NoSuchResourceExc(e.what());
         } catch (const DiscoverError &e) {
             DiscoverExc(e.what());
