@@ -260,7 +260,7 @@ ClusterMap::VerifyClusterConf()
 	if (!std::equal(empty.begin() + 1, empty.end(), empty.begin())) {
 		uint32_t i = 0;
 		for (auto it : empty) {
-			pr_err("cluster %u : %u\n", i++, (unsigned)it);
+			pr_err("cluster %u : %s\n", i++, (unsigned)it ? "present" : "missing");
 		}
 
 		pr_err("DSS buckets are missing\n");
@@ -389,22 +389,6 @@ Client::ExtractOptions(const SesOptions& o)
 
 	return cfg;
 }
-
-/*
-Client*
-Client::CreateClient(const std::string& ip,
-					 const std::string& user, const std::string& pwd)
-{
-	SesOptions options;
-	Client *client = new Client(ip, user, pwd, options);
-	if (client->InitClusterMap() < 0) {
-		fprintf(stderr, "Failed to init cluster map\n");
-		return nullptr;
-	}
-
-	return client;
-}
-*/
 
 Client*
 Client::CreateClient(const std::string& ip,

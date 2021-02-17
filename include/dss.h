@@ -273,7 +273,6 @@ public:
 
 
 	void GetCluster(Request* req);
-	//Cluster* GetCluster(const Aws::String& key);
 	int DownloadClusterConf();
 	int VerifyClusterConf();
 
@@ -310,7 +309,7 @@ private:
 	Client* m_client;
 	std::hash<std::string> m_hash;
 	std::vector<Cluster*> m_clusters;
-
+#if 0
 	static const uint64_t SLOT_TBL_SIZE = 8;
 	static const uint64_t EP_SLOT_BITS = 5; /**/
 	static const uint64_t EP_SLOT_MAX =  1ULL << EP_SLOT_BITS;
@@ -320,7 +319,7 @@ private:
 	static const uint64_t CL_SLOT_BITS = 4;
 	static const uint64_t CL_SLOT_MAX = 1ULL << CL_SLOT_BITS;
 	static const uint64_t CL_SLOT_MASK = (1ULL << CL_SLOT_BITS) - 1;
-	
+#endif	
 }; 
 
 class Client {
@@ -340,7 +339,7 @@ public:
     int PutObject(const Aws::String& objectName, const Aws::String& src_fn);
     int DeleteObject(const Aws::String& objectName);
 
-    Objects *GetObjects(std::string prefix, uint32_t page_size = DSS_PAGINATION_DEFAULT) {
+    Objects* GetObjects(std::string prefix, uint32_t page_size = DSS_PAGINATION_DEFAULT) {
     	return new Objects(m_cluster_map, prefix, page_size);
     };
     std::set<std::string> ListObjects(const std::string& prefix);
