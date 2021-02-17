@@ -1,8 +1,8 @@
 {
- "tess_clients_ip":[ "202.0.0.136", "202.0.0.135"],
+ "tess_clients_ip":[ "202.0.0.135","202.0.0.136"],
   "master": {
     "ip_address": "202.0.0.135",
-    "workers": 10,
+    "workers": 5,
     "max_index_size": 1000,
     "size": "1GB"
   },
@@ -17,12 +17,12 @@
     "port_status": 6001
   },
  "nfs_config":{
-               "202.0.0.137":["/dog"]
+               "202.0.0.103": ["/dir4"]
               },
   "s3_storage": {
-    "minio": {"url": "202.0.0.137:9000", "access_key": "minio", "secret_key": "minio123"},
+    "minio": {"url": "202.0.0.103:9000", "access_key": "minio", "secret_key": "minio123"},
     "bucket": "bucket",
-    "client": "minio"
+    "client": "minio_client"
   },
   "operations": ["PUT","GET","DEL","LIST"],
   "logging_path": "/var/log"

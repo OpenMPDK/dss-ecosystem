@@ -6,11 +6,11 @@ from botocore.client import Config
 from datetime import datetime
 
 class S3:
-  def __init__(self, config):
+  def __init__(self, config={}):
     self.s3_client = boto3.client('s3',
-                        endpoint_url='http://202.0.0.137:9000',
-                        aws_access_key_id='minio',
-                        aws_secret_access_key='minio123',
+                        endpoint_url=config["endpoint"],
+                        aws_access_key_id=config["minio_access_key"],
+                        aws_secret_access_key=config["minio_secret_key"],
                         config=Config(signature_version='s3v4'),
                         region_name='us-east-1')
 
@@ -48,7 +48,7 @@ class S3:
     if not object_key.startswith("/"):
         self.s3_client.Bucket(bucket).upload_file(source_file_path, object_key)
 
-  def upload_fileobj(self, bucket=None, source_file_path=None):
+  def putObject(self, bucket=None, source_file_path=None):
     """
     Upload a file object given a object key
     :param bucket:
@@ -85,7 +85,7 @@ class S3:
 
     return buckets
 
-  def list_objects(self, bucket=None, prefix=None):
+  def listObjects(self, bucket=None, prefix=None):
     """
     List all the objects under a bucket and return
     :param bucket: Bucket name required
@@ -94,18 +94,15 @@ class S3:
     """
     object_keys = []
     if bucket and prefix:
-      response = self.s3_client.list_objects(Bucket=bucket,Prefix=prefix)
-      #for object in bucket_obj.objects.all():
-      #  print(object.key)
-      #  object_keys.append(object.key)
-      for content in response["Contents"]:
-        #print(content["Key"])
+      response = self.s3_client.list_objects_v2(Bucket=bucket,Prefix=prefix, MaxKeys=10)
+      #print(response)
+      for content in response.get("Contents",{}):
         object_keys.append(content["Key"])
-        yield content["Key"]
+        #yield content["Key"]
 
-    #return object_keys
+    return object_keys
 
-  def download_file(self, object_key):
+  def getObject(self, object_key):
     # Create local directory structure
     local_file_path = "/" + object_key
     directory  =  os.path.dirname(local_file_path)
@@ -113,53 +110,90 @@ class S3:
       os.makdir(directory)
     self.s3_client.download_file(object_key, local_file_path)
 
-  def delete_objects(self, bucket=None,prefix=None):
+  def deleteObject(self, bucket=None,prefix=None):
     """
     Remove a object based on object key.
     :param bucket: Bucket name required
     :param prefix: prefix required
     :return:
+    delete_object(Bucket='string',
+    Key='string',
+    MFA='string',
+    VersionId='string',
+    RequestPayer='requester',
+    BypassGovernanceRetention=True|False,
+    ExpectedBucketOwner='string')
+    Return:
+    {
+    'DeleteMarker': True|False,
+    'VersionId': 'string',
+    'RequestCharged': 'requester'
+    }
     """
-    if not bucket or not prefix:
-      return False
-    try:
-      self.s3_client.delete_object(Bucket=bucket, Key=prefix)
-    except Exception as e:
-      print("EXCEPTION: {}".format(e))
-      return False
-    return True
+    if bucket and prefix:
+
+      try:
+        response = self.s3_client.delete_object(Bucket=bucket, Key=prefix)
+        #print("KKKKKKKKKKKKKK:{}".format(ret))
+        """
+        {'ResponseMetadata': {'RequestId': '16646EFF2BD0F3CB',
+         'HostId': '', 'HTTPStatusCode': 204, 
+         'HTTPHeaders': {'accept-ranges': 'bytes', 'content-security-policy': 'block-all-mixed-content',
+         'server': 'MinIO', 'vary': 'Origin', 'x-amz-request-id': '16646EFF2BD0F3CB', 'x-xss-protection': '1;
+          mode=block', 'date': 'Wed, 17 Feb 2021 04:36:48 GMT'}, 'RetryAttempts': 0}}
+        """
+        if "DeleteMarker" in response:
+          if response["DeleteMarker"]:
+            return True
+          else:
+            print("ERROR: {} not deleted ".format(prefix))
+        else:
+          return True   # Require to handle properly.
+      except Exception as e:
+        print("EXCEPTION: {}".format(e))
+
+    return False
 
 
 
 
 
 if __name__ =="__main__":
-    s3=  S3({})
+
+    config = {"endpoint":"http://202.0.0.103:9000", "minio_access_key":"minio", "minio_secret_key":"minio123" }
+    start_time = datetime.now()
+    s3=  S3(config)
+    print("INFO: DSS Client Connection Time: {}".format((datetime.now() - start_time).seconds))
     # Example of uploading files
     print("Uploading files")
-    directory = "/bird/bird1/"
+    directory = "/deer/deer1/"
     uploaded_file_count = 0
     now = datetime.now()
 
     for file in os.listdir(directory):
         file_path = directory + file
-        if s3.upload_fileobj("bucket", file_path):
+        if s3.putObject("bucket", file_path):
           uploaded_file_count +=1
     print("Uploaded Files:{} , Time-{}".format(uploaded_file_count, (datetime.now() - now).seconds))
 
     # Example of listing buckets.
     print("All Buckets: {}".format(s3.list_buckets()))
 
-    prefix = "bird/"
+    prefix = "deer/"
     # List object keys
-    #print("List Object Keys: {}".format(s3.list_objects("bucket", "bird/")))
+    print("List Object Keys: {}".format(s3.listObjects("bucket", prefix)))
 
     # Delete object
+
     deleted_object_count = 0
-    for object_key in s3.list_objects("bucket", prefix):
-      if s3.delete_objects("bucket", object_key):
+    for object_key in s3.listObjects("bucket", prefix):
+      #print(object_key)
+      if s3.deleteObject("bucket", object_key):
         deleted_object_count +=1
+    
     print("Deleted Objects Count: {} for prefix-\"{}\"".format(deleted_object_count, prefix))
+
+
 
 
 

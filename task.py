@@ -17,30 +17,24 @@ ds = mgr.dict()
 Need to be updated 
 """
 @exception
-def put(params, status_queue , logger_queue):
+#def put(s3_client, params, status_queue , logger_queue):
+def put(s3_client, **kwargs):
+    params = kwargs["params"]
+    status_queue = kwargs["status_queue"]
+    logger_queue = kwargs["logger_queue"]
+
     index_data = params.get("data",{})
     s3config   = params["s3config"]
-    minio_config = s3config.get("minio",{})
-    minio_url = minio_config["url"]
-    minio_access_key = minio_config["access_key"]
-    minio_secret_key = minio_config["secret_key"]
     minio_bucket = s3config.get("bucket","bucket")
 
     success = 0
-    #logger_queue.put("TASK:Upload Minio Config {}".format(minio_config))
-    mc = MinioClient(minio_url,minio_access_key,minio_secret_key)
-    s3 = S3({})
-    #logger_queue.put(" **************************** Based on S3")
-    #print("Uploaded files dir:{}/{}".format(index_data["dir"], index_data["files"]))
     #logger_queue.put("TASK:PUT DATA  {}".format(index_data))
     uploaded_files = []
     failure_files_size = 0
-    if mc.client:
-    #if s3.s3_client:
+    if s3_client:
         for file_name in index_data["files"]:
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
             if os.path.exists(file):
-
                 if params.get("dryrun", False):
                     # Read file for the purpose of testing
                     with open(file, "rb") as FH:
@@ -49,8 +43,7 @@ def put(params, status_queue , logger_queue):
                     lines = []
                     success +=1
                 else:
-                    if mc.put(minio_bucket, file):
-                    #if s3.upload_fileobj(minio_bucket, file):
+                    if s3_client.putObject(minio_bucket, file):
                         uploaded_files.append(file_name)
                         success +=1
                     else:
@@ -67,7 +60,7 @@ def put(params, status_queue , logger_queue):
     logger_queue.put("DEBUG: Minio Upload Status - {} - {}".format(status_message, status_queue.qsize()))
 
 @exception
-def list(params, task_queue,index_data_queue, logger_queue, listing_progress, listing_progress_lock):
+def list(s3_client, **kwargs):
     """
     List the Object keys from lower level directory. If not then, create a task, so that can be processed by other
     worker.
@@ -79,32 +72,33 @@ def list(params, task_queue,index_data_queue, logger_queue, listing_progress, li
     :param listing_progress_lock:
     :return:
     """
+    params = kwargs["params"]
+    task_queue = kwargs["task_queue"]  # Contains task Object
+    index_data_queue = kwargs["index_data_queue"] # Contains index_data
+    logger_queue = kwargs["logger_queue"]
+    listing_progress = kwargs["listing_progress"] # The shared memory is used to hold progress status.
+    listing_progress_lock = kwargs["listing_progress_lock"]
+
     max_index_size = params["max_index_size"]
 
     prefix_index_data_file = "/var/log/prefix_index_data.json"
     with open(prefix_index_data_file, "r") as prefix_index_data_handler:
         prefix_index_data = json.load(prefix_index_data_handler)
-    #print(prefix_index_data)
+
     prefix = None
     if params.get("data", {}) and params["data"].get("prefix", None):
         prefix = (params["data"]["prefix"]).strip()
 
     # That mean lowest level of directory.
     s3config = params["s3config"]
-    minio_config = s3config.get("minio", {})
-    minio_url = minio_config["url"]
-    minio_access_key = minio_config["access_key"]
-    minio_secret_key = minio_config["secret_key"]
     minio_bucket = s3config.get("bucket", "bucket")
-
-    mc = MinioClient(minio_url, minio_access_key, minio_secret_key)
 
     #if prefix not in listing_progress:
     #    listing_progress[prefix] = 0
 
     if prefix in prefix_index_data:
         #print("*****Prefix:{}".format(prefix))
-        object_keys_iterator = mc.list(minio_bucket, prefix)
+        object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
         if object_keys_iterator:
             lowest_level_directory= True
             for result in list_object_keys(object_keys_iterator, prefix_index_data,max_index_size):
@@ -146,7 +140,7 @@ def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size):
     """
     Iterate over the object keys and generate a message which holds a prefix and object keys underneath of the prefix.
     :param object_keys_iterator: Returned object keys iterator,
-    :param prefix_index_data: Data loaded from persistent storage  {"prefix": {"files": <file_count>, "size": <size under prefix>}}
+    :param prefix_index_data: Data loaded from persistent storage  {"<prefix>": {"files": <file_count>, "size": <size under prefix>}}
     :param max_index_size:
     :return:
     """
@@ -196,22 +190,19 @@ def check_listing_progress(listing_progress,listing_progress_lock, prefix, logge
 def get():
     print("Download functionality ")
 @exception
-def delete(params, status_queue , logger_queue):
-    #print("Remove files")
-    #logger_queue.put("+++++++++++++++++++++++++++ Finally DELETE {}".format(params))
-    object_keys = params.get("data", {})
+def delete(s3_client,**kwargs):
+    params = kwargs["params"]
+    status_queue = kwargs["status_queue"]
+    logger_queue = kwargs["logger_queue"]
+
     s3config = params["s3config"]
-    minio_config = s3config.get("minio", {})
-    minio_url = minio_config["url"]
-    minio_access_key = minio_config["access_key"]
-    minio_secret_key = minio_config["secret_key"]
     minio_bucket = s3config.get("bucket", "bucket")
 
     success = 0
-    mc = MinioClient(minio_url, minio_access_key, minio_secret_key)
+    #mc = MinioClient(minio_url, minio_access_key, minio_secret_key)
     removed_objects = []
     object_keys = params["data"]
-    if mc.client:
+    if s3_client:
         for object_key in object_keys["files"]:
             #logger_queue.put("TASK: Going to removed object key {}".format(object_key))
             if params.get("dryrun", False):
@@ -219,7 +210,7 @@ def delete(params, status_queue , logger_queue):
                 success +=1
             else:
                 # Actual operation
-                if mc.delete(minio_bucket, object_key):
+                if s3_client.deleteObject(minio_bucket, object_key):
                     #logger_queue.put("TASK: Removed object key {}".format(object_key))
                     removed_objects.append(object_key)
                     success += 1
@@ -250,16 +241,27 @@ class Task:
     self.task_queue   = queue["task_queue"]
     self.index_data_queue = queue["index_data_queue"]
 
+    s3_client = queue["s3_client"]
+
     #self.logger_queue.put("====>>INFO: TASK: Started task for operation-{}".format(self.operation))
     #print("====>>INFO: TASK: Started task ...! {}".format(self.params))
     try:
       self.params["logger_queue"] = self.logger_queue
       if self.operation.lower() == "put":
-        put(self.params, queue["status_queue"], self.logger_queue)
+        put(s3_client, params=self.params,
+                       status_queue=queue["status_queue"],
+                       logger_queue=self.logger_queue)
       elif self.operation.lower() == "list":
-        list(self.params, queue["task_queue"], queue["index_data_queue"] , self.logger_queue,queue["listing_progress"], queue["listing_progress_lock"])
+        list(s3_client, params=self.params,
+                        task_queue=queue["task_queue"],
+                        index_data_queue=queue["index_data_queue"] ,
+                        logger_queue=self.logger_queue,
+                        listing_progress=queue["listing_progress"],
+                        listing_progress_lock=queue["listing_progress_lock"])
       elif self.operation.lower() == "del":
-        delete(self.params, queue["status_queue"], self.logger_queue)
+        delete(s3_client, params=self.params,
+                          status_queue=queue["status_queue"],
+                          logger_queue=self.logger_queue)
       elif self.operation.lower() == "indexing":
         indexing(data=self.params["data"],
                  nfs_cluster=self.params["nfs_cluster"],

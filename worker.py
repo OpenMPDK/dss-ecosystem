@@ -6,8 +6,12 @@ import random
 import argparse
 import platform
 from multiprocessing import Process,Queue,Value, Lock
+from minio_client import MinioClient
+from s3_client import S3
+from dss_client import DssClientLib
 import time
 from task import Task
+from datetime import datetime
 
 """
 TODO:
@@ -22,6 +26,8 @@ class Worker:
     self.index_data_queue = kwargs.get("index_data_queue", None)
     self.logger_queue = kwargs.get("logger_queue", None)  # A multiprocessing logger queue
     self.operation_status_queue = kwargs.get("status_queue", None)  # Used by only client Application
+
+    self.s3_config = kwargs.get("s3_config", None)
 
     self.status = Value('i', 1)
     self.lock = Lock()
@@ -40,6 +46,32 @@ class Worker:
 
     self.stop()
     #time.sleep(1)
+
+  def get_s3_client(self,client_name=None):
+    # Create S3_Client
+    minio_config = self.s3_config.get("minio", {})
+    minio_url = minio_config["url"]
+    minio_access_key = minio_config["access_key"]
+    minio_secret_key = minio_config["secret_key"]
+    #print("YYYYYYYYYYYYYY:{}".format(self.s3_config))
+    #self.logger_queue.put("YYYYYYYYYYYYYY:{}".format(self.s3_config))
+    start_time = datetime.now()
+    s3_client =None
+    if self.s3_config.get("client",None).lower() == "minio_client":
+      s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key)
+    elif self.s3_config.get("client",None).lower() == "dss_client":
+      os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
+      s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
+
+    elif self.s3_config.get("client",None).lower() == "boto3_client":
+      config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio", "minio_secret_key": "minio123"}
+      s3_client = S3(config)
+
+    print("INFO: S3 Connection time: {}".format((datetime.now() - start_time).seconds))
+    self.logger_queue.put("INFO: S3 Connection time: {}".format((datetime.now() - start_time).seconds))
+    return s3_client
+
+
 
   def start(self):
     """
@@ -85,6 +117,8 @@ class Worker:
     :return:
     """
 
+    s3_client = self.get_s3_client()
+
     while True:
       # Get the status of worker from a shared flag.
       if not self.status.value:
@@ -114,7 +148,8 @@ class Worker:
                    progress_of_indexing=self.progress_of_indexing,
                    progress_of_indexing_lock=self.progress_of_indexing_lock,
                    listing_progress = self.listing_progress,
-                   listing_progress_lock = self.listing_progress_lock
+                   listing_progress_lock = self.listing_progress_lock,
+                   s3_client = s3_client
                    )
 
       time.sleep(1)  # 1 second delay

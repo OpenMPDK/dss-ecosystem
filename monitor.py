@@ -163,6 +163,8 @@ class Monitor:
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
                 self.logger_queue.put("INFO: Indexed data distribution is completed! {}".format(self.index_data_queue.qsize()))
                 self.all_index_data_distributed.value = 1
+                print("INFO: Index Distribution FINISHED,  time - {}".format((datetime.now() - self.operation_start_time).seconds))
+                self.logger_queue.put("INFO: Index Distribution FINISHED,  time - {}".format((datetime.now() - self.operation_start_time).seconds))
 
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
@@ -261,7 +263,6 @@ class Monitor:
                     received_response = client.socket_status.poll(timeout=1000)  # Wait 1 secs
                     if received_response:
                         status = client.socket_status.recv_json()
-                        #print("++++DEBUG: Monitor-Poller Operation Status client-{}, Status - {}".format(client.id, status))
                         self.logger_queue.put("DEBUG: Monitor-Poller Operation Status for client-{}, Status - {}".format(client.id, status))
                         self.status_queue.put(status)
                 except Exception as e:
@@ -364,10 +365,10 @@ class Monitor:
         print("***** Operation Statistics *****")
         if operation_success_count:
             success_percentage = (operation_success_count / self.index_data_count.value) * 100
-            print("Total Operation: {},  Operation Success:{} - {}%".format(self.index_data_count.value, operation_success_count, success_percentage))
+            print("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
         if operation_failure_count:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
-            print("Total Operation:{}, Operation Failure:{} - {}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
+            print("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
 
         bandwidth = success_operation_size_in_byte / ( 1024 * 1024 * total_operation_time)

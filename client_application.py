@@ -143,7 +143,8 @@ class ClientApplication:
                        task_queue=self.task_queue,
                        status_queue=self.operation_status_queue,
                        index_data_queue=self.operation_data_queue,
-                       logger_queue=self.logger_queue)
+                       logger_queue=self.logger_queue,
+                       s3_config=self.s3_config)
             #self.logger.write("DEBUG: Starting worker-{}\n".format(index))
             w.start()
             self.workers.append(w)

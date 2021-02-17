@@ -40,7 +40,7 @@ class Master:
 		self.client_user_id = config["client"]["user_id"]
 		self.client_password = config["client"]["password"]
 
-
+		self.s3_config = config.get("s3_storage", {})
 
 		## Logging
 		self.logging_path = config.get("logging_path", "/var/log")
@@ -147,7 +147,8 @@ class Master:
 					   progress_of_indexing= self.progress_of_indexing,
 					   progress_of_indexing_lock=self.progress_of_indexing_lock,
 					   listing_progress=self.listing_progress,
-					   listing_progress_lock=self.listing_progress_lock
+					   listing_progress_lock=self.listing_progress_lock,
+					   s3_config=self.s3_config
 					   )
 			w.start()
 			self.workers.append(w)

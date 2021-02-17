@@ -30,7 +30,7 @@ class MinioClient:
     for bucket in self.client.list_buckets():
       print("{}".format(bucket.name))
 
-  def list(self, bucket=None, prefix=None, recursive=False):
+  def listObjects(self, bucket=None, prefix=None, recursive=False):
     try:
       objects = self.client.list_objects(bucket_name=bucket,prefix=prefix,recursive=recursive)
     except err:
@@ -39,20 +39,10 @@ class MinioClient:
     return objects
 
 
-  def put(self, bucket=None, data=None):
+  def putObject(self, bucket=None, data=None):
     #print("Bucket Name:{}=>{}".format(bucket,data))
     try:
-      if os.path.isdir(data):
-        # Make recursive copy
-        #print("Directory Data:{}".format(data))
-        for file in os.listdir(data):
-          file_path = os.path.abspath(data + "/" + file)
-          print(file_path)
-          self.put(bucket,file_path)
-      else:
-        # File copy
-        #print("Data:{}".format(data))
-        self.client.fput_object(bucket_name=bucket,object_name=data[1:],file_path=data,content_type="text/plain")
+      self.client.fput_object(bucket_name=bucket,object_name=data[1:],file_path=data,content_type="text/plain")
     except err:
       print("Exception:{}".format(err))
       return False
@@ -61,7 +51,7 @@ class MinioClient:
     pass
 
 
-  def delete(self, bucket=None, prefix=None, recursive=False):
+  def deleteObject(self, bucket=None, prefix=None, recursive=False):
     try:
       if bucket:
         """
