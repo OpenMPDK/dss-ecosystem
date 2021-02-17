@@ -75,12 +75,6 @@ cd cmake
 git checkout v3.18.4
 ./bootstrap --prefix=/opt/cmake
 
-Install Anaconda:
-wget https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
-chmod +X Anaconda3-2020.11-Linux-x86_64.sh
-./Anaconda3-2020.11-Linux-x86_64.sh
-
-
 Build aws-cpp-sdk:
 yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
 git clone https://github.com/aws/aws-sdk-cpp.git
