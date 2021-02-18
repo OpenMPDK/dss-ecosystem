@@ -121,7 +121,7 @@ def list(s3_client, **kwargs):
         else:
             logger_queue.put("ERROR: No object keys belongs to the prefix-{}".format(prefix))
     else:
-        object_keys = mc.list(minio_bucket, prefix)
+        object_keys = s3_client.listObjects(minio_bucket, prefix)
         if object_keys:
             for obj_key in object_keys:
                 if prefix in listing_progress:

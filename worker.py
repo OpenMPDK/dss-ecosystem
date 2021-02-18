@@ -53,9 +53,7 @@ class Worker:
     minio_url = minio_config["url"]
     minio_access_key = minio_config["access_key"]
     minio_secret_key = minio_config["secret_key"]
-    #print("YYYYYYYYYYYYYY:{}".format(self.s3_config))
-    #self.logger_queue.put("YYYYYYYYYYYYYY:{}".format(self.s3_config))
-    start_time = datetime.now()
+    #start_time = datetime.now()
     s3_client =None
     if self.s3_config.get("client",None).lower() == "minio_client":
       s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key)
@@ -67,8 +65,8 @@ class Worker:
       config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio", "minio_secret_key": "minio123"}
       s3_client = S3(config)
 
-    print("INFO: S3 Connection time: {}".format((datetime.now() - start_time).seconds))
-    self.logger_queue.put("INFO: S3 Connection time: {}".format((datetime.now() - start_time).seconds))
+    #print("INFO: S3 Connection time: {}".format((datetime.now() - start_time).seconds))
+    #self.logger_queue.put("INFO: S3 Connection time: {}".format((datetime.now() - start_time).seconds))
     return s3_client
 
 
