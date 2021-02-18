@@ -183,15 +183,11 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os, std::set<std::string>&
     do {
         out = m_ses.ListObjectsV2(req);
         if (out.IsSuccess()) {
-            //std::cout << "Objects in bucket '" << bn << "':"
-            //          << std::endl;
-
+			//TODO: std::move()
             Aws::Vector<Aws::S3::Model::Object> objects =
                                             out.GetResult().GetContents();
-            for (auto o : objects) {
-                //std::cout << o.GetKey() << std::endl;
+            for (auto o : objects)
                 keys.insert(o.GetKey().c_str());
-            }
         } else {
 			return Result(false, out.GetError());
         }
@@ -530,7 +526,6 @@ Client::ListObjects(const std::string& prefix)
 
 int Objects::GetObjKeys() 
 {
-	bool cont = false;
 	const std::vector<Cluster*> clusters = m_cluster_map->GetClusters();
 
 	m_page.clear();
@@ -542,12 +537,9 @@ int Objects::GetObjKeys()
 		return -1;
 	}
 
-	do {
+	while (1) {
 		Result r = clusters[m_cur_id]->ListObjects(this, m_page);
-		if (r.IsSuccess()) {
-			m_cur_id++;
-			return 0;
-		} else {
+		if (!r.IsSuccess()) {
 			auto err = r.GetErrorType();
 			if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
 				throw NoSuchResourceError();
@@ -555,19 +547,27 @@ int Objects::GetObjKeys()
             	throw GenericError(r.GetErrorMsg().c_str());
 		}
 
-		if (m_page.size() < GetPageSize()) {
-			m_cur_id += 1;
-			cont = true;
-			if ((unsigned long)m_cur_id == clusters.size()) {
-				m_cur_id = -1;
-				return -1;
-			}
-		} else {
-			cont = false;
-		}
-	} while (cont);
+		printf("cluster %u returns %lu keys\n", m_cur_id, m_page.size());
 
-    return -1;
+		if (m_page.size() < GetPageSize()) {
+			// TODO: It is unclear whether aws sdk would return
+			// # of keys less than pagesize while there are still
+			// leftovers in cluster, so we rely on GetIsTruncated()
+			// which sets token if true;
+			if (!TokenSet()) {
+				m_cur_id += 1;
+				if ((unsigned long)m_cur_id == clusters.size())
+					break;
+			}
+			continue;
+		} else {
+			if (!TokenSet())
+				m_cur_id += 1;
+			break;
+		}
+	}
+
+    return 0;
 }
 
 } // namespace dss

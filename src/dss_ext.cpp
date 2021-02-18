@@ -69,5 +69,12 @@ PYBIND11_MODULE(dss, m) {
             LastIterExc(e.what());
         }
     });
+
+	py::class_<Objects>(m, "Objects")
+        .def("__iter__", [](Objects &objs) {
+        	if (objs.GetObjKeys() < 0)
+        		throw NoIterator();
+        	return py::make_iterator(objs.begin(), objs.end());
+        }, py::keep_alive<0, 1>());
 }
 

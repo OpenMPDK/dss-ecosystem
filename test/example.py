@@ -5,8 +5,6 @@ sys.path.insert(0, '/root/jerry/dss_client/build')
 
 import dss
 import os
-import trio
-
 
 access_key = "minioadmin"
 access_secret = "minioadmin"
@@ -36,9 +34,18 @@ def main():
 		client.putObject(key, filename)
 
 	# Print objects with prefix
-	objects = client.listObjects(key_base + str(1))
-	for o in objects:
-		print(o)
+	objects = client.getObjects(key_base, 8)
+	while True:
+		try:
+			it = iter(objects)
+		except dss.NoIterator:
+			break
+		while True:
+			try:
+				key = next(it)
+				print("{}".format(key))
+			except StopIteration:
+				break
 
 	# Retrieve object then delete
 	for i in range(20):
