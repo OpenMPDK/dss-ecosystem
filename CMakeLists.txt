@@ -20,6 +20,7 @@ endif()
 
 # Find the AWS SDK for C++ package.
 find_package(AWSSDK REQUIRED COMPONENTS s3)
+find_package(Python ${PYTHON_VERSION} REQUIRED COMPONENTS Interpreter)
 
 SET(CMAKE_CXX_FLAGS "-O0 -g3 -Wall -Werror")
 
@@ -58,4 +59,7 @@ target_link_options(${DSS_PYTHON_LIB} PUBLIC "-Wl,--disable-new-dtags" "-Wl,-rpa
 target_link_libraries(${DSS_PYTHON_LIB} ${DSS_LIB})
 set_target_properties(${DSS_PYTHON_LIB} PROPERTIES PREFIX "")
 
-#g++ -O0 -g3 -Wall -Werror -shared -std=c++11 -fPIC `python3 -m pybind11 --includes` -I./ dss_extension.cpp -o dss`python3.8-config --extension-suffix` -L./build -lDSSClient  -Wl,-rpath,. -Wl,--disable-new-dtags -Wl,-rpath,/usr/lib/x86_64-linux-gnu/
+# Installation
+install(TARGETS ${DSS_LIB} DESTINATION ./lib64 )
+install(TARGETS ${DSS_LIB} ${DSS_PYTHON_LIB} DESTINATION ${Python_SITEARCH})
+

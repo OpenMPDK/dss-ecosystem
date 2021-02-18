@@ -5,4 +5,5 @@ mkdir ./build
 cd ./build
 CXX=/opt/gcc/bin/g++ cmake ../
 make -j
+make install
 cd ../

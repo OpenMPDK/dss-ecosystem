@@ -1,8 +1,3 @@
-import sys
-import io
-
-sys.path.insert(0, '/root/jerry/dss_client/build')
-
 import dss
 import os
 
