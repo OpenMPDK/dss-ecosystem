@@ -41,26 +41,36 @@ Otherwise, to build the s3-benchmark executable, you must issue this following c
 Below are the command line arguments to the program (which can be displayed using -help):
 
 ```
+./s3-benchmark --help
+Wasabi benchmark program v2.0
+Usage of myflag:
   -a string
         Access key
   -b string
         Bucket for testing (default "wasabi-benchmark-bucket")
+  -c int
+        Number of object per thread written earlier
   -d int
         Duration of each test in seconds (default 60)
   -l int
         Number of times to repeat test (default 1)
+  -n int
+        Number of IOS per thread to run
+  -o int
+        Type of op, 1 = put, 2 = get, 3 = del
+  -p string
+        Key prefix to be added during key generation (default "s3-bench-minio")
+  -r string
+        Region for testing (default "us-east-1")
   -s string
         Secret key
   -t int
         Number of threads to run (default 1)
-  -n int
-        Number of IOs per thread
-  -o int
-        Type of io, 0 = put,get,del, 1 = put, 2 = get, 3 = del
   -u string
         URL for host with method prefix (default "http://s3.wasabisys.com")
   -z string
         Size of objects in bytes with postfix K, M, and G (default "1M")
+
 ```        
 
 # Example Benchmark
@@ -97,6 +107,24 @@ Parameters: url=http://10.1.51.21:9000, bucket=som4, region=us-east-1, duration=
 2021/01/05 18:24:04 WARNING: createBucket som4 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
         status code: 409, request id: 16578360FD53602A, host id:
 Loop 1: DELETE time 4.3 secs, 2342.4 deletes/sec. Slowdowns = 0
+
+//Prefix based run
+root@msl-ssg-si04 s3-bench]./s3-benchmark -a minio -b som10 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 1M -n 100 -o 1 -p samsung-s3-bench
+Wasabi benchmark program v2.0
+Parameters: url=http://10.1.51.21:9000, bucket=som10, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=1, loops=1, size=1M
+2021/02/17 17:08:12 WARNING: createBucket som10 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
+        status code: 409, request id: 1664B231AFA7F9A4, host id:
+Loop 1: PUT time 4.6 secs, objects = 10000, speed = 2.1GB/sec, 2157.8 operations/sec. Slowdowns = 0
+
+//Time based read
+
+root@msl-ssg-si04 s3-bench]./s3-benchmark -a minio -b som10 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 1M -d 30 -c 100 -o 2 -p samsung-s3-bench
+Wasabi benchmark program v2.0
+Parameters: url=http://10.1.51.21:9000, bucket=som10, region=us-east-1, duration=30, threads=100, num_ios=0, op_type=2, loops=1, size=1M
+2021/02/17 17:06:55 WARNING: createBucket som10 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
+        status code: 409, request id: 1664B21FB5A67930, host id:
+Loop 1: GET time 30.0 secs, objects = 201106, speed = 6.5GB/sec, 6700.2 operations/sec. Slowdowns = 0
+
 
 ```
 
