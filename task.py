@@ -57,7 +57,7 @@ def put(s3_client, **kwargs):
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(index_data["files"]) - success) , "dir": index_data["dir"] , "size" : failure_files_size}
     status_queue.put(status_message)
-    logger_queue.put("DEBUG: Minio Upload Status - {} - {}".format(status_message, status_queue.qsize()))
+    #logger_queue.put("DEBUG: Minio Upload Status - {} - {}".format(status_message, status_queue.qsize()))
 
 @exception
 def list(s3_client, **kwargs):
@@ -220,7 +220,7 @@ def delete(s3_client,**kwargs):
     #logger_queue.put("DEBUG: DELETED object keys-{}".format(removed_objects ))
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
-    logger_queue.put("DEBUG: Task DELETE Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
+    #logger_queue.put("DEBUG: Task DELETE Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
     status_queue.put(status_message)
 
 
@@ -364,7 +364,6 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
             progress_of_indexing_lock.release()
             if progress_of_indexing[hash_key] == 0 and len(hierarchical_dirs) > 2:
                 # Remove non-top directory
-                #print("TTTTTTTTTTTTTTTT:{}=>{}".format(hash_key, progress_of_indexing[hash_key]))
                 progress_of_indexing_lock.acquire()
                 del progress_of_indexing[hash_key]
                 progress_of_indexing_lock.release()
@@ -381,9 +380,7 @@ def iterate_dir(**kwargs):
     :param dir:
     :return:
     """
-    #print("DEBUG: Iterating - {}".format(kwargs))
 
-    #file_count=10
     file_set = []
     file_set_size = 0
     dir = kwargs["data"]

@@ -255,7 +255,7 @@ class Master:
 			self.logger_queue.put("INFO:NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
 			self.nfs_shares.extend(nfs_shares)
 			for nfs_share in nfs_shares:
-				print("DEBUG: Creating task for {}".format(nfs_share))
+				#print("DEBUG: Creating task for {}".format(nfs_share))
 				task = Task(operation="indexing",
 							data=nfs_share,
 							nfs_cluster=ip_address,

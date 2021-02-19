@@ -140,11 +140,12 @@ class Monitor:
                     # Buffer prefix_index_data for persistent storage only to be used during PUT
                     if self.operation.upper() == "PUT":
                         object_prefix_key = data["dir"][1:] + "/"
-                        if data["dir"] in self.prefix_index_data:
+                        if object_prefix_key in self.prefix_index_data:
                             self.prefix_index_data[object_prefix_key]["files"] += len(data["files"])
                             self.prefix_index_data[object_prefix_key]["size"]  += data["size"]
                         else:
-                            self.prefix_index_data[object_prefix_key] = {"files": len(data["files"]), "size": data["size"]}
+                            self.prefix_index_data[object_prefix_key] = manager.dict()
+                            self.prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
 
                     #print("===>>INFO: Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
                     if self.send_index_data(client.socket_index, data):
@@ -189,9 +190,13 @@ class Monitor:
         # Storing prefix index data to persistent storage
         if self.operation.upper() == "PUT":
             prefix_storage_file = "/var/log/prefix_index_data.json"
+            prefix_index_data = {}
+            for key,value in self.prefix_index_data.items():
+                prefix_index_data[key] = value.copy()
+
             print("INFO: Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
             with open(prefix_storage_file, "w") as persistent_storage:
-                json.dump(self.prefix_index_data.copy(), persistent_storage)
+                json.dump(prefix_index_data, persistent_storage)
 
         print("INFO: Monitor-Index-Distribution is terminated gracefully!")
         self.logger_queue.put("INFO: Monitor-Index-Distribution is terminated gracefully! ")
@@ -322,12 +327,14 @@ class Monitor:
                 #upload_parcentage = (file_index_count / self.index_data_count.value) * 100
                 #print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
                 #self.logger_queue.put("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
+
                 if self.index_data_count.value:
                     upload_percentage = (file_index_count / self.index_data_count.value) * 100
                     if upload_percentage > display_percentage:
                         print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
                         self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
                         display_percentage +=10
+
             """
             if self.all_index_data_distributed.value:
                 if self.index_data_count.value:
@@ -337,6 +344,7 @@ class Monitor:
                         self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
                         display_percentage +=10
             """
+
 
             ## All index data distributed to clients and received all operation status back from clients.
             if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
