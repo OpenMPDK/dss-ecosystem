@@ -178,9 +178,10 @@ struct Request {
 
 class Objects {
 public:
-    Objects(ClusterMap* map, std::string prefix, uint32_t ps) :
-        m_cur_id(-1), m_cluster_map(map), m_prefix(prefix), m_pagesize(ps) {}
+    Objects(ClusterMap* map, std::string prefix, std::string delimiter, uint32_t ps) :
+        m_cur_id(-1), m_cluster_map(map), m_prefix(prefix), m_delim(delimiter), m_pagesize(ps) {}
     const char *GetPrefix() { return m_prefix.c_str(); }
+    std::string& GetDelim() { return m_delim; }
 	uint32_t GetPageSize() { return m_pagesize; }
     int GetObjKeys();
 
@@ -188,6 +189,7 @@ public:
 	Aws::String& GetToken() { return m_token; }
     bool TokenSet() { return m_token.size() != 0; }
     bool PageSizeSet() { return m_pagesize != 0; }
+    std::set<std::string>& GetPage() { return m_page; }
 
 private:
 	int m_cur_id;
@@ -195,6 +197,7 @@ private:
    	bool m_token_set;
 	ClusterMap* m_cluster_map;
 	std::string m_prefix;
+	std::string m_delim;
 	uint32_t m_pagesize;
     std::set<std::string> m_page;
 public:
@@ -239,7 +242,7 @@ public:
 	Result HeadBucket(const Aws::String& bn);
 	Result CreateBucket(const Aws::String& bn);
 
-	Result ListObjects(const Aws::String& bn, Objects *objs, std::set<std::string>& keys);
+	Result ListObjects(const Aws::String& bn, Objects *objs);
 
 private:
 	Aws::S3::S3Client m_ses;
@@ -273,7 +276,7 @@ public:
 	Result CreateBucket();
     uint32_t GetID() { return m_id; }
 
-	Result ListObjects(Objects *objs, std::set<std::string>& keys);
+	Result ListObjects(Objects *objs);
 
 	int InsertEndpoint(Client* c, const std::string& ip, uint32_t port);
 private:
@@ -372,10 +375,10 @@ public:
     int PutObject(const Aws::String& objectName, const Aws::String& src_fn);
     int DeleteObject(const Aws::String& objectName);
 
-    Objects* GetObjects(std::string prefix, uint32_t page_size = DSS_PAGINATION_DEFAULT) {
-    	return new Objects(m_cluster_map, prefix, page_size);
+    Objects* GetObjects(std::string prefix, std::string delimiter, uint32_t page_size = DSS_PAGINATION_DEFAULT) {
+    	return new Objects(m_cluster_map, prefix, delimiter, page_size);
     };
-    std::set<std::string> ListObjects(const std::string& prefix);
+    std::set<std::string> ListObjects(const std::string& prefix, const std::string& delimiter);
     std::set<std::string> ListBuckets();
 
 private:

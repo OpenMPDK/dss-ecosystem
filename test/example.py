@@ -29,7 +29,7 @@ def main():
 		client.putObject(key, filename)
 
 	# Print objects with prefix
-	objects = client.getObjects(key_base, 8)
+	objects = client.getObjects("", "/", 8)
 	while True:
 		try:
 			it = iter(objects)
@@ -46,7 +46,7 @@ def main():
 	for i in range(20):
 		key = key_base + str(i)
 		client.getObject(key, '/tmp/' + key)
-		client.deleteObject(key)
+		#client.deleteObject(key)
 
 if __name__ == "__main__":
 	main()

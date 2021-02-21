@@ -50,6 +50,7 @@
 #include <aws/s3/model/DeleteBucketRequest.h>
 #include <aws/s3/model/HeadBucketRequest.h>
 #include <aws/s3/model/BucketLocationConstraint.h>
+#include <aws/s3/model/CommonPrefix.h>
 
 #include "dss.h"
 
@@ -200,14 +201,14 @@ Endpoint::DeleteObject(const Aws::String& bn, Request* req)
 }
 
 Result
-Endpoint::ListObjects(const Aws::String& bn, Objects *os, std::set<std::string>& keys)
+Endpoint::ListObjects(const Aws::String& bn, Objects *os)
 {
 	bool cont = false;
 	std::string token;
     S3::Model::ListObjectsV2Outcome out;
     S3::Model::ListObjectsV2Request req;
 
-    req.WithBucket(bn).WithPrefix(os->GetPrefix());
+    req.WithBucket(bn).WithPrefix(os->GetPrefix()).WithDelimiter(os->GetDelim().c_str());
     if (os->PageSizeSet())
     	req.SetMaxKeys(os->GetPageSize());
     if (os->TokenSet())
@@ -219,8 +220,14 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os, std::set<std::string>&
 			//TODO: std::move()
             Aws::Vector<Aws::S3::Model::Object> objects =
                                             out.GetResult().GetContents();
+        	Aws::Vector<Aws::S3::Model::CommonPrefix> cps = out.GetResult().GetCommonPrefixes();
+
             for (auto o : objects)
-                keys.insert(o.GetKey().c_str());
+                os->GetPage().insert(o.GetKey().c_str());
+
+            for (auto cp : cps)
+            	os->GetPage().insert(cp.GetPrefix().c_str());
+
         } else {
 			return Result(false, out.GetError());
         }
@@ -389,9 +396,9 @@ Cluster::DeleteObject(Request* r)
 }
 
 Result
-Cluster::ListObjects(Objects *objs, std::set<std::string>& keys)
+Cluster::ListObjects(Objects *objs)
 {
-	return m_endpoints[0]->ListObjects(m_bucket, objs, keys);
+	return m_endpoints[0]->ListObjects(m_bucket, objs);
 }
 
 Result
@@ -537,14 +544,13 @@ int Client::DeleteObject(const Aws::String& objectName)
 }
 
 std::set<std::string>
-Client::ListObjects(const std::string& prefix)
+Client::ListObjects(const std::string& prefix, const std::string& delimit)
 {
-	std::set<std::string> list;
-	Objects* objs = GetObjects(prefix, 0);
+	Objects* objs = GetObjects(prefix, delimit, 0);
 	const std::vector<Cluster*> clusters = m_cluster_map->GetClusters();
 
 	for (auto c : clusters) {
-		Result r = c->ListObjects(objs, list);
+		Result r = c->ListObjects(objs);
 		if (!r.IsSuccess()) {
 			auto err = r.GetErrorType();
 	        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
@@ -554,7 +560,7 @@ Client::ListObjects(const std::string& prefix)
 		}
 	}
 
-	return list;
+	return objs->GetPage();
 }
 
 int Objects::GetObjKeys() 
@@ -571,7 +577,7 @@ int Objects::GetObjKeys()
 	}
 
 	while (1) {
-		Result r = clusters[m_cur_id]->ListObjects(this, m_page);
+		Result r = clusters[m_cur_id]->ListObjects(this);
 		if (!r.IsSuccess()) {
 			auto err = r.GetErrorType();
 			if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)

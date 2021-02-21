@@ -66,9 +66,11 @@ PYBIND11_MODULE(dss, m) {
         .def("deleteObject", &Client::DeleteObject, "Delete object from dss cluster",
         	py::arg("key"))
         .def("listObjects", &Client::ListObjects, "List object keys with prefix",
-        	 py::arg("prefix") = "")
+        	 py::arg("prefix") = "",
+        	 py::arg("delimiter") = "")
 		.def("getObjects", &Client::GetObjects, "Create a iterable key list",
 			py::arg("prefix") = "",
+			py::arg("delimiter") = "",
 			py::arg("limit") = DSS_PAGINATION_DEFAULT);
 
 	class NoIterator : std::exception {
