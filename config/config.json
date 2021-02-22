@@ -23,7 +23,7 @@
   "s3_storage": {
     "minio": {"url": "202.0.0.103:9000", "access_key": "minio", "secret_key": "minio123"},
     "bucket": "bucket",
-    "client": "minio_client"
+    "client": "dss_client"
   },
   "operations": ["PUT","GET","DEL","LIST"],
   "logging_path": "/var/log"

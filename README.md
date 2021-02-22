@@ -1,6 +1,6 @@
 # nkv-datamover
 
-#Dependency:
+# Dependency:
 Install following packages on the client nodes before launching client application to those nodes.
 ```
 python3 -m pip install paramiko
@@ -13,12 +13,18 @@ Use isntall.sh on each master/client node.
 - Need to update tool to install all dependecy prior to execution.
 ```
 
-#Execution command:
+# Execution command:
 ```
 python3 master_application.py -op PUT -c 10.1.51.2
 python3 master_application.py -op LIST -c 10.1.51.2
 python3 master_application.py -op DEL -c 10.1.51.2
 python3 master_application.py -op DEL -c 10.1.51.2 --prefix bird/
+
+Dry Run:
+- Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance
+python3 master_application.py -op PUT -c 10.1.51.2 --dryrun 
+- It performa every steps involved in DELETE operation except actual DELETE from S3 storage.
+python3 master_application.py -op DEL -c 10.1.51.2 --dryrun
 
 NFS Cluster: 10.1.51.2
 ```
