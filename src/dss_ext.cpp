@@ -56,8 +56,12 @@ struct AsyncCtx {
 
 PYBIND11_MODULE(dss, m) {
 	m.doc() = "provides a key-value API against Samsung DSS clusters";
-	m.def("getVersion", []() {
+	m.def("getVer", []() {
 		return std::string(DSS_VER);
+		});
+
+	m.def("getGITVer", []() {
+		return std::string(GIT_VER);
 		});
 
     py::class_<AsyncCtx>(m, "asyncCtx")
