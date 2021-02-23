@@ -57,6 +57,7 @@ namespace dss {
 using Credentials = Aws::Auth::AWSCredentials;
 using Config = Aws::Client::ClientConfiguration;
 
+#define DSS_VER					"20210217"
 #define DSS_PAGINATION_DEFAULT	100UL
 
 class NoSuchResourceError : std::exception {

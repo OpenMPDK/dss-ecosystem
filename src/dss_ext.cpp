@@ -39,6 +39,10 @@ using namespace dss;
 namespace py = pybind11;
 
 PYBIND11_MODULE(dss, m) {
+	m.def("getVersion", []() {
+		return std::string(DSS_VER);
+		});
+
     py::class_<SesOptions>(m, "clientOption")
     	.def(py::init<>())
 		.def_readwrite("scheme", &SesOptions::scheme)
