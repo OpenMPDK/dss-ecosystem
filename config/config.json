@@ -7,7 +7,7 @@
     "size": "1GB"
   },
   "client": {
-    "workers": 30,
+    "workers": 25,
     "max_index_size": 1000,
     "user_id": "root",
     "password": "msl-ssg"
@@ -17,13 +17,12 @@
     "port_status": 6001
   },
  "nfs_config":{
-               "202.0.0.103": ["/dir1","/dir2","/dir3","/dir4"],
-               "202.0.0.104": ["/bird","/dog","/cat","/deer"]
+               "202.0.0.103": ["/dir4"]
               },
   "s3_storage": {
     "minio": {"url": "202.0.0.103:9000", "access_key": "minio", "secret_key": "minio123"},
     "bucket": "bucket",
-    "client": "dss_client"
+    "client_lib": "minio"
   },
   "operations": ["PUT","GET","DEL","LIST"],
   "logging_path": "/var/log"

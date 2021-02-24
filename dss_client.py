@@ -52,10 +52,10 @@ class DssClientLib:
                 print("EXCEPTION: putObject {}".format(e))
         return False
 
-    def listObjects(self, bucket=None,  prefix=""):
+    def listObjects(self, bucket=None,  prefix="", delimiter="/"):
         object_keys = []
         try:
-            object_keys = self.dss_client.listObjects(prefix)
+            object_keys = self.dss_client.listObjects(prefix, delimiter)
             #if object_keys:
             #    yield object_keys
         except dss.NoSuchResouceError as e:
@@ -66,7 +66,7 @@ class DssClientLib:
         return object_keys
 
     def deleteObject(self, bucket=None, object_key=""):
-        self.logger_queue.put("DELETE ......{}".format(object_key))
+        #self.logger_queue.put("DELETE ......{}".format(object_key))
         if object_key:
             try:
                 if self.dss_client.deleteObject(object_key) == 0:
@@ -99,7 +99,7 @@ class DssClientLib:
 
 
 if __name__ == "__main__":
-    paths = ["/deer/deer1", "/deer/deer2"]
+    paths = ["/dir4/dir41", "/dir4/dir42"]
 
     config="/home/somnath.s/work/nkv-datamover/conf.json"
     start_time = datetime.now()
@@ -115,11 +115,11 @@ if __name__ == "__main__":
             if not  dss_client.putObject(None, file_path):
                 print("Failed to upload file - {}".format(file_path))
 
-        object_keys = dss_client.listObjects("deer/")
+        object_keys = dss_client.listObjects(None, "dir4/dir41/")
         print("ListObjects: {}".format(object_keys))
 
-        object_keys = dss_client.getObjects("deer/")
-        print("GetObjects:{}".format(object_keys))
+        #object_keys = dss_client.getObjects("dir4/")
+        #print("GetObjects:{}".format(object_keys))
 
 
 

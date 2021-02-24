@@ -92,6 +92,7 @@ def list(s3_client, **kwargs):
     # That mean lowest level of directory.
     s3config = params["s3config"]
     minio_bucket = s3config.get("bucket", "bucket")
+    s3_client_library = s3config.get("client_lib","minio_client")
 
     #if prefix not in listing_progress:
     #    listing_progress[prefix] = 0
@@ -101,7 +102,7 @@ def list(s3_client, **kwargs):
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
         if object_keys_iterator:
             lowest_level_directory= True
-            for result in list_object_keys(object_keys_iterator, prefix_index_data,max_index_size):
+            for result in list_object_keys(object_keys_iterator, prefix_index_data,max_index_size, s3_client_library):
                 if "object_keys" in result:
                     index_data_message ={"dir": prefix, "files": result["object_keys"]}
                     #print("=====>>> TASK-INFO: Index Data Message - {}".format(index_data_message))
@@ -136,7 +137,7 @@ def list(s3_client, **kwargs):
 
 
 
-def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size):
+def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size, s3_client_lib):
     """
     Iterate over the object keys and generate a message which holds a prefix and object keys underneath of the prefix.
     :param object_keys_iterator: Returned object keys iterator,
@@ -146,17 +147,21 @@ def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size):
     """
 
     object_keys = []
-    for obj_key in object_keys_iterator:
+    for obj_key_iter in object_keys_iterator:
+        if s3_client_lib.lower() == "minio":
+          obj_key = obj_key_iter.object_name
+        elif s3_client_lib.lower() == "dss_client":
+          obj_key = obj_key_iter
         # To handle a scenario in which directory has both file and directory
-        if obj_key.object_name in prefix_index_data:
-            yield {"prefix": obj_key.object_name}
+        if obj_key in prefix_index_data:
+            yield {"prefix": obj_key}
         else:
             if len(object_keys) == max_index_size:
                 #print("++++++=============>ObjectKey-:{}".format(object_keys))
                 yield {"object_keys": object_keys}
-                object_keys = [obj_key.object_name]
+                object_keys = [obj_key]
             else:
-                object_keys.append(obj_key.object_name)
+                object_keys.append(obj_key)
     if object_keys:
         yield {"object_keys": object_keys}
 

@@ -55,13 +55,13 @@ class Worker:
     minio_secret_key = minio_config["secret_key"]
     #start_time = datetime.now()
     s3_client =None
-    if self.s3_config.get("client",None).lower() == "minio_client":
+    if self.s3_config.get("client_lib",None).lower() == "minio":
       s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key)
-    elif self.s3_config.get("client",None).lower() == "dss_client":
+    elif self.s3_config.get("client_lib",None).lower() == "dss_client":
       os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
       s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
 
-    elif self.s3_config.get("client",None).lower() == "boto3_client":
+    elif self.s3_config.get("client_lib",None).lower() == "boto3":
       config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio", "minio_secret_key": "minio123"}
       s3_client = S3(config)
 
