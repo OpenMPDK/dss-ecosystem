@@ -99,7 +99,7 @@ Result
 Endpoint::GetObject(const Aws::String& bn, Request* req)
 {
     Aws::S3::Model::GetObjectRequest ep_req;
-    ep_req.WithBucket(bn).SetKey(Aws::String(req->key));
+    ep_req.WithBucket(bn).SetKey(Aws::String(req->key.c_str()));
 
     Aws::S3::Model::GetObjectOutcome out = m_ses.GetObject(ep_req);
 
@@ -135,6 +135,50 @@ Endpoint::GetObject(const Aws::String& bn, const Aws::String& objectName)
     }
 }
 
+void PutObjectAsyncDone(const Aws::S3::S3Client* s3Client, 
+    const Aws::S3::Model::PutObjectRequest& request, 
+    const Aws::S3::Model::PutObjectOutcome& outcome,
+    const std::shared_ptr<const Aws::Client::AsyncCallerContext>& context)
+{
+	const std::shared_ptr<const CallbackCtx> ctx = 
+			std::static_pointer_cast<const CallbackCtx>(context);
+
+    if (outcome.IsSuccess()) {
+        Callback cb = ctx->getCbFunc();
+		Request* req = (Request*)ctx->getCbArgs();
+
+        cb(req->done_arg, req->key, req->key, 0);
+    } else {
+        std::cout << "Error: PutObjectAsyncDone: " <<
+            outcome.GetError().GetMessage() << std::endl;
+    }
+
+    //upload_variable.notify_one();
+}
+
+
+Result
+Endpoint::PutObjectAsync(const Aws::String& bn, Request* req)
+{
+    // Create and configure the asynchronous put object request.
+    Aws::S3::Model::PutObjectRequest request;
+    request.WithBucket(bn).SetKey(Aws::String(req->key.c_str()));
+	request.SetBody(req->io_stream);
+
+    // Create and configure the context for the asynchronous put object request.
+
+    std::shared_ptr<Aws::Client::AsyncCallerContext> context =
+    		Aws::MakeShared<CallbackCtx>("PutObjectAllocationTag", req->done_func, req);
+    context->SetUUID(Aws::String(req->key.c_str()));
+
+    // Make the asynchronous put object call. Queue the request into a 
+    // thread executor and call the PutObjectAsyncDone function when the 
+    // operation has finished. 
+    m_ses.PutObjectAsync(request, PutObjectAsyncDone, context);
+
+    return true;
+}
+
 Result
 Endpoint::PutObject(const Aws::String& bn, const Aws::String& objectName,
 					std::shared_ptr<Aws::IOStream>& input_stream) 
@@ -156,7 +200,7 @@ Result
 Endpoint::PutObject(const Aws::String& bn, Request* req) 
 {
     S3::Model::PutObjectRequest ep_req;
-    ep_req.WithBucket(bn).SetKey(Aws::String(req->key));
+    ep_req.WithBucket(bn).SetKey(Aws::String(req->key.c_str()));
     ep_req.SetBody(req->io_stream);
 
     S3::Model::PutObjectOutcome out = m_ses.PutObject(ep_req);
@@ -189,7 +233,7 @@ Endpoint::DeleteObject(const Aws::String& bn, Request* req)
 {
     Aws::S3::Model::DeleteObjectRequest ep_req;
 
-    ep_req.WithBucket(bn).SetKey(Aws::String(req->key));
+    ep_req.WithBucket(bn).SetKey(Aws::String(req->key.c_str()));
 
     auto out = m_ses.DeleteObject(ep_req);
 
@@ -220,11 +264,11 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os)
 			//TODO: std::move()
             Aws::Vector<Aws::S3::Model::Object> objects =
                                             out.GetResult().GetContents();
-        	Aws::Vector<Aws::S3::Model::CommonPrefix> cps = out.GetResult().GetCommonPrefixes();
+        	Aws::Vector<Aws::S3::Model::CommonPrefix> cps =
+        									out.GetResult().GetCommonPrefixes();
 
             for (auto o : objects)
                 os->GetPage().insert(o.GetKey().c_str());
-
             for (auto cp : cps)
             	os->GetPage().insert(cp.GetPrefix().c_str());
 
@@ -320,10 +364,10 @@ ClusterMap::VerifyClusterConf()
 void
 ClusterMap::GetCluster(Request* req)
 {
-	unsigned id = 0, max_w = GetCLWeight(0, req->key);
+	unsigned id = 0, max_w = GetCLWeight(0, req->key.c_str());
 	for (unsigned i=1; i<m_clusters.size(); i++) {
-		unsigned w = GetCLWeight(i, req->key);
-		 pr_debug("key %s: cluster %u weight %0x\n", req->key, i, w);
+		unsigned w = GetCLWeight(i, req->key.c_str());
+		 pr_debug("key %s: cluster %u weight %0x\n", req->key.c_str(), i, w);
 		if (w > max_w) {
 			id = i;
 			max_w = w;
@@ -333,7 +377,7 @@ ClusterMap::GetCluster(Request* req)
 	req->key_hash = max_w;
 	req->cluster = m_clusters[id];
 
-	pr_debug("key %s: cluster %u weight %0x\n", req->key, id, max_w);
+	pr_debug("key %s: cluster %u weight %0x\n", req->key.c_str(), id, max_w);
 }
 
 int
@@ -374,13 +418,19 @@ Cluster::GetObject(Request* r)
 Result
 Cluster::PutObject(const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream)
 {
-	return m_endpoints[0]->PutObject(m_bucket, objectName, input_stream);
+	return std::move(m_endpoints[0]->PutObject(m_bucket, objectName, input_stream));
+}
+
+Result
+Cluster::PutObjectAsync(Request* r)
+{
+	return GetEndpoint(r)->PutObjectAsync(m_bucket, r);
 }
 
 Result
 Cluster::PutObject(Request* r)
 {
-	return GetEndpoint(r)->PutObject(m_bucket, r);
+	return std::move(GetEndpoint(r)->PutObject(m_bucket, r));
 }
 
 Result
@@ -426,11 +476,11 @@ Client::ExtractOptions(const SesOptions& o)
 	return cfg;
 }
 
-Client*
+std::unique_ptr<Client>
 Client::CreateClient(const std::string& ip,
 					 const std::string& user, const std::string& pwd, const SesOptions& options)
 {
-	Client *client = new Client(ip, user, pwd, options);
+	std::unique_ptr<Client> client(new Client(ip, user, pwd, options));
 	if (client->InitClusterMap() < 0) {
 		pr_err("Failed to init cluster map\n");
 		return nullptr;
@@ -461,7 +511,7 @@ Client::InitClusterMap()
 Result
 Request::Submit(Handler handler)
 {
-	return (this->cluster->*handler)(this);
+	return ((this->cluster->*handler)(this));
 }
 
 int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
@@ -493,8 +543,42 @@ int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
     }
 }
 
-int Client::PutObject(const Aws::String& objectName, const Aws::String& src_fn)
+int Client::PutObjectAsync(const std::string& objectName, const std::string& src_fn,
+						   Callback cb, void* cb_arg)
 {
+	Result r;
+    struct stat buffer;
+	Request* req = new Request(objectName.c_str(), src_fn.c_str(), cb, cb_arg);
+
+    if (stat(src_fn.c_str(), &buffer) == -1) {
+        pr_err("Error: PutObject: File '%s' does not exist.",
+        		src_fn.c_str());
+        return false;
+    }
+
+	req->io_stream = Aws::MakeShared<Aws::FStream>("Client::PutObject",
+            			src_fn.c_str(),
+            			std::ios_base::in | std::ios_base::binary);
+
+	m_cluster_map->GetCluster(req);
+	r = std::move(req->Submit(&Cluster::PutObjectAsync));
+
+    if (r.IsSuccess()) {
+        return 0;
+    } else {
+        auto err = r.GetErrorType();
+        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
+                throw NoSuchResourceError();
+        else
+            throw GenericError(r.GetErrorMsg().c_str());
+
+        return -1;
+    }
+}
+
+int Client::PutObject(const Aws::String& objectName, const Aws::String& src_fn, bool async)
+{
+	Result r;
     struct stat buffer;
 	std::unique_ptr<Request> req_guard(new Request(objectName.c_str(), src_fn.c_str()));
 
@@ -509,7 +593,10 @@ int Client::PutObject(const Aws::String& objectName, const Aws::String& src_fn)
             			std::ios_base::in | std::ios_base::binary);
 
 	m_cluster_map->GetCluster(req_guard.get());
-	Result r = req_guard->Submit(&Cluster::PutObject);
+	if (!async)
+		r = std::move(req_guard->Submit(&Cluster::PutObject));
+	else
+		r = std::move(req_guard->Submit(&Cluster::PutObjectAsync));
 
     if (r.IsSuccess()) {
         return 0;
@@ -543,14 +630,14 @@ int Client::DeleteObject(const Aws::String& objectName)
     }
 }
 
-std::set<std::string>
+std::set<std::string>&&
 Client::ListObjects(const std::string& prefix, const std::string& delimit)
 {
-	Objects* objs = GetObjects(prefix, delimit, 0);
+	std::unique_ptr<Objects> objs = GetObjects(prefix, delimit, 0);
 	const std::vector<Cluster*> clusters = m_cluster_map->GetClusters();
 
 	for (auto c : clusters) {
-		Result r = c->ListObjects(objs);
+		Result r = c->ListObjects(objs.get());
 		if (!r.IsSuccess()) {
 			auto err = r.GetErrorType();
 	        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
@@ -560,7 +647,7 @@ Client::ListObjects(const std::string& prefix, const std::string& delimit)
 		}
 	}
 
-	return objs->GetPage();
+	return std::move(objs->GetPage());
 }
 
 int Objects::GetObjKeys() 
@@ -611,23 +698,40 @@ int Objects::GetObjKeys()
 
 } // namespace dss
 
+void
+test_put_done(void* ptr, std::string key, std::string message, int err)
+{
+	printf("%s: key %s\n", __func__, key.c_str());
+}
+
 int main()
 {
 	const Aws::String object_name = "test_obj";
     const Aws::String fname = "/root/jerry/dss_client/src/dss_client.cpp";
 
-	dss::Client* client = dss::Client::CreateClient("http://127.0.0.1:9001",
-				 									"minioadmin", "minioadmin");
-	if (client == nullptr)
-		return 1;
+	std::unique_ptr<dss::Client> client
+		= dss::Client::CreateClient("http://127.0.0.1:9001", "minioadmin", "minioadmin");
+	if (!client) {
+		fprintf(stderr, "Failed to create client\n");
+		return -1;
+	}
 
-	for (unsigned i=0; i<10000; i++) {
+/*
+	for (unsigned i=0; i<2; i++) {
 		Aws::String key = object_name + std::to_string(i).c_str();
-       	client->PutObject(key, fname);
+       	client->PutObject(key, fname, true);
+       	
 		if (!client->GetObject(key, "/tmp/" + key)) {
            	return 1;
-         }
+        }
+        
     }
+    */
+	std::string key = std::string(object_name.c_str()) + std::to_string(0).c_str();
+   	client->PutObjectAsync(key, std::string(fname.c_str()), test_put_done, nullptr);
+
+   	while(1);
+	
 /*
 	Aws::String key = Aws::String("test_obj9991");
    	client->PutObject(key, fname);
@@ -641,8 +745,6 @@ int main()
 	//auto result = client->ListObjects("");
 	//for (auto k : result)
 	//	printf("%s\n", k.c_str());
-
-	delete client;
 
 	//client.DeleteBucket(bucket_name, true);
 

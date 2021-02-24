@@ -33,15 +33,40 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/functional.h>
+
 #include "dss.h"
 
 using namespace dss;
 namespace py = pybind11;
 
+class AsyncCtx;
+using PyCallback = std::function<void(AsyncCtx& pct)>;
+
+struct AsyncCtx {
+	std::string		key;
+	std::string		msg;
+	int				error_code;
+	PyCallback		done_func;
+	py::object		done_arg;
+
+	std::string& getKey()		{ return key; }
+	std::string& getErrMsg()	{ return msg; }
+};
+
 PYBIND11_MODULE(dss, m) {
+	m.doc() = "provides a key-value API against Samsung DSS clusters";
 	m.def("getVersion", []() {
 		return std::string(DSS_VER);
 		});
+
+    py::class_<AsyncCtx>(m, "asyncCtx")
+    	.def(py::init<>())
+		.def_property_readonly("key", &AsyncCtx::getKey)
+		.def_property_readonly("msg", &AsyncCtx::getErrMsg)
+		.def_readonly("error_code", &AsyncCtx::error_code)
+		.def_readwrite("done_func", &AsyncCtx::done_func)
+		.def_readwrite("done_arg", &AsyncCtx::done_arg);
 
     py::class_<SesOptions>(m, "clientOption")
     	.def(py::init<>())
@@ -63,7 +88,23 @@ PYBIND11_MODULE(dss, m) {
     py::class_<Client>(m, "Client")
         .def("putObject", &Client::PutObject,	"Upload object to dss cluster",
         	py::arg("key"),
-        	py::arg("file_path"))
+        	py::arg("file_path"),
+        	py::arg("async") = false)
+        .def("putObjectAsync", 
+        	 [&](Client& self, const std::string& key, const std::string& src_fn, AsyncCtx& actx)
+        	 {
+        		Callback pb_callback = [](void* ptr, std::string key, std::string message, int err) {
+        			AsyncCtx* ctx = (AsyncCtx*)ptr;
+        			ctx->key = key; 
+        			ctx->msg = message;
+        			ctx->error_code = err;
+        			ctx->done_func(*ctx);
+        		};
+				return self.PutObjectAsync(key, src_fn, pb_callback, &actx);
+        	},	"Upload object to dss cluster asynchronously",
+        	py::arg("key"),
+        	py::arg("file_path"),
+        	py::arg("asyncCtx"))
         .def("getObject", &Client::GetObject,	"Download object from dss cluster",
         	py::arg("key"),
         	py::arg("file_path"))

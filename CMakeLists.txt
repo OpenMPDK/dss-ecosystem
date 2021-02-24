@@ -6,6 +6,7 @@ project("dss")
 
 # Set the C++ standard to use to build this target.
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED on)
 
 # Enable CTest for testing these code examples.
 # include(CTest)
@@ -54,6 +55,7 @@ add_library(${DSS_PYTHON_LIB} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/dss_ext.cpp
 target_include_directories(${DSS_PYTHON_LIB}  PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
+target_compile_options(${DSS_PYTHON_LIB} PRIVATE "-fvisibility=hidden")
 target_link_options(${DSS_PYTHON_LIB} PUBLIC "-Wl,--disable-new-dtags" "-Wl,-rpath,/usr/lib/x86_64-linux-gnu/")
 
 target_link_libraries(${DSS_PYTHON_LIB} ${DSS_LIB})

@@ -45,7 +45,7 @@ use conda install gcc, cmake and etc..
 
 Install Anaconda:
 wget https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
-chmod +X Anaconda3-2020.11-Linux-x86_64.sh
+chmod +x Anaconda3-2020.11-Linux-x86_64.sh
 ./Anaconda3-2020.11-Linux-x86_64.sh
 
 Regardless of how you setup toolchain, you will need pybind11 and aws-cpp-sdk
