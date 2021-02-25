@@ -30,7 +30,11 @@ def exec_cmd(cmd="", output=False, blocking=False):
     """
     Execute the specified command
     :param cmd: <string> a executable command.
-    :return: None
+    :return:
+    ret = { ret==0  indicate success
+            ret !=0 failure
+          }
+    console_output = stdout gets returned
     """
     ret = 0
     console_output= ""

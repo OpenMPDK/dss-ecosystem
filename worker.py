@@ -12,6 +12,7 @@ from dss_client import DssClientLib
 import time
 from task import Task
 from datetime import datetime
+from utils.utility import exception
 
 """
 TODO:
@@ -47,26 +48,33 @@ class Worker:
     self.stop()
     #time.sleep(1)
 
-  def get_s3_client(self,client_name=None):
-    # Create S3_Client
+  def get_s3_client(self):
+    """
+    Create actual s3_client based on s3 credential
+    :return: s3_client connection.
+    """
     minio_config = self.s3_config.get("minio", {})
     minio_url = minio_config["url"]
     minio_access_key = minio_config["access_key"]
     minio_secret_key = minio_config["secret_key"]
-    #start_time = datetime.now()
     s3_client =None
-    if self.s3_config.get("client_lib",None).lower() == "minio":
-      s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key)
-    elif self.s3_config.get("client_lib",None).lower() == "dss_client":
-      os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
-      s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
 
-    elif self.s3_config.get("client_lib",None).lower() == "boto3":
-      config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio", "minio_secret_key": "minio123"}
-      s3_client = S3(config)
+    try:
+      s3_client_lib_name = (self.s3_config["client_lib"]).lower()
+      if s3_client_lib_name == "minio":
+        s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key)
+      elif s3_client_lib_name == "dss_client":
+        os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
+        s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
 
-    #print("INFO: S3 Connection time: {}".format((datetime.now() - start_time).seconds))
-    #self.logger_queue.put("INFO: S3 Connection time: {}".format((datetime.now() - start_time).seconds))
+      elif s3_client_lib_name == "boto3":
+        config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio", "minio_secret_key": "minio123"}
+        s3_client = S3(config)
+      else:
+        self.logger_queue.put("ERROR: S3 Client-{} doesn't exist! Supported S3 clients [\"minio\",\"dss_client\", \"boto3\"] ".format(s3_client_lib_name))
+    except Exception as e:
+      self.logger_queue.put("EXCEPTION: BAD s3_client {}".format(e))
+
     return s3_client
 
 
