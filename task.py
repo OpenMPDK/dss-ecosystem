@@ -129,7 +129,11 @@ def list(s3_client, **kwargs):
                     listing_progress[prefix] += 1
                 else:
                     listing_progress[prefix] = 1
-                task = Task(operation="list", data={"prefix":obj_key.object_name}, s3config=params["s3config"], max_index_size=max_index_size)
+                if s3_client_library.lower() == "minio":
+                    object_key_prefix =  obj_key.object_name
+                elif s3_client_library.lower() == "dss_client":
+                    object_key_prefix =  obj_key
+                task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                 task_queue.put(task)
         else:
             logger_queue.put("ERROR: No object keys belongs to the prefix-{}".format(prefix))

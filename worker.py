@@ -125,6 +125,10 @@ class Worker:
 
     s3_client = self.get_s3_client()
 
+    if not s3_client:
+      self.status.value = 0
+      return
+
     while True:
       # Get the status of worker from a shared flag.
       if not self.status.value:
