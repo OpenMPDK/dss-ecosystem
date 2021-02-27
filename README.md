@@ -93,7 +93,19 @@ Specify NFS cluster information from configuration file.
                "<NFS Cluster DNS/IP address>":[ "NFS share1", "NFS share2"]
              },
 ```
-
+# S3 Client Library
+The supported S3 client libraries minio-python-lib, dss-client-lib or boto3.
+minio-python-lib => "minio"
+dss-client-lib => "dss_client"
+boto3 => "boto3" 
+Update the client library in the following location of configuration file.
+```
+"s3_storage": {
+    "minio": {"url": "202.0.0.103:9000", "access_key": "minio", "secret_key": "minio123"},
+    "bucket": "bucket",
+    "client_lib": "dss_client" <<== Update client library, supported values [ "minio" | "dss_clint" | "boto3" ]
+  },
+```
 # Operation
 Supported operations are PUT/DEL/GET
 ## Operation PUT
