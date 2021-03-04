@@ -33,9 +33,10 @@ import (
 	"time"
 )
 
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 // Global variables
-var access_key, secret_key, url_host, bucket, region, key_prefix string
-var duration_secs, threads, loops, num_ios, num_total_object_per_thread, op_type int
+var access_key, secret_key, url_host, bucket, region, key_prefix, key_random string
+var duration_secs, threads, loops, num_ios, num_total_object_per_thread, op_type, key_len int
 var object_size uint64
 var object_data []byte
 var object_data_md5 string
@@ -207,11 +208,12 @@ func setSignature(req *http.Request) {
 }
 
 func runUpload(thread_num int) {
+
         if (num_ios == 0) {
 	  for time.Now().Before(endtime) {
 		objnum := atomic.AddInt32(&upload_count, 1)
 		fileobj := bytes.NewReader(object_data)
-		prefix := fmt.Sprintf("%s/%s/%s-Object-%d", url_host, bucket, key_prefix, objnum)
+		prefix := fmt.Sprintf("%s/%s/%s%s-Object-%d", url_host, bucket, key_prefix, key_random, objnum)
 		req, _ := http.NewRequest("PUT", prefix, fileobj)
 		req.Header.Set("Content-Length", strconv.FormatUint(object_size, 10))
 		req.Header.Set("Content-MD5", object_data_md5)
@@ -235,7 +237,7 @@ func runUpload(thread_num int) {
           for iter := 0; iter < num_ios; iter++  {
                 atomic.AddInt32(&upload_count, 1)
                 fileobj := bytes.NewReader(object_data)
-                prefix := fmt.Sprintf("%s/%s/%s-Object-%d-%d", url_host, bucket, key_prefix, thread_num, iter)
+                prefix := fmt.Sprintf("%s/%s/%s%s-Object-%d-%d", url_host, bucket, key_prefix, key_random, thread_num, iter)
                 req, _ := http.NewRequest("PUT", prefix, fileobj)
                 req.Header.Set("Content-Length", strconv.FormatUint(object_size, 10))
                 req.Header.Set("Content-MD5", object_data_md5)
@@ -265,7 +267,7 @@ func runUpload(thread_num int) {
 
 func runDownload(thread_num int) {
 
-        if (num_ios == 0) {
+	if (num_ios == 0) {
 	  for time.Now().Before(endtime) {
 		//atomic.AddInt32(&download_count, 1)
                 var objnum int32
@@ -279,9 +281,9 @@ func runDownload(thread_num int) {
                 }
                 prefix := ""
                 if (num_total_object_per_thread == 0) {
-		  prefix = fmt.Sprintf("%s/%s/%s-Object-%d", url_host, bucket, key_prefix, objnum)
+		  prefix = fmt.Sprintf("%s/%s/%s%s-Object-%d", url_host, bucket, key_prefix, key_random, objnum)
                 } else {
-                  prefix = fmt.Sprintf("%s/%s/%s-Object-%d-%d", url_host, bucket, key_prefix, thread_num, objnum)
+                  prefix = fmt.Sprintf("%s/%s/%s%s-Object-%d-%d", url_host, bucket, key_prefix, key_random, thread_num, objnum)
                 }
 		req, _ := http.NewRequest("GET", prefix, nil)
 		setSignature(req)
@@ -306,7 +308,7 @@ func runDownload(thread_num int) {
                         objnum = 1
                 }*/
 
-                prefix := fmt.Sprintf("%s/%s/%s-Object-%d-%d", url_host, bucket, key_prefix, thread_num, objnum)
+                prefix := fmt.Sprintf("%s/%s/%s%s-Object-%d-%d", url_host, bucket, key_prefix, key_random, thread_num, objnum)
                 req, _ := http.NewRequest("GET", prefix, nil)
                 setSignature(req)
                 if resp, err := httpClient.Do(req); err != nil {
@@ -336,7 +338,7 @@ func runDelete(thread_num int) {
 		if objnum > upload_count {
 			break
 		}
-		prefix := fmt.Sprintf("%s/%s/%s-Object-%d", url_host, bucket, key_prefix, objnum)
+		prefix := fmt.Sprintf("%s/%s/%s%s-Object-%d", url_host, bucket, key_prefix, key_random, objnum)
 		req, _ := http.NewRequest("DELETE", prefix, nil)
 		setSignature(req)
 		if resp, err := httpClient.Do(req); err != nil {
@@ -350,7 +352,7 @@ func runDelete(thread_num int) {
 
           for iter := 0; iter < num_ios; iter++ {
                 atomic.AddInt32(&delete_count, 1)
-                prefix := fmt.Sprintf("%s/%s/%s-Object-%d-%d", url_host, bucket, key_prefix, thread_num, iter)
+                prefix := fmt.Sprintf("%s/%s/%s%s-Object-%d-%d", url_host, bucket, key_prefix, key_random, thread_num, iter)
                 req, _ := http.NewRequest("DELETE", prefix, nil)
                 setSignature(req)
                 if resp, err := httpClient.Do(req); err != nil {
@@ -368,6 +370,14 @@ func runDelete(thread_num int) {
 	atomic.AddInt32(&running_threads, -1)
 }
 
+func randSeq(n int) string {
+    b := make([]rune, n)
+    for i := range b {
+        b[i] = letters[rand.Intn(len(letters))]
+    }
+    return string(b)
+}
+
 func main() {
 	// Hello
 	fmt.Println("Wasabi benchmark program v2.0")
@@ -380,6 +390,7 @@ func main() {
 	myflag.StringVar(&bucket, "b", "wasabi-benchmark-bucket", "Bucket for testing")
 	myflag.StringVar(&region, "r", "us-east-1", "Region for testing")
 	myflag.StringVar(&key_prefix, "p", "s3-bench-minio", "Key prefix to be added during key generation")
+	myflag.IntVar(&key_len, "y", 60, "Length will be used for key generation")
 	myflag.IntVar(&duration_secs, "d", 60, "Duration of each test in seconds")
 	myflag.IntVar(&threads, "t", 1, "Number of threads to run")
 	myflag.IntVar(&num_ios, "n", 0, "Number of IOS per thread to run")
@@ -416,6 +427,10 @@ func main() {
 	logit(fmt.Sprintf("Parameters: url=%s, bucket=%s, region=%s, duration=%d, threads=%d, num_ios=%d, op_type=%d, loops=%d, size=%s",
 		url_host, bucket, region, duration_secs, threads, num_ios, op_type, loops, sizeArg))
 
+	// Initialize data for key
+        rand.Seed(111); //lets use constant seed so objects can be GET/DEL after PUT ops (time.Now().UnixNano())
+	key_random = randSeq(key_len)
+ 	
 	// Initialize data for the bucket
 	object_data = make([]byte, object_size)
 	rand.Read(object_data)
@@ -443,6 +458,10 @@ func main() {
 		  running_threads = int32(threads)
 		  starttime := time.Now()
 		  endtime = starttime.Add(time.Second * time.Duration(duration_secs))
+		  
+		  prefix := fmt.Sprintf("%s/%s/%s%s-Object-%d-%d", url_host, bucket, key_prefix, key_random, 0, 0)
+		  fmt.Printf("Upload ~key-size:%d ~key:%s\n", len(prefix), prefix)
+	
 		  for n := 1; n <= threads; n++ {
 			go runUpload(n)
 		  }
@@ -463,6 +482,10 @@ func main() {
 		  running_threads = int32(threads)
 		  starttime := time.Now()
 		  endtime = starttime.Add(time.Second * time.Duration(duration_secs))
+		  
+		  prefix := fmt.Sprintf("%s/%s/%s%s-Object-%d-%d", url_host, bucket, key_prefix, key_random, 0, 0)
+		  fmt.Printf("Download ~key-size:%d ~key:%s\n", len(prefix), prefix)
+	
 		  for n := 1; n <= threads; n++ {
 			go runDownload(n)
 		  }
@@ -483,6 +506,10 @@ func main() {
 		  running_threads = int32(threads)
 		  starttime := time.Now()
 		  endtime = starttime.Add(time.Second * time.Duration(duration_secs))
+		  
+		  prefix := fmt.Sprintf("%s/%s/%s%s-Object-%d-%d", url_host, bucket, key_prefix, key_random, 0, 0)
+		  fmt.Printf("Delete ~key-size:%d ~key:%s\n", len(prefix), prefix)
+	
 		  for n := 1; n <= threads; n++ {
 			go runDelete(n)
 		  }
