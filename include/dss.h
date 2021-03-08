@@ -108,6 +108,10 @@ public:
 			}
 		}
 
+		c = (char*) "AWS_EC2_METADATA_DISABLED=true";
+		if (putenv(c))
+			pr_err("Failed to set AWS_EC2_METADATA_DISABLED\n");
+
     	m_options.loggingOptions.logLevel = (Aws::Utils::Logging::LogLevel) l;
     	Aws::InitAPI(m_options);
 	}
