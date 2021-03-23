@@ -17,13 +17,13 @@
     "port_status": 6001
   },
  "nfs_config":{
-               "202.0.0.103": ["/dir4"]
+               "202.0.0.103": ["/dir1","/dir2","/dir3","/dir4"]
               },
   "s3_storage": {
     "minio": {"url": "202.0.0.103:9000", "access_key": "minio", "secret_key": "minio123"},
     "bucket": "bucket",
-    "client_lib": "minio"
+    "client_lib": "dss_client"
   },
   "operations": ["PUT","GET","DEL","LIST"],
-  "logging_path": "/var/log"
+  "logging_path": "/var/log/dss"
 }
