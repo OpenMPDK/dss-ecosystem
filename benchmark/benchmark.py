@@ -9,26 +9,21 @@ import sys
 import threading
 import time
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 object_data = None
 object_data_md5 = None
-data_dir = '/tmp/'
-data_file_ref = data_dir + 'datafile_ref'
-data_md5_file_ref = data_dir + 'data_md5_file_ref'
-
-put_count = None
-put_fail_count = None
-get_count = None
-get_fail_count = None
-del_count = None
-del_fail_count = None
+data_dir = 'dss_client_data/'
+data_file_ref = None
+data_md5_file_ref = None
 
 log_level = 'INFO'
 log_file = 'dss_benchmark.log'
 
-# Puts per thread
-puts_per_thread = {}
+g_end_point = None
+g_access_key = None
+g_secret_key = None
+g_logger = None
 
 
 def _set_logger(log_filename, module):
@@ -134,99 +129,115 @@ class DSSClient(object):
             raise e
 
 
-def run_data_put(client_conn, thr_id, key_prefix, num_ios=0):
+def run_data_put_prepare(thr_id, key_prefix, num_ios=0):
+    for count in range(num_ios):
+        key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
+        filename = os.path.join(data_dir, key)
+        with open(filename, 'wb') as f:
+            f.write(object_data)
+
+
+def run_data_put(thr_id, key_prefix, num_ios=0):
+    logger = g_logger
+    try:
+        client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
+        if not client_conn:
+            logger.error('Error in creating DSS client connection')
+            return
+    except:
+        logger.error('Error in creating DSS client connection')
+        return
+
     start_time = time.time()
     count = 0
+    fail_count = 0
     while True:
         if num_ios and count >= num_ios:
             break
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
-        filename = data_file_ref
+        filename = os.path.join(data_dir, key)
+        count = count + 1
+        logger.debug('Thread-%d - Uploading the file %s', thr_id, filename)
         try:
             client_conn.put_object(key, filename)
-            count = count + 1
-            put_count.increment()
+            logger.debug('Thread-%d - Uploading the file %s DONE', thr_id, filename)
         except:
-            put_fail_count.increment()
+            logger.debug('Thread-%d - Uploading the file %s FAILED', thr_id, filename)
+            fail_count += 1
     end_time = time.time()
-
-    logger.info('PUT objects - total %d, failed %d, time %d ms', count, put_fail_count.value(),
-                (end_time - start_time) * 10**6)
-    puts_per_thread[thr_id] = count
-
-    '''
-    if num_ios:
-        i = 0
-        start_time = time.time()
-        while i < num_ios:
-            key = '%s-object-%s-%d'.format(key_prefix, thr_id, i)
-            try:
-                client_conn.put_object(key, object_data)
-                i = i + 1
-                put_count.increment()
-            except:
-                put_fail_count.increment()
-                pass
-        end_time = time.time()
-        logger.info('PUT objects - count %d - time %d', num_ios, (end_time - start_time))
-    else:
-        start_time = time.time()
-        count = 0
-        while True:
-            if time.time() - start_time > duration:
-                break
-            key = '%s-object-%d'.format(key_prefix, count)
-            try:
-                client_conn.put_object(key, object_data)
-                count = count + 1
-                put_count.increment()
-            except:
-                put_fail_count.increment()
-                pass
-        end_time = time.time()
-        logger.info('PUT objects - count %d - time %d', count, (end_time - start_time))
-    '''
+    logger.info('PUT objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
+    logger.info('PUT objects - Thr_id %d,  count %d, failed %d,  time %d sec', thr_id, count,
+                fail_count, (end_time - start_time))
 
 
-def run_data_get(client_conn, thr_id, key_prefix, num_ios=0):
+def run_data_put_cleanup(thr_id, key_prefix, num_ios=0):
+    for count in range(num_ios):
+        key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
+        filename = os.path.join(data_dir, key)
+        os.unlink(filename)
+
+
+def run_data_get(thr_id, key_prefix, num_ios=0):
+    logger = g_logger
+    try:
+        client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
+        if not client_conn:
+            logger.error('Error in creating DSS client connection')
+            return
+    except:
+        logger.error('Error in creating DSS client connection')
+        return
+
     start_time = time.time()
     count = 0
+    fail_count = 0
     while True:
         if num_ios and count >= num_ios:
             break
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
-        filename = data_dir + key
+        filename = os.path.join(data_dir, key)
         count = count + 1
         try:
             client_conn.get_object(key, filename)
-            get_count.increment()
         except:
-            get_fail_count.increment()
+            fail_count += 1
 
     end_time = time.time()
 
-    logger.info('GET objects - count %d, failed %d,  time %d ms', count,
-                get_fail_count.value(), (end_time - start_time) * 10**6)
+    logger.info('GET objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
+    logger.info('GET objects - Thr_id %d,  count %d, failed %d,  time %d sec', thr_id, count,
+                fail_count, end_time - start_time)
 
 
-def check_data_after_get(client_conn, thr_id, key_prefix, num_ios=0):
-    fail_count = FastWriteCounter()
+def check_data_after_get(thr_id, key_prefix, num_ios=0):
+    fail_count = 0
     for i in range(num_ios):
         key = '%s-object-%s-%d' % (key_prefix, thr_id, i)
-        filename = data_dir + key
+        filename = os.path.join(data_dir, key)
         with open(filename, 'rb') as file:
             output = file.read()
             output_md5 = hashlib.md5(output).hexdigest()
             logger.debug('Obj MD5 - %s, Actual MD5 - %s', output_md5, object_data_md5)
             if output_md5 != object_data_md5:
                 logger.error("Key %s didn't match with object data", key)
-                fail_count.increment()
-    logger.info('CHECK data - total %d, mismatch %d', num_ios, fail_count.value())
+                fail_count +=1
+    logger.info('CHECK data - total %d, mismatch %d', num_ios, fail_count)
 
 
-def run_data_del(client_conn, thr_id, key_prefix, num_ios=0):
+def run_data_del(thr_id, key_prefix, num_ios=0):
+    logger = g_logger
+    try:
+        client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
+        if not client_conn:
+            logger.error('Error in creating DSS client connection')
+            return
+    except:
+        logger.error('Error in creating DSS client connection')
+        return
+
     start_time = time.time()
     count = 0
+    fail_count = 0
     while True:
         if num_ios and count >= num_ios:
             break
@@ -234,14 +245,14 @@ def run_data_del(client_conn, thr_id, key_prefix, num_ios=0):
         count = count + 1
         try:
             client_conn.del_object(key)
-            del_count.increment()
         except:
-            del_fail_count.increment()
+            fail_count += 1
 
     end_time = time.time()
 
-    logger.info('DEL objects - count %d, failed %d, time %d ms', count,
-                del_fail_count.value(), (end_time - start_time) * 10**6)
+    logger.info('DEL objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
+    logger.info('DEL objects - Thr_id %d,  count %d, failed %d,  time %d us', thr_id, count,
+                fail_count, (end_time - start_time) * 10**6)
 
 
 if __name__ == '__main__':
@@ -254,21 +265,38 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num_ios', dest='num_ios', help='Number of IOs to do (default: 1)',
                         type=int, default=1, required=True)
     parser.add_argument('-o', '--op_type', dest='op_type',
-                        help='Type of IO (1 - PUT, 2 - GET, 3 - DEL, 4 - LIST, 0 - PUT/GET/DEL)',
-                        type=int, choices=[0, 1, 2, 3, 4], default=0)
+                        help='Type of IO (1 - PUT, 2 - GET, 3 - DEL, 8 - PREPARE DATA FOR PUT'
+                             '9 - CLEANUP, 0 - PUT/GET/DEL)',
+                        type=int, choices=[0, 1, 2, 3, 4, 8, 9], default=0)
     parser.add_argument('-t', '--num_threads', dest='thr_cnt', help='Number of threads to start (default: 1)',
                         type=int, default=1)
-    parser.add_argument('-z', '--object_size', dest='object_size', help='size of object in KB (default:1024)',
+    parser.add_argument('-z', '--object-size', dest='object_size', help='size of object in KB (default:1024)',
                         type=int, default=1024)
     parser.add_argument('-p', '--key-prefix', dest='key_prefix', help='Key prefix for the object name', default='dss')
     parser.add_argument('-c', '--objects_per_thread', dest='objects_per_thread',
                         help='number of objects per thread already written')
+    parser.add_argument('-x', '--data-dir', dest='data_dir', help='Data directory to read from/write to',
+                        default='dss_client_data')
     args = parser.parse_args()
 
     logger = _set_logger(log_file, 'dss_benchmark')
     logger.info('Input args %s', str(args))
 
-    if args.op_type in [0, 1]:
+    if args.data_dir:
+        data_dir = args.data_dir
+
+    data_file_ref = os.path.join(data_dir, 'datafile_ref')
+    data_md5_file_ref = os.path.join(data_dir, 'data_md5_file_ref')
+
+    g_logger = logger
+    g_end_point = args.endpoint_url
+    g_access_key = args.access_key
+    g_secret_key = args.secret_key
+
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
+    if args.op_type in [0, 1, 8]:
         object_data = os.urandom(args.object_size * 1024)
         object_data_md5 = hashlib.md5(object_data).hexdigest()
         with open(data_file_ref, 'wb') as f:
@@ -291,29 +319,22 @@ if __name__ == '__main__':
             logger.error('Wrong digest info. Exiting')
             sys.exit(-1)
 
-    put_count = FastWriteCounter()
-    put_fail_count = FastWriteCounter()
-    get_count = FastWriteCounter()
-    get_fail_count = FastWriteCounter()
-    del_count = FastWriteCounter()
-    del_fail_count = FastWriteCounter()
-
-    fn_list = {0: [run_data_put, run_data_get, check_data_after_get, run_data_del],
+    fn_list = {0: [run_data_put, run_data_get, run_data_del],
                1: [run_data_put],
-               2: [run_data_get, check_data_after_get],
-               3: [run_data_del]
+               2: [run_data_get],
+               3: [run_data_del],
+               8: [run_data_put_prepare],
+               9: [run_data_put_cleanup]
                }
 
     for loop in range(args.total_loops):
         for fn in fn_list[args.op_type]:
-            with ThreadPoolExecutor() as executor:
+            with ProcessPoolExecutor(max_workers=args.thr_cnt) as executor:
                 future_tasks = []
+                start_time = time.time()
                 for i in range(args.thr_cnt):
-                    client_hdl = DSSClient(args.endpoint_url, args.access_key, args.secret_key, logger)
-                    if not client_hdl.client:
-                        sys.exit(-1)
                     try:
-                        task = executor.submit(fn, client_hdl, i, args.key_prefix,
+                        task = executor.submit(fn, i, args.key_prefix,
                                                args.num_ios)
                         future_tasks.append(task)
                     except Exception as e:
@@ -321,9 +342,12 @@ if __name__ == '__main__':
 
                 for task in as_completed(future_tasks):
                     res = task.result()
-                    logger.info('Task result - %s', str(res))
-
-
-
-
-
+                    # logger.info('Task result - %s', str(res))
+                end_time = time.time()
+                time_taken = end_time - start_time
+                logger.info('Time taken for fn %s - %d, start time - %d, end time - %d', str(fn),
+                            end_time - start_time, start_time, end_time)
+                if fn in [run_data_put, run_data_get]:
+                    total_io_size = (args.num_ios * args.thr_cnt * args.object_size * 1024)
+                    logger.info('Throughput - %s GB/s',
+                                total_io_size/(time_taken * 1024 * 1024 * 1024))
