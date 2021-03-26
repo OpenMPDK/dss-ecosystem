@@ -9,23 +9,25 @@ python3 -m pip install pyminio
 python3 -m pip install ntplib
 
 Use isntall.sh on each master/client node.
-## TODO
-- Need to update tool to install all dependecy prior to execution.
+OR
+pip3 install requirements.txt
 ```
 
 # Execution command:
 ```
-python3 master_application.py -op PUT -c 10.1.51.2
-python3 master_application.py -op LIST -c 10.1.51.2
-python3 master_application.py -op DEL -c 10.1.51.2
-python3 master_application.py -op DEL -c 10.1.51.2 --prefix bird/
+python3 master_application.py PUT -c 10.1.51.2
+python3 master_application.py LIST -c 10.1.51.2
+python3 master_application.py DEL -c 10.1.51.2
+python3 master_application.py DEL -c 10.1.51.2 --prefix bird/
+python3 master_application.py DEL -c 10.1.51.2 --dest_path <Destination Path>
 
 Dry Run:
 - Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance
-python3 master_application.py -op PUT -c 10.1.51.2 --dryrun 
+python3 master_application.py PUT -c 10.1.51.2 --dryrun 
 - It performa every steps involved in DELETE operation except actual DELETE from S3 storage.
-python3 master_application.py -op DEL -c 10.1.51.2 --dryrun
-
+python3 master_application.py DEL -c 10.1.51.2 --dryrun
+- It performs every steps involved in GET operation except actual S3 GET operation
+python3 master_application.py DEL -c 10.1.51.2 --dest_path <"Destination File Path"> --dryrun 
 NFS Cluster: 10.1.51.2
 ```
 # TESS Master Node and Client Nodes
@@ -118,13 +120,20 @@ Supported operations are PUT/DEL/GET
   only. Each prefix is processed by independent workers. Results are en-queued to IndexQueue for
   DEL/GET operation. Else, gets dumped into a local file (#TODO).
 ## Operation DEL
-  The DEL operation is dependent on LIST operation. The LISTing operation distribute the object keys
-  to the client nodes in a round-robin fashion. The actual DELETE operation is performed by ClientApplication.
+  The DEL operation is dependent on LIST operation. The object keys from the LISTing operation gets 
+  among the client-nodes in round-robin fashion. The actual DELETE operation is performed by ClientApplication.
   If a prefix is specified from command line, then object_keys under that prefix should be removed.
   The object prefix should be ended with forward slash (/) such as bird/ , bird/bird1/
   ```
-    python3 master_application.py -op DEL -c 10.1.51.2 --prefix bird/
-    python3 master_application.py -op DEL -c 10.1.51.2 
+    python3 master_application.py DEL -c 10.1.51.2 --prefix bird/
+    python3 master_application.py DEL -c 10.1.51.2 
+  ```
+  ## Operation GET
+  The GET operation is dependent on LIST operation. The object keys from the LISTing operation gets 
+  among the client-nodes in round-robin fashion. The actual GET operation is performed by ClientApplication.
+  The destination path should be provided from command line as sub-command along with GET. 
+  ```
+    python3 master_application.py GET -c 10.1.51.2 --dest_path <destiniation path>
   ```
   If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
   

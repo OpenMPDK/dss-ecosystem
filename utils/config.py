@@ -112,6 +112,7 @@ def ClientApplicationArgumentParser():
                            help='Dry run - Just check operation is working , but does not actual upload')
     parser.add_argument("--port_index", "-pi", type=str, required=True, help='Specify index port')
     parser.add_argument("--port_status", "-ps", type=str, required=True, help='Specify status port')
+    parser.add_argument("--dest_path", "-dp", type=str, required=False, help='Specify Destination Directory for GET operation only')
 
     options = vars(parser.parse_args())
     return options
@@ -171,6 +172,7 @@ class CommandLineArgument:
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify operation type such as read=r write=w , wr...')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--dest_path", "-d", type=str, required=True, help='Specify destination file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual download')
 

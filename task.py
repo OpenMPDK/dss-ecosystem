@@ -196,8 +196,44 @@ def check_listing_progress(listing_progress,listing_progress_lock, prefix, logge
             print("EXCEPTION:{}: {} =={} ".format(__file__, e, listing_progress))
 
 @exception
-def get():
-    print("Download functionality ")
+def get(s3_client,**kwargs):
+    params = kwargs["params"]
+    status_queue = kwargs["status_queue"]
+    logger_queue = kwargs["logger_queue"]
+    dest_path = params.get("dest_path","")
+
+    s3config = params["s3config"]
+    minio_bucket = s3config.get("bucket", "bucket")
+
+    success = 0
+    prefix_index_data_file = "/var/log/prefix_index_data.json"
+    with open(prefix_index_data_file, "r") as prefix_index_data_handler:
+        prefix_index_data = json.load(prefix_index_data_handler)
+
+    object_keys = params["data"]
+    if s3_client:
+        # Create directory if not exist
+        dest_dir = dest_path + "/" + object_keys["dir"]
+        if not os.path.exists(dest_dir):
+          os.makedirs(dest_dir)
+
+        for object_key in object_keys["files"]:
+            # logger_queue.put("TASK: Going to removed object key {}".format(object_key))
+            if params.get("dryrun", False):  # Dry run
+                success += 1
+            else: # Actual operation
+                dest_file_path = dest_dir + object_key.split("/")[-1]
+                if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
+                    success += 1
+    else:
+        logger_queue.put("ERROR: Unable to connect to Minio for upload with {}".format(minio_config))
+
+    # logger_queue.put("DEBUG: downloaded  object keys-{}".format(removed_objects ))
+    # Update following section for upload status.
+    status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
+    #logger_queue.put("DEBUG: Task GET Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
+    status_queue.put(status_message)
+
 @exception
 def delete(s3_client,**kwargs):
     params = kwargs["params"]
@@ -242,8 +278,6 @@ class Task:
     self.operation = kwargs["operation"]
     kwargs.pop("operation")
     self.params = kwargs
-    #self.data = kwargs["data"]
-    #print("Params:{}".format(self.params))
 
   def start(self, **queue):
     self.logger_queue = queue["logger_queue"]
@@ -252,8 +286,7 @@ class Task:
 
     s3_client = queue["s3_client"]
 
-    #self.logger_queue.put("====>>INFO: TASK: Started task for operation-{}".format(self.operation))
-    #print("====>>INFO: TASK: Started task ...! {}".format(self.params))
+    #self.logger_queue.put("====>>INFO: TASK: Started task for operation-{} - {}".format(self.operation, self.params))
     try:
       self.params["logger_queue"] = self.logger_queue
       if self.operation.lower() == "put":
@@ -271,6 +304,11 @@ class Task:
         delete(s3_client, params=self.params,
                           status_queue=queue["status_queue"],
                           logger_queue=self.logger_queue)
+
+      elif self.operation.lower() == "get":
+        get(s3_client, params=self.params,
+                       status_queue=queue["status_queue"],
+                       logger_queue=self.logger_queue)
       elif self.operation.lower() == "indexing":
         indexing(data=self.params["data"],
                  nfs_cluster=self.params["nfs_cluster"],

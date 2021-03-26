@@ -249,7 +249,7 @@ class ClientApplication:
                 break
 
             # Index Msg: {"dir":<>, "files":["f1","f2"]}
-            self.logger_queue.put("DEBUG: Client-{}, Waiting to receive INDEX the message".format(self.id))
+            #self.logger_queue.put("DEBUG: Client-{}, Waiting to receive INDEX the message".format(self.id))
             message = {}
             ####
             try:
@@ -263,7 +263,7 @@ class ClientApplication:
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
-                    self.logger_queue.put("DEBUG: Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, len(message["files"])))
+                    #self.logger_queue.put("DEBUG: Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message["files"]))
                     is_index_data_added = False #
                     # Add indexing data to the "operation_data_queue".
                     if self.operation.upper() == "PUT":
@@ -286,11 +286,10 @@ class ClientApplication:
                             self.logger_queue.put("ERROR: Bad formed message -{}".format(message))
                             socket.send_json({"success": 0, "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id,  message)})
 
-                    elif self.operation.upper() == "DEL":
+                    elif self.operation.upper() == "DEL" or self.operation.upper() == "GET":
                         self.operation_data_queue.put(message)  ## Add index to operation_data_queue
                         socket.send_json({"success": 1})  # Send response back to MasterApp
                         is_index_data_added = True
-
 
                     if is_index_data_added:
                         ## Create a Shared dictionary to check progress of PUT/DEL/GET operation
@@ -298,15 +297,12 @@ class ClientApplication:
                             index_buffer[message["dir"]] += len(message["files"])
                         else:
                             index_buffer[message["dir"]] = len(message["files"])
-
-
             except Exception as e:
                 self.logger_queue.put("EXCEPTION: Monitor-Index - {}".format(e))
 
-            time.sleep(1)
+            #time.sleep(1)
 
         socket.close()
-        #self.logger_queue.put("TTTTTTTTTTTTTTTTTTTTTT Indexing :{} ".format(index_buffer))
         self.logger_queue.put("INFO: Monitor-Index-Receiver terminated gracefully !")
 
     def message_server_status(self):
@@ -359,7 +355,7 @@ class ClientApplication:
                 self.operation_status_send_completed.value = 1
                 break
 
-            time.sleep(1)
+            #time.sleep(1)
 
         socket.close()
         self.logger_queue.put("INFO: Monitor-StatusHandler is terminated gracefully !")
@@ -467,7 +463,8 @@ class ClientApplication:
                         task = Task(operation=self.operation,
                                     data=task_data,
                                     s3config=self.s3_config,
-                                    dryrun=self.dryrun)
+                                    dryrun=self.dryrun,
+                                    dest_path=self.config.get("dest_path",""))
                         self.task_queue.put(task)  # Enqueue task to TaskQ
                     except Exception as e:
                         print("Exception: create_task - {}".format(e))
@@ -475,7 +472,7 @@ class ClientApplication:
                     self.task_id +=1
 
                     index += self.client_config.get("max_index_size", 2)
-            time.sleep(1)
+            #time.sleep(1)
 
             # How to stop it?
             ## index_data receive is completed and  operation_data_queue is empty.
@@ -514,9 +511,8 @@ if __name__ == "__main__":
     config_obj = Config(params)
     config = config_obj.get_config()
     client_config = config.get("client", {})
-    logging_path = config.get("logging_path", "/var/log")
+    logging_path = config.get("logging_path", "/var/log/dss")
 
-    print(config)
 
     ca = ClientApplication(params.get("id", 1), config)
     ca.logger_queue.put("CONFIG:{}".format(config))

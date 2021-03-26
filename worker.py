@@ -62,7 +62,7 @@ class Worker:
     try:
       s3_client_lib_name = (self.s3_config["client_lib"]).lower()
       if s3_client_lib_name == "minio":
-        s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key)
+        s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
       elif s3_client_lib_name == "dss_client":
         os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
         s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
@@ -106,7 +106,7 @@ class Worker:
       try:
         self.process.terminate()
       except Exception as e:
-        print("EXCEPTION: Unable to terminate Worker-{} - {}".format(self.id, e))
+        self.logger_queue.put("EXCEPTION: Unable to terminate Worker-{} - {}".format(self.id, e))
     self.logger_queue.put("INFO: Worker-{} stopped!".format(self.id))
 
 
@@ -142,9 +142,8 @@ class Worker:
           #self.logger_queue.put("DEBUG: TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(),self.id))
           task = self.task_queue.get()
         except Exception as e:
-          print("EXCEPTION:WORKER-{}:{}".format(self.id, e))
+          self.logger_queue.put("EXCEPTION:WORKER-{}:{}".format(self.id, e))
       else:
-        #self.logger_queue.put("WWWWWWWWTTTTT ---->>DEBUG: TaskQ Size-{} , empty By worker-{}".format(self.task_queue.qsize(),self.id))
         pass
 
       if task:
@@ -162,7 +161,7 @@ class Worker:
                    s3_client = s3_client
                    )
 
-      time.sleep(1)  # 1 second delay
+      #time.sleep(1)  # 1 second delay
 
 
 

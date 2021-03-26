@@ -45,11 +45,11 @@ class DssClientLib:
                 if ret == 0:
                     return True
                 elif ret == -1:
-                    print("ERROR: Upload Failed for  key - {}".format(object_key))
+                    self.logger_queue.put("ERROR: Upload Failed for  key - {}".format(object_key))
             except dss.NoSuchResouceError as e:
-                print("EXCEPTION: NoSuchResourceError putObject - {}".format(e))
+                self.logger_queue.put("EXCEPTION: NoSuchResourceError putObject - {}".format(e))
             except dss.GenericError as e:
-                print("EXCEPTION: putObject {}".format(e))
+                self.logger_queue.put("EXCEPTION: putObject {}".format(e))
         return False
 
     def listObjects(self, bucket=None,  prefix="", delimiter="/"):
@@ -59,9 +59,9 @@ class DssClientLib:
             #if object_keys:
             #    yield object_keys
         except dss.NoSuchResouceError as e:
-            print("EXCEPTION: NoSuchResourceError - {}".format(e))
+            self.logger_queue.put("EXCEPTION: NoSuchResourceError - {}".format(e))
         except dss.GenericError as e:
-            print("EXCEPTION: listObjects - {}".format(e))
+            self.logger_queue.put("EXCEPTION: listObjects - {}".format(e))
 
         return object_keys
 
@@ -72,30 +72,30 @@ class DssClientLib:
                 if self.dss_client.deleteObject(object_key) == 0:
                     return True
                 elif self.dss_client.deleteObject(object_key) == -1:
-                    print("ERROR: delete object filed for key - {}".format(object_key))
+                    self.logger_queue.put("ERROR: delete object filed for key - {}".format(object_key))
             except dss.NoSuchResouceError as e:
-                print("EXECEPTION: deleteOBject - {}, {}".format(object_key,e))
+                self.logger_queue.put("EXCEPTION: deleteOBject - {}, {}".format(object_key,e))
             except dss.GenericError as e:
-                print("EXCEPTION: deleteObject - {}".format(e))
+                self.logger_queue.put("EXCEPTION: deleteObject - {}".format(e))
         return False
 
 
-    def getObject(self, bucket=None, object_key="", dest_path=""):
-        if object_key and dest_path:
+    def getObject(self, bucket=None, object_key="", dest_file_path=""):
+        """
+        Download the objects from S3 storage and store in a local or share path.
+        :param bucket: None # Not required
+        :param object_key: required to get object
+        :param dest_file_path: file path in which object should be copied.
+        :return:
+        """
+        if object_key and dest_file_path:
             try:
-                return self.dss_client.getObject(object_key, dest_path)
+                return  self.dss_client.getObject(object_key, dest_file_path)
             except dss.NoSuchResouceError as e:
-                print("EXCEPTION: getObject - {} , {}".format(object_key, e))
+                self.logger_queue.put("EXCEPTION: getObject - {} , {}".format(object_key, e))
             except dss.GenericError as e:
-                print("EXCEPTION: GenericError - {}".format(e))
+                self.logger_queue.put("EXCEPTION: GenericError - {}".format(e))
         return False
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
@@ -115,11 +115,17 @@ if __name__ == "__main__":
             if not  dss_client.putObject(None, file_path):
                 print("Failed to upload file - {}".format(file_path))
 
-        object_keys = dss_client.listObjects(None, "dir4/dir41/")
+        object_keys = dss_client.listObjects(None, "dir1/")
         print("ListObjects: {}".format(object_keys))
 
         #object_keys = dss_client.getObjects("dir4/")
         #print("GetObjects:{}".format(object_keys))
+
+        # getObject()
+        for key in object_keys:
+            if not dss_client.getObject(None, key, "/home/somnath.s/work/Testing/GET/"):
+                print("ERROR: Failed to copy file for key - {}".format(key))
+
 
 
 

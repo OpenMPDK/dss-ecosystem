@@ -2,11 +2,13 @@ import os,sys
 from minio import Minio
 from minio.error import ResponseError, BucketAlreadyOwnedByYou, BucketAlreadyExists
 from datetime import datetime
+import json
 
 class MinioClient:
-  def __init__(self, url, access_key="minio", secret_key="minio123"):
+  def __init__(self, url, access_key="minio", secret_key="minio123", logger=None):
     self.minio_url = url
     self.client = self.get_client(url,access_key, secret_key)
+    self.logger_queue = logger
 
   def get_client(self,url,access_key, secret_key):
     #print("Minio Server: http://{}, Access Key:{} , Secret Key:{}".format(url, access_key, secret_key))
@@ -31,10 +33,12 @@ class MinioClient:
       print("{}".format(bucket.name))
 
   def listObjects(self, bucket=None, prefix=None, recursive=False):
+    objects = []
     try:
-      objects = self.client.list_objects(bucket_name=bucket,prefix=prefix,recursive=recursive)
+      if bucket:
+        objects = self.client.list_objects(bucket_name=bucket,prefix=prefix,recursive=recursive)
     except err:
-      print("Exception:{}".format(err))
+      self.logger_queue.put("Exception:{}".format(err))
 
     return objects
 
@@ -44,7 +48,7 @@ class MinioClient:
     try:
       self.client.fput_object(bucket_name=bucket,object_name=data[1:],file_path=data,content_type="text/plain")
     except err:
-      print("Exception:{}".format(err))
+      self.logger_queue.put("Exception:{}".format(err))
       return False
     return True
   def get(self, bucket=None ):
@@ -63,18 +67,32 @@ class MinioClient:
         """
         self.client.remove_object(bucket_name=bucket, object_name=prefix)
     except err:
-      print("Exception:{}".format(err))
+      self.logger_queue.put("Exception:{}".format(err))
       return False
     return True
 
-
-
+  def getObject(self,bucket=None, object_key="", dest_path=""):
+    """
+    Download the object based on the specified object key to the specified file path.
+    :param bucket: A bucket name is required and that has to be present into minio.
+    :param object_key: Required
+    :param dest_path: Required , destination file path
+    :return:
+    """
+    if bucket and object_key and dest_path:
+      try:
+        self.client.fget_object(bucket, object_key, dest_path)
+        return True
+      except Exception as e:
+        self.logger_queue.put("Exception: {}".format(e))
+    return False
 
 if __name__=="__main__":
-  mc = MinioClient("202.0.0.137:9000")
+  mc = MinioClient("202.0.0.103:9000")
   # Example of uploading files
+  """
   print("Uploading files")
-  directory = "/bird/bird1/"
+  directory = "/dir1"
   uploaded_file_count = 0
   now = datetime.now()
 
@@ -83,17 +101,22 @@ if __name__=="__main__":
     if mc.put("bucket", file_path):
       uploaded_file_count += 1
   print("Uploaded Files:{} , Time-{}".format(uploaded_file_count, (datetime.now() - now).seconds))
+  """
 
   # Example of listing buckets.
   #print("All Buckets: {}".format(mc.list()))
 
-  prefix = "bird/bird1/"
+  prefix = "dir1/"
   # List object keys
   # print("List Object Keys: {}".format(s3.list_objects("bucket", "bird/")))
 
   # Delete object
   deleted_object_count = 0
-  for object in mc.list("bucket", prefix):
-    if mc.delete("bucket", object.object_name):
-      deleted_object_count += 1
-  print("Deleted Objects Count: {} for prefix-\"{}\"".format(deleted_object_count, prefix))
+  get_count = 0
+  for object in mc.listObjects("bucket", prefix):
+    if mc.getObject("bucket", object.object_name, "/home/somnath.s/work/Testing" ):
+      get_count +=1
+    #if mc.deleteObject("bucket", object.object_name):
+    #  deleted_object_count += 1
+
+  #print("Deleted Objects Count: {} for prefix-\"{}\"".format(deleted_object_count, prefix))

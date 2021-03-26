@@ -22,7 +22,7 @@ manager = Manager()
 
 class Master:
 	"""
-	TODO:
+	Master application initiate
 	-
 	"""
 
@@ -112,12 +112,6 @@ class Master:
 		if self.operation.upper() == "DEL" or self.operation.upper() == "GET":
 			self.start_listing()
 
-
-
-
-
-
-
 	def stop(self):
 		"""
 		Stop master and its all clients and their application.
@@ -184,7 +178,8 @@ class Master:
 							self.client_user_id,
 							self.client_password,
 							self.config["dryrun"],
-							self.config["message"])
+							self.config["message"],
+							self.config.get("dest_path",""))
 			client.start()
 			self.logger_queue.put("INFO: Started ClientApplication-{} at node - {}".format(client.id,client_ip))
 			self.clients.append(client)
@@ -303,7 +298,7 @@ class Master:
 
 class Client:
 
-	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg", dryrun=False, message_port={}):
+	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg", dryrun=False, message_port={}, dest_path=""):
 		self.id = id
 		self.ip = ip
 		self.operation=operation
@@ -313,6 +308,7 @@ class Client:
 		self.ssh_client_handler = None
 		self.master_ip_address = master_ip
 		self.dryrun = dryrun
+		self.destination_path = dest_path # Only to be used for GET operation
 
 		# Messaging service configuration
 		self.port_index = message_port["port_index"]  # Need to configure from configuration file.
@@ -355,10 +351,14 @@ class Client:
 		                                                        " --ip_address {} ".format(self.ip) + \
 			                                                    " --port_index {} ".format(self.port_index) + \
 			                                                    " --port_status {} ".format(self.port_status)
+
+		if self.operation.upper() == "GET":
+			command += " --dest_path {} ".format(self.destination_path)
 		if self.master_ip_address == self.ip:
 			command += " --master_node "
 		if self.dryrun:
 			command += " --dryrun "
+
 
 		self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
 		self.remote_stdin = stdin
@@ -619,8 +619,79 @@ def process_del_operation(master):
 
 		time.sleep(2)
 
-def process_get_operation():
-	pass
+def process_get_operation(master):
+	workers_stopped = 0
+	monitors_stopped = 0
+
+	while True:
+		# Check for completion of indexing, Shutdown workers
+		listing_done = False
+		master.listing_progress_lock.acquire()
+
+		# Determine listing is done.
+		if master.prefix:
+			if len(master.listing_progress) == 1 and master.listing_progress.get(master.prefix, -1) == 0:
+				listing_done = True
+
+		else:
+			# All the children of top level prefix should be processed.
+			# len( ["/bird","/cat","/dog"] ) == len ( {"bird/":0, "cat/":0, "dog/":0} )
+			if (len(master.nfs_shares) == len(master.listing_progress)):
+				is_all_child_processed = True
+				for nfs_share, child_listing_count in master.listing_progress.items():
+					if child_listing_count:
+						is_all_child_processed = False
+
+				listing_done = is_all_child_processed
+		master.listing_progress_lock.release()
+		# print("NFS Share-{}:{}:{}".format(master.nfs_shares, master.listing_progress, listing_done))
+
+		if not workers_stopped:
+			if listing_done and master.index_data_generation_complete.value == 0:
+				master.index_data_generation_complete.value = 1
+				master.logger_queue.put("INFO: Object-Keys generation through listing is completed!")
+				print("INFO: Object-Keys generation through listing is completed!")
+				print("INFO: {} LISTING Completed in {} seconds".format(master.operation, (
+						datetime.now() - master.operation_start_time).seconds))
+		# Shutdown workers
+		# master.stop_workers()
+		# workers_stopped = 1
+
+		# Check all the ClientApplications once they are finished
+		all_clients_completed = 1
+		for client in master.clients:
+			# print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
+			if not client.status:
+				if client.remote_client_status():
+					client.remote_client_exit_status()
+				all_clients_completed = 0
+
+		# Check for Monitors status
+		master.monitor.status_lock.acquire()
+		if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
+				master.monitor.monitor_status_poller.value and \
+				master.monitor.monitor_progress_status.value:
+			monitors_stopped = 1
+		master.monitor.status_lock.release()
+
+		# Bring down workers.
+		if not workers_stopped and master.monitor.monitor_index_data_sender.value:
+			master.stop_workers()
+			workers_stopped = 1
+
+		## Once all the response received from Client Applications, shut down 3 monitors
+		if workers_stopped and monitors_stopped and all_clients_completed:
+			break
+
+		# If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
+		if all_clients_completed:
+			if not monitors_stopped:
+				master.stop_monitor()
+			if not workers_stopped:
+				master.stop_workers()
+			break
+
+		time.sleep(1)
 
 
 if __name__ == "__main__":
@@ -652,6 +723,8 @@ if __name__ == "__main__":
 		process_list_operation(master)
 	elif cli.operation.upper() == "DEL":
 		process_del_operation(master)
+	elif cli.operation.upper() == "GET":
+		process_get_operation(master)
 
 	# Terminate logger at the end.
 	master.stop_logging()  ## Termination5
