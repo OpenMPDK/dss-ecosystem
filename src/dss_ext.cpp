@@ -43,6 +43,9 @@ namespace py = pybind11;
 class AsyncCtx;
 using PyCallback = std::function<void(AsyncCtx& pct)>;
 
+#define MAKE_STR(x) _MAKE_STR(x)
+#define _MAKE_STR(x) #x
+
 struct AsyncCtx {
 	std::string		key;
 	std::string		msg;
@@ -61,7 +64,7 @@ PYBIND11_MODULE(dss, m) {
 		});
 
 	m.def("getGITVer", []() {
-		return std::string(GIT_VER);
+		return std::string(MAKE_STR(GIT_VERSION));
 		});
 
     py::class_<AsyncCtx>(m, "asyncCtx")

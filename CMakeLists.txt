@@ -44,12 +44,15 @@ target_include_directories(${DSS_LIB} PUBLIC
 target_link_libraries(test_dss ${AWSSDK_LINK_LIBRARIES})
 target_link_libraries(${DSS_LIB} ${AWSSDK_LINK_LIBRARIES})
 
+execute_process(COMMAND git describe --abbrev=4 --always --tags OUTPUT_VARIABLE GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(COMMAND python3-config --extension-suffix OUTPUT_VARIABLE EXT_NAME_SUFFIX)
 execute_process(COMMAND python3 -m pybind11 --includes OUTPUT_VARIABLE EXT_INCLUDE_FLAG)
 separate_arguments(EXT_INCLUDE_FLAGS UNIX_COMMAND "${EXT_INCLUDE_FLAG}")
 
 string(REGEX REPLACE "\\.[^.]*$" "" PYTHON_LIB_SUFFIX ${EXT_NAME_SUFFIX})
 string(CONCAT DSS_PYTHON_LIB ${DSS_LIB} ${PYTHON_LIB_SUFFIX})
+
+add_compile_definitions(GIT_VERSION=${GIT_COMMIT})
 
 add_library(${DSS_PYTHON_LIB} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/dss_ext.cpp)
 target_include_directories(${DSS_PYTHON_LIB}  PUBLIC
