@@ -16,12 +16,11 @@ and you should be able see a list of classes offered by dss
 ***************
      Run
 ***************
+
 There is test/example.py that can used to verify your build and also serve as
 an example for the client APIs. It uploads, lists then downloads example.py
 as a test file against S3 store. In this case, the S3 store can be a stock minio
 or DSS cluster.
-
-In the header, there are the S3 endpoint configurations
 
 Note: Before the run, you need to config S3 endpoint in the header section of the file,
 e.g.
@@ -33,7 +32,6 @@ If you are working with a new dss clusters, you need to prime one of the cluster
 to contain a cluster config file for dss client to discover clustering topology. In order
 to do it, pick a cluster to create a bucket named "dss" and upload a file named "conf.json"
 to it. See conf.json in the source tree as example.
-
 
 ***************
     Debug
