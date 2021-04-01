@@ -34,7 +34,10 @@
 #include <iostream>
 #include <fstream>
 #include <fcntl.h>
+#include <mutex>
 #include <sys/stat.h>
+
+#include <unistd.h>
 
 #include <aws/core/Aws.h>
 #include <aws/core/client/ClientConfiguration.h>
@@ -328,34 +331,37 @@ int
 ClusterMap::VerifyClusterConf()
 {
 	std::vector<bool> empty;
-
 	empty.resize(m_clusters.size());
 
-	for (auto c : m_clusters) {
-		Result r = c->HeadBucket();
-        if (!r.IsSuccess())
-			empty[c->GetID()] = true;
-	}
-
-	if (!std::equal(empty.begin() + 1, empty.end(), empty.begin())) {
-		uint32_t i = 0;
-		for (auto it : empty) {
-			pr_err("cluster %u : %s\n", i++, (unsigned)it ? "present" : "missing");
+	{
+		std::lock_guard<std::mutex> lock(dss_init.mutex());
+		for (auto c : m_clusters) {
+			Result r = c->HeadBucket();
+        	if (!r.IsSuccess())
+				empty[c->GetID()] = true;
 		}
 
-		pr_err("DSS buckets are missing\n");
-		return -1;
-	}
+		if (!std::equal(empty.begin() + 1, empty.end(), empty.begin())) {
+			uint32_t i = 0;
+			for (auto it : empty) {
+				pr_err("cluster %u : %s\n", i++, (unsigned)it ? "present" : "missing");
+			}
 
-	if (empty[0]) {
-		for (auto c : m_clusters) {
-			Result r = c->CreateBucket();
-			if (!r.IsSuccess()) {
-				pr_err("Failded to create bucket on cluster %u (err=%u)\n",
-						c->GetID(), (unsigned)r.GetErrorType());
-				return -1;
+			pr_err("DSS buckets are missing\n");
+			return -1;
+		}
+
+		if (empty[0]) {
+			for (auto c : m_clusters) {
+				Result r = c->CreateBucket();
+				if (!r.IsSuccess()) {
+					pr_err("Failded to create bucket on cluster %u (err=%u)\n",
+							c->GetID(), (unsigned)r.GetErrorType());
+					return -1;
+				}
 			}
 		}
+
 	}
 
 	return 0;
@@ -704,10 +710,28 @@ test_put_done(void* ptr, std::string key, std::string message, int err)
 	printf("%s: key %s\n", __func__, key.c_str());
 }
 
+void*
+do_work(void*) 
+{
+	std::unique_ptr<dss::Client> client
+		= dss::Client::CreateClient("http://127.0.0.1:9001", "minioadmin", "minioadmin");
+	if (!client)
+		fprintf(stderr, "Failed to create client\n");
+
+	sleep(2);
+
+	return NULL;
+}
+
 int main()
 {
 	const Aws::String object_name = "test_obj";
     const Aws::String fname = "/root/jerry/dss_client/src/dss_client.cpp";
+
+    for (int i=0; i<5; i++) {
+    	pthread_t t; 
+    	pthread_create(&t, NULL, do_work, NULL);	
+    }
 
 	std::unique_ptr<dss::Client> client
 		= dss::Client::CreateClient("http://127.0.0.1:9001", "minioadmin", "minioadmin");
@@ -730,7 +754,7 @@ int main()
 	std::string key = std::string(object_name.c_str()) + std::to_string(0).c_str();
    	client->PutObjectAsync(key, std::string(fname.c_str()), test_put_done, nullptr);
 
-   	while(1);
+   	sleep(2);
 	
 /*
 	Aws::String key = Aws::String("test_obj9991");

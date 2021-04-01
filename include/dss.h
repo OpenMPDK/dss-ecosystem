@@ -121,7 +121,10 @@ public:
 		Aws::ShutdownAPI(m_options);
 	}
 
+	std::mutex& mutex() { return m_mutex; }
+
 private:
+	std::mutex m_mutex;
 	Aws::SDKOptions m_options;
 };
 
