@@ -13,16 +13,31 @@ To validate the python extension, start python shell and run
  >>> print(help(dss))
 and you should be able see a list of classes offered by dss
 
-Note: If you are working with a new dss clusters, you need to prime one of the cluster
+***************
+     Run
+***************
+There is test/example.py that can used to verify your build and also serve as
+an example for the client APIs. It uploads, lists then downloads example.py
+as a test file against S3 store. In this case, the S3 store can be a stock minio
+or DSS cluster.
+
+In the header, there are the S3 endpoint configurations
+
+Note: Before the run, you need to config S3 endpoint in the header section of the file,
+e.g.
+access_key = "minioadmin"
+access_secret = "minioadmin"
+discover_endpoint = 'http://127.0.0.1:9001'
+
+If you are working with a new dss clusters, you need to prime one of the cluster
 to contain a cluster config file for dss client to discover clustering topology. In order
 to do it, pick a cluster to create a bucket named "dss" and upload a file named "conf.json"
 to it. See conf.json in the source tree as example.
 
-Note: In case creating dss client feels slow, do export AWS_EC2_METADATA_DISABLED=true
 
-
-Debug: 
-
+***************
+    Debug
+***************
 To enable aws-cpp-sdk logging, set env var DSS_AWS_LOG to the range between 0 and 6
 enum class LogLevel : int
 {
