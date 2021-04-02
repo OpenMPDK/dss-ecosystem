@@ -79,7 +79,7 @@ class FastWriteCounter_old(object):
         self._read_lock = threading.Lock()
 
     def increment(self):
-        value = None
+        # value = None
         with self._read_lock:
             value = self.value
             self.value += 1
@@ -111,21 +111,35 @@ class DSSClient(object):
         try:
             self.client.putObject(key, value)
         except Exception as e:
-            logger.exception('Failed to put the key %s', key)
+            self.logger.exception('Failed to put the key %s', key)
             raise e
 
     def get_object(self, key, value):
         try:
             self.client.getObject(key, value)
         except Exception as e:
-            logger.exception('Failed to get the object %s', key)
+            self.logger.exception('Failed to get the object %s', key)
+            raise e
+
+    def get_objects(self, prefix):
+        try:
+            self.client.getObjects(prefix, len(prefix))
+        except Exception as e:
+            self.logger.exception('Failed to list the objects for prefix %s', prefix)
+            raise e
+
+    def list_objects(self, prefix):
+        try:
+            self.client.listObjects(prefix)
+        except Exception as e:
+            self.logger.exception('Failed to list the objects for prefix %s', prefix)
             raise e
 
     def del_object(self, key):
         try:
             self.client.deleteObject(key)
         except Exception as e:
-            logger.exception('Failed to get the object %s', key)
+            self.logger.exception('Failed to get the object %s', key)
             raise e
 
 
@@ -210,6 +224,7 @@ def run_data_get(thr_id, key_prefix, num_ios=0):
 
 
 def check_data_after_get(thr_id, key_prefix, num_ios=0):
+    logger = g_logger
     fail_count = 0
     for i in range(num_ios):
         key = '%s-object-%s-%d' % (key_prefix, thr_id, i)
@@ -255,17 +270,47 @@ def run_data_del(thr_id, key_prefix, num_ios=0):
                 fail_count, (end_time - start_time) * 10**6)
 
 
+def run_data_list(thr_id, key_prefix, num_ios=0):
+    logger = g_logger
+    try:
+        client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
+        if not client_conn:
+            logger.error('Error in creating DSS client connection')
+            return
+    except:
+        logger.error('Error in creating DSS client connection')
+        return
+
+    start_time = time.time()
+    count = 0
+    fail_count = 0
+    key = '%s-object-%s' % (key_prefix, thr_id)
+    try:
+        obj = client_conn.get_objects(key)
+        count = len(obj)
+    except:
+        logger.info('Failed to list objects with prefix %s', key)
+        fail_count += 1
+
+    end_time = time.time()
+
+    logger.info('LIST objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
+    logger.info('LIST objects - Thr_id %d,  count %d, failed %d,  time %d us', thr_id, count,
+                fail_count, (end_time - start_time) * 10**6)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--access-key', dest='access_key', help='Access Key of the Minio server', required=True)
     parser.add_argument('-s', '--secret-key', dest='secret_key', help='Secret Key of the Minio server', required=True)
     parser.add_argument('-u', '--endpoint-url', dest='endpoint_url', help='Endpoint URL of MINIO server', required=True)
-    parser.add_argument('-d', '--duration', dest='duration', help='Duration in seconds (default: 10)', default=10)
+    # parser.add_argument('-d', '--duration', dest='duration', help='Duration in seconds (default: 10)', default=10)
     parser.add_argument('-l', '--loops', dest='total_loops', help='Number of loops to run (default: 1)', default=1)
     parser.add_argument('-n', '--num_ios', dest='num_ios', help='Number of IOs to do (default: 1)',
                         type=int, default=1, required=True)
     parser.add_argument('-o', '--op_type', dest='op_type',
-                        help='Type of IO (1 - PUT, 2 - GET, 3 - DEL, 8 - PREPARE DATA FOR PUT'
+                        help='Type of IO (1 - PUT, 2 - GET, 3 - DEL, 4 - LIST, '
+                             '8 - PREPARE DATA FOR PUT, '
                              '9 - CLEANUP, 0 - PUT/GET/DEL)',
                         type=int, choices=[0, 1, 2, 3, 4, 8, 9], default=0)
     parser.add_argument('-t', '--num_threads', dest='thr_cnt', help='Number of threads to start (default: 1)',
@@ -273,8 +318,8 @@ if __name__ == '__main__':
     parser.add_argument('-z', '--object-size', dest='object_size', help='size of object in KB (default:1024)',
                         type=int, default=1024)
     parser.add_argument('-p', '--key-prefix', dest='key_prefix', help='Key prefix for the object name', default='dss')
-    parser.add_argument('-c', '--objects_per_thread', dest='objects_per_thread',
-                        help='number of objects per thread already written')
+    # parser.add_argument('-c', '--objects_per_thread', dest='objects_per_thread',
+    #                     help='number of objects per thread already written')
     parser.add_argument('-x', '--data-dir', dest='data_dir', help='Data directory to read from/write to',
                         default='dss_client_data')
     args = parser.parse_args()
@@ -319,10 +364,11 @@ if __name__ == '__main__':
             logger.error('Wrong digest info. Exiting')
             sys.exit(-1)
 
-    fn_list = {0: [run_data_put, run_data_get, run_data_del],
+    fn_list = {0: [run_data_put_prepare, run_data_put, run_data_get, run_data_del, run_data_put_cleanup],
                1: [run_data_put],
                2: [run_data_get],
                3: [run_data_del],
+               # 4: [run_data_list],
                8: [run_data_put_prepare],
                9: [run_data_put_cleanup]
                }
@@ -347,7 +393,17 @@ if __name__ == '__main__':
                 time_taken = end_time - start_time
                 logger.info('Time taken for fn %s - %d, start time - %d, end time - %d', str(fn),
                             end_time - start_time, start_time, end_time)
-                if fn in [run_data_put, run_data_get]:
+                if fn == run_data_put_prepare:
+                    print('Data is prepared for PUT/GET/DEL calls')
+                elif fn == run_data_put_cleanup:
+                    print('Data is removed from the directory')
+                if fn in [run_data_put, run_data_get, run_data_del]:
                     total_io_size = (args.num_ios * args.thr_cnt * args.object_size * 1024)
-                    logger.info('Throughput - %s GB/s',
-                                total_io_size/(time_taken * 1024 * 1024 * 1024))
+                    throughput = float(total_io_size)/(time_taken * 1024 * 1024 * 1024)
+                    logger.info('Throughput - %f GB/s', throughput)
+                    if fn == run_data_get:
+                        print('GET Throughput - %f GB/s' % throughput)
+                    elif fn == run_data_put:
+                        print('PUT Throughput - %f GB/s' % throughput)
+                    elif fn == run_data_del:
+                        print('DEL Throughput - %f GB/s' % throughput)
