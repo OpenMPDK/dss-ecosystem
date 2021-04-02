@@ -320,11 +320,43 @@ class Master:
 					self.task_queue.put(task)
 
 
-	def remote_host_setup(self, ip_address):
-		pass
-		# Upload source code to Remote node
+	def compaction(self):
+		# Spawn the process on target node and wait for response.
+		command = "sudo python3 /usr/dss/nkv-datamover/target_compaction.py"
+		compaction_status = {}
+		start_time = datetime.now()
+		for client_ip in self.config["dss_clients"]:
+			print("INFO: Started Compaction for target-ip:{}".format(client_ip))
+			self.logger_queue.put("INFO: Started Compaction for target-ip:{}".format(client_ip))
+			ssh_client_handler, stdin, stdout, stderr = remoteExecution(client_ip, self.client_user_id, self.client_password,command)
+			compaction_status[client_ip] = []
+			compaction_status[client_ip].append(ssh_client_handler)
+			compaction_status[client_ip].append(stdin)
+			compaction_status[client_ip].append(stdout)
+			compaction_status[client_ip].append(stderr)
 
-	    # Install required Python libraries
+
+		while True:
+			is_compaction_done = True
+			for client_ip in compaction_status:
+				if compaction_status[client_ip][0]:
+					if compaction_status[client_ip][2]:
+						status = compaction_status[client_ip][2].channel.exit_status_ready()
+						if status:
+							print("INFO: Compaction is finished for - {}".format(client_ip))
+							self.logger_queue.put("INFO: Compaction is finished for - {}".format(client_ip))
+						else:
+							is_compaction_done = False
+			if is_compaction_done:
+				break
+
+
+		compaction_time = (datetime.now() - start_time).seconds
+		print("INFO: Total Compaction time - {} seconds".format(compaction_time))
+
+
+
+
 
 
 
@@ -377,7 +409,7 @@ class Client:
 		#self.setup()
 		print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
 		self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-		command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
+		command = "sudo python3 /usr/dss/nkv-datamover/client_application.py " + \
 				                                                " --client_id {} ".format(self.id) + \
 		                                                        " --operation {} ".format(self.operation) + \
 		                                                        " --ip_address {} ".format(self.ip) + \
@@ -758,7 +790,14 @@ if __name__ == "__main__":
 	elif cli.operation.upper() == "GET":
 		process_get_operation(master)
 
+	# Start Compaction
+	if cli.operation == "PUT" and "compaction" in params:
+		master.compaction()
+
 	# Terminate logger at the end.
 	master.stop_logging()  ## Termination5
 	print("INFO: Stopping master")
 	### 10.1.51.238 , 10.1.51.54, 10.1.51.61
+
+
+

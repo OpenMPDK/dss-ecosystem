@@ -50,7 +50,7 @@ class NFSCluster:
         if self.mounted:
             for cluster_ip in self.local_mounts:
                 for local_mount in self.local_mounts[cluster_ip]:
-                    command = "umount {}".format(local_mount)
+                    command = "sudo umount {}".format(local_mount)
                     ret, console = exec_cmd(command, True, True)
                     if ret :
                         print("ERROR: Failed to un-mount  {} path ".format(local_mount))
@@ -105,7 +105,7 @@ class NFSCluster:
             print("WARNING: NFS share \"{}\" already mounted!".format(nfs_share))
             self.logger_queue.put("WARNING: NFS share {} already mounted!".format(nfs_share))
         else:
-            command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share)
+            command = "sudo mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share)
             #self.logger_queue.put("DEBUG: Mount Command - {}".format(command))
             ret, console = exec_cmd(command, True, True)
         return ret,console

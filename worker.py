@@ -47,11 +47,6 @@ from task import Task
 from datetime import datetime
 from utils.utility import exception
 
-"""
-TODO:
-task_queue shared among the workers, should use same lock by all workers.
-logger_queue is shared among the workers and logger 
-"""
 
 class Worker:
   def __init__(self,**kwargs):
