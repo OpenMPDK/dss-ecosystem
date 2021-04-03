@@ -322,10 +322,10 @@ class Master:
 
 	def compaction(self):
 		# Spawn the process on target node and wait for response.
-		command = "sudo python3 /usr/dss/nkv-datamover/target_compaction.py"
+		command = "python3 /usr/dss/nkv-datamover/target_compaction.py"
 		compaction_status = {}
 		start_time = datetime.now()
-		for client_ip in self.config["dss_clients"]:
+		for client_ip in self.config["dss_targets"]:
 			print("INFO: Started Compaction for target-ip:{}".format(client_ip))
 			self.logger_queue.put("INFO: Started Compaction for target-ip:{}".format(client_ip))
 			ssh_client_handler, stdin, stdout, stderr = remoteExecution(client_ip, self.client_user_id, self.client_password,command)
@@ -409,7 +409,7 @@ class Client:
 		#self.setup()
 		print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
 		self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-		command = "sudo python3 /usr/dss/nkv-datamover/client_application.py " + \
+		command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
 				                                                " --client_id {} ".format(self.id) + \
 		                                                        " --operation {} ".format(self.operation) + \
 		                                                        " --ip_address {} ".format(self.ip) + \
@@ -791,7 +791,7 @@ if __name__ == "__main__":
 		process_get_operation(master)
 
 	# Start Compaction
-	if cli.operation == "PUT" and "compaction" in params:
+	if cli.operation == "PUT" and "compaction" in params and params["compaction"]:
 		master.compaction()
 
 	# Terminate logger at the end.
