@@ -29,7 +29,7 @@ def main():
 		client.putObject(key, filename)
 
 	# Print objects with prefix
-	objects = client.getObjects(key_base, 8)
+	objects = client.getObjects(key_base, '/')
 	while True:
 		try:
 			it = iter(objects)
