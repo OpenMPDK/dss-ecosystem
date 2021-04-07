@@ -784,7 +784,8 @@ if __name__ == "__main__":
 	if cli.operation.upper() == "PUT":
 		process_put_operation(master)
 	elif cli.operation.upper() == "LIST":
-		process_list_operation(master)
+                print('Unsupported operation')
+		# process_list_operation(master)
 	elif cli.operation.upper() == "DEL":
 		process_del_operation(master)
 	elif cli.operation.upper() == "GET":
