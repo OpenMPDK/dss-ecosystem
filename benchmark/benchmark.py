@@ -123,14 +123,16 @@ class DSSClient(object):
 
     def get_objects(self, prefix):
         try:
-            self.client.getObjects(prefix, len(prefix))
+            get_objs = self.client.getObjects(prefix)
+            return get_objs
         except Exception as e:
             self.logger.exception('Failed to list the objects for prefix %s', prefix)
             raise e
 
     def list_objects(self, prefix):
         try:
-            self.client.listObjects(prefix)
+            list_objs = self.client.listObjects(prefix)
+            return list_objs
         except Exception as e:
             self.logger.exception('Failed to list the objects for prefix %s', prefix)
             raise e
@@ -320,7 +322,8 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--key-prefix', dest='key_prefix', help='Key prefix for the object name', default='dss')
     # parser.add_argument('-c', '--objects_per_thread', dest='objects_per_thread',
     #                     help='number of objects per thread already written')
-    parser.add_argument('-x', '--data-dir', dest='data_dir', help='Data directory to read from/write to',
+    parser.add_argument('-x', '--data-dir', dest='data_dir',
+                        help='Data directory to read from/write to (default: ./dss_client_data)',
                         default='dss_client_data')
     args = parser.parse_args()
 
@@ -365,7 +368,7 @@ if __name__ == '__main__':
             sys.exit(-1)
 
     fn_list = {0: [run_data_put_prepare, run_data_put, run_data_get, run_data_del, run_data_put_cleanup],
-               1: [run_data_put],
+               1: [run_data_put_prepare, run_data_put, run_data_put_cleanup],
                2: [run_data_get],
                3: [run_data_del],
                # 4: [run_data_list],
