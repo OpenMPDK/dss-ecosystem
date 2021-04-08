@@ -38,7 +38,7 @@ class Compaction:
 
 
   def start(self):
-    command = TARGET_SRC_PATH + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact -n "
+    command = "sudo " + TARGET_SRC_PATH + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact -n "
     for nqn in self.nqn:
       compaction_command = command + nqn
       self.logger.write("INFO: Compaction started for - {}\n".format(nqn))
@@ -63,7 +63,7 @@ class Compaction:
 
   
   def get_status(self):
-    command = TARGET_SRC_PATH + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact --get_status -n "
+    command = "sudo " + TARGET_SRC_PATH + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact --get_status -n "
     for nqn in self.nqn:
       status_command = command + nqn
       ret,console = exec_cmd(status_command, True, True)
