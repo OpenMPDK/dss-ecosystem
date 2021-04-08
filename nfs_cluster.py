@@ -50,7 +50,7 @@ class NFSCluster:
         if self.mounted:
             for cluster_ip in self.local_mounts:
                 for local_mount in self.local_mounts[cluster_ip]:
-                    command = "sudo umount {}".format(local_mount)
+                    command = "umount {}".format(local_mount)
                     ret, console = exec_cmd(command, True, True)
                     if ret :
                         print("ERROR: Failed to un-mount  {} path ".format(local_mount))
@@ -101,12 +101,14 @@ class NFSCluster:
         console =None
         # Create local directory
         if not os.path.isdir(nfs_share):
-            os.mkdir(nfs_share)
+            # os.mkdir(nfs_share)
+            command = "mkdir {}".format(nfs_share)
+            ret, console = exec_cmd(command, True, True)
         if os.path.ismount(nfs_share):
             print("WARNING: NFS share \"{}\" already mounted!".format(nfs_share))
             self.logger_queue.put("WARNING: NFS share {} already mounted!".format(nfs_share))
         else:
-            command = "sudo mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share)
+            command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share)
             #self.logger_queue.put("DEBUG: Mount Command - {}".format(command))
             ret, console = exec_cmd(command, True, True)
         return ret,console
@@ -141,7 +143,7 @@ class NFSCluster:
         ret =0
         console =None
         if os.path.ismount(local_mount):
-            command = "sudo umount {}".format(local_mount)
+            command = "umount {}".format(local_mount)
             ret, console = exec_cmd(command, True, True)
             # Remove directory
             if ret == 0:
