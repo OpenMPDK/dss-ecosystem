@@ -797,6 +797,7 @@ if __name__ == "__main__":
 
 	# Terminate logger at the end.
 	master.stop_logging()  ## Termination5
+	master.nfs_cluster_obj.umount_all()
 	print("INFO: Stopping master")
 	### 10.1.51.238 , 10.1.51.54, 10.1.51.61
 

@@ -30,7 +30,9 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-import os,sys
+
+import os
+import sys
 import subprocess
 import traceback
 import ntplib
@@ -38,10 +40,10 @@ import time
 import paramiko
 from multiprocessing import Process, Queue, Value, Lock
 
-
 """
 Contains list of utility functions...
 """
+
 
 def exception(func):
     """
@@ -49,12 +51,13 @@ def exception(func):
     :param func: <function ptr>
     :return: depends on function return type.
     """
-    def wrapper(self, *args,**kwargs):
+    def wrapper(self, *args, **kwargs):
         try:
-            return func(self,*args,**kwargs)
+            return func(self, *args, **kwargs)
         except Exception as e:
-            print("EXCEPTION: {} : {}".format(e,traceback.format_exc()))
+            print("EXCEPTION: {} : {}".format(e, traceback.format_exc()))
             return False
+
     return wrapper
 
 
@@ -62,6 +65,8 @@ def exec_cmd(cmd="", output=False, blocking=False):
     """
     Execute the specified command
     :param cmd: <string> a executable command.
+    :param output: Output
+    :param blocking: Blocking or non-blocking call
     :return:
     ret = { ret==0  indicate success
             ret !=0 failure
@@ -69,30 +74,45 @@ def exec_cmd(cmd="", output=False, blocking=False):
     console_output = stdout gets returned
     """
     ret = 0
-    console_output= ""
+    console_output = ""
     std_out_default = sys.stdout
+    if not cmd.startswith('sudo'):
+            cmd = 'sudo -u root ' + cmd
+
     try:
-        #print("INFO: Execution Cmd - {}".format(cmd))
+        # print("INFO: Execution Cmd - {}".format(cmd))
         if blocking:
             if output:
-                result = subprocess.check_output(cmd.split(), shell=False, stderr=subprocess.STDOUT,universal_newlines=False)
+                '''
+                p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                out, err = p.communicate()
+                # out = out.decode('utf-8')
+                console_output = out.strip()
+                # err = err.decode('utf-8')
+                ret = p.returncode
+                '''
+                result = subprocess.check_output(cmd.split(), shell=False, stderr=subprocess.STDOUT,
+                                                 universal_newlines=False)
                 console_output = result
             else:
-                DEVNULL = open(os.devnull, "wb")
-                ret = subprocess.call(cmd.split(), shell=False, stdout=DEVNULL, stderr=subprocess.STDOUT)
+                with open(os.devnull, "wb") as fh:
+                    ret = subprocess.call(cmd.split(), shell=False, stdout=fh, stderr=subprocess.STDOUT)
         else:
             subprocess.Popen(cmd.split())
 
     except subprocess.CalledProcessError as e:
-        print(traceback.format_exc())
         console_output = e.output
         ret = e.returncode
+        # print(console_output)
+        # print("Return code -", ret)
+        # print(traceback.format_exc())
 
     finally:
         if not output:
             os.stdout = std_out_default
 
-    return ret , console_output
+    return ret, console_output
+
 
 @exception
 def ntp_time(host):
@@ -106,6 +126,7 @@ def ntp_time(host):
     ntp_time = int(response.tx_time)
     return ntp_time
 
+
 @exception
 def epoch(ts):
     """
@@ -114,8 +135,9 @@ def epoch(ts):
     :return:
     """
     time_format = '%Y-%m-%d %H:%M:%S'
-    ts_epoch =int( time.mktime(time.strptime(ts, time_format)))
+    ts_epoch = int(time.mktime(time.strptime(ts, time_format)))
     return ts_epoch
+
 
 @exception
 def get_file_path(base_dir, file_name):
@@ -139,11 +161,10 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
     :param blocking:
     :return:
     """
-
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-    client.connect(host,username=username, password=password)
-    stdin,stdout,stderr = client.exec_command(cmd)
+    client.connect(host, username=username, password=password)
+    stdin, stdout, stderr = client.exec_command(cmd)
 
     if blocking:
         status = stdout.channel.recv_exit_status()
@@ -152,7 +173,7 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
         client.close()
         return stdout_lines, stderr_lines, status
     else:
-        return client , stdin, stdout, stderr
+        return client, stdin, stdout, stderr
 
 
 def uploadFile(dst_host, dst_path, src_path, username, password="msl-ssg"):
@@ -167,7 +188,7 @@ def uploadFile(dst_host, dst_path, src_path, username, password="msl-ssg"):
     print("Uploading {} to {}:{}".format(src_path, dst_host, dst_path))
 
     transport = paramiko.Transport((dst_host, 22))
-    transport.connect(username=username,password=password)
+    transport.connect(username=username, password=password)
 
     sftp = paramiko.SFTPClient.from_transport(transport)
     print("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII- {}-{}".format(src_path, dst_path))
@@ -179,19 +200,17 @@ def uploadFile(dst_host, dst_path, src_path, username, password="msl-ssg"):
     # TODO why does this always throw an exception
     print("KKKKK--{}".format(os.path.dirname(dst_path)))
     try:
-        sftp.put(src_path,dst_path)
+        sftp.put(src_path, dst_path)
         remoteExecution(dst_host, username, password, "sudo tar -xvzf  {}".format(dst_path), True)
         remoteExecution(dst_host, username, password, "sudo rm   {}".format(dst_path), True)
     except Exception as e:
         print("EXCEPTION---: {}-{}".format(__file__, e))
 
-    #remoteExecution(dst_host, username,password, "sudo chmod 777 {}".format(dst_path))
+    # remoteExecution(dst_host, username,password, "sudo chmod 777 {}".format(dst_path))
     transport.close()
     sftp.close()
 
-    #remoteExecution(dst_host, username, password, "sudo chmod 777 {}".format(os.path.dirname(dst_path)), True)
-
-
+    # remoteExecution(dst_host, username, password, "sudo chmod 777 {}".format(os.path.dirname(dst_path)), True)
 
 
 def get_s3_prefix(prefix):
@@ -214,7 +233,6 @@ class MultiprocessingQueue:
 
     def __init__(self):
         self.lock = Lock()
-
 
     def put(self, data=None):
         """
@@ -244,3 +262,4 @@ class MultiprocessingQueue:
         :return:
         """
         pass
+
