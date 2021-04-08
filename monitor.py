@@ -410,7 +410,9 @@ class Monitor:
             print("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
 
-        bandwidth = success_operation_size_in_byte / ( 1024 * 1024 * total_operation_time)
+        bandwidth = 0
+        if total_operation_time:
+            bandwidth = success_operation_size_in_byte / ( 1024 * 1024 * total_operation_time)
         operation_size_in_gb = success_operation_size_in_byte / ( 1024 * 1024 * 1024)
 
         print("INFO: Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))

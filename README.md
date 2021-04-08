@@ -14,6 +14,8 @@ pip3 install requirements.txt
 ```
 
 # Execution command:
+As a non-root user, please run the below commands with '''sudo''' and make sure the non-root user
+is part of sudoers file.
 ```
 python3 master_application.py PUT -c 10.1.51.2
 python3 master_application.py LIST -c 10.1.51.2
