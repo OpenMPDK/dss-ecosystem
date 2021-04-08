@@ -57,6 +57,7 @@ class NFSCluster:
                         self.logger_queue.put("ERROR: Failed to un-mount  {} path ".format(local_mount))
                     else:
                         self.logger_queue.put("DEBUG: Un-mounted local NFS mount {}".format(local_mount))
+            env.close()
 
     @exception
     def mount_all(self):
