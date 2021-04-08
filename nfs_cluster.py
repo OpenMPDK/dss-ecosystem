@@ -140,7 +140,7 @@ class NFSCluster:
         ret =0
         console =None
         if os.path.ismount(local_mount):
-            command = "umount {}".format(local_mount)
+            command = "sudo umount {}".format(local_mount)
             ret, console = exec_cmd(command, True, True)
             # Remove directory
             if ret == 0:
