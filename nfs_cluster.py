@@ -75,6 +75,8 @@ class NFSCluster:
                     if ret == 0:
                         mounted_nfs_shares.append(nfs_share)
                         local_nfs_mount_paths.append(nfs_share)
+                        self.logger_queue.put(
+                            "DEBUG:NFS mounting {}:{} successful \n".format(cluster_ip, nfs_share))
                     else:
                         print("ERROR:NFS mounting {}:{} failed \n {}".format(cluster_ip,nfs_share, console))
                         self.logger_queue.put("ERROR:NFS mounting {}:{} failed \n {}".format(cluster_ip,nfs_share, console))
@@ -102,7 +104,7 @@ class NFSCluster:
         # Create local directory
         if not os.path.isdir(nfs_share):
             # os.mkdir(nfs_share)
-            command = "mkdir {}".format(nfs_share)
+            command = "mkdir -p {}".format(nfs_share)
             ret, console = exec_cmd(command, True, True)
         if os.path.ismount(nfs_share):
             print("WARNING: NFS share \"{}\" already mounted!".format(nfs_share))
@@ -148,7 +150,11 @@ class NFSCluster:
             # Remove directory
             if ret == 0:
                 try:
-                    os.rmdir(local_mount)
+                    command = "rm -rf {}".format(local_mount)
+                    ret, console = exec_cmd(command, True, True)
+                    #os.rmdir(local_mount)
+                    if ret:
+                        self.logger_queue.put("ERROR: Failed to remove {} ".format(local_mount))
                 except OSError as e:
                     self.logger_queue.put("ERROR: Unable to remove directory {}, {} ".format(local_mount, e))
         else:

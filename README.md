@@ -18,6 +18,7 @@ As a non-root user, please run the below commands with '''sudo''' and make sure 
 is part of sudoers file.
 ```
 python3 master_application.py PUT -c 10.1.51.2
+python3 master_application.py PUT -c 10.1.51.2  --compaction
 python3 master_application.py LIST -c 10.1.51.2
 python3 master_application.py DEL -c 10.1.51.2
 python3 master_application.py DEL -c 10.1.51.2 --prefix bird/
@@ -117,6 +118,17 @@ Supported operations are PUT/DEL/GET
   The actual upload is performed in client nodes. The index distribution is done through a IndexMonitor.
   It distribute indexes in round-robin fashion in all the clients. The actual file upload is done at the
   client node.
+### Target Compaction
+  The DSS target compaction can be initiated after actual upload is done. Use the "--compaction" switch
+  along with regular upload command.
+  ```
+  python3 master_application.py PUT -c 10.1.51.2  --compaction
+  ``` 
+#### Configuration: 
+  Include IP address of the DSS targets from the DataMover configuration file.
+  ```
+  "dss_targets": ["202.0.0.104"]  # Here "202.0.0.104" is the ip address of the DSS target.
+  ```
 ## Operation LIST
   The LIST operation list all keys under a provided prefix. It is performed by MasterApplication
   only. Each prefix is processed by independent workers. Results are en-queued to IndexQueue for
