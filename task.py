@@ -344,6 +344,7 @@ class Task:
       elif self.operation.lower() == "indexing":
         indexing(data=self.params["data"],
                  nfs_cluster=self.params["nfs_cluster"],
+                 nfs_share=self.params["nfs_share"],
 				 task_queue=queue["task_queue"],
 				 index_data_queue=queue["index_data_queue"],
                  logger_queue=queue["logger_queue"],
@@ -375,6 +376,7 @@ def indexing(**kwargs):
     logger_queue = kwargs["logger_queue"]
     index_data_queue = kwargs["index_data_queue"]
     nfs_cluster = kwargs["nfs_cluster"]
+    nfs_share = kwargs["nfs_share"]
     max_index_size= kwargs["max_index_size"]
 
     progress_of_indexing = kwargs["progress_of_indexing"]
@@ -392,13 +394,13 @@ def indexing(**kwargs):
         # If files a directory, then create a task
         if "dir" in result and "files" in result:
             #print("Received Files: {}".format(result))
-            msg = {"dir": result["dir"], "files": result["files"] , "size": result["size"], "nfs_cluster": nfs_cluster}
+            msg = {"dir": result["dir"], "files": result["files"] , "size": result["size"], "nfs_cluster": nfs_cluster, "nfs_share": nfs_share}
             index_data_queue.put(msg)
             logger_queue.put("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format( result["dir"], len(result["files"]) , index_data_queue.qsize()))
 
 
         elif "dir" in result:
-            task = Task(operation="indexing", data=result["dir"], nfs_cluster=nfs_cluster, max_index_size=max_index_size )
+            task = Task(operation="indexing", data=result["dir"], nfs_cluster=nfs_cluster, nfs_share=nfs_share, max_index_size=max_index_size )
             task_queue.put(task)
             is_dir_only_consist_files = False
 
@@ -413,11 +415,11 @@ def indexing(**kwargs):
 
     #print("####### Shared Dict: dir{}:{}".format(dir,progress_of_indexing))
     if is_dir_only_consist_files:
-        check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock ,dir, logger_queue)
+        check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock ,dir, nfs_share, logger_queue)
     #print("============ Shared Dict: dir{}:{}".format(dir, progress_of_indexing))
 
 
-def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock,  dir, logger_queue):
+def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock,  dir, nfs_share, logger_queue):
     """
     This function helps to detect that indexing for hierarchical directory structure is completed.
         A               A=2
@@ -441,14 +443,15 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
             if progress_of_indexing[hash_key] > 0:
                 progress_of_indexing[hash_key] -= 1
             progress_of_indexing_lock.release()
-            if progress_of_indexing[hash_key] == 0 and len(hierarchical_dirs) > 2:
-                # Remove non-top directory
+            # To check if all the children processed for a prefix dir, Should stop when it reaches to NFS share root .
+            if progress_of_indexing[hash_key] == 0 and len(dir) > len(nfs_share) :
+                # Remove child directory under NFS share
                 progress_of_indexing_lock.acquire()
                 del progress_of_indexing[hash_key]
                 progress_of_indexing_lock.release()
                 # Check parent node with parent_hash_key
                 parent_hash_key = "/".join(hierarchical_dirs[:-1])
-                check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock, parent_hash_key, logger_queue)
+                check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock, parent_hash_key, nfs_share, logger_queue)
         except Exception as e:
             logger_queue.put("EXCEPTION:{}: {} ".format(__file__, e))
             #print("EXCEPTION:{}: {} ".format(__file__, e))

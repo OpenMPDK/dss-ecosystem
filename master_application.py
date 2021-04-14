@@ -286,6 +286,7 @@ class Master:
 				task = Task(operation="indexing",
 							data=nfs_share,
 							nfs_cluster=ip_address,
+							nfs_share=nfs_share,
 							max_index_size=self.max_index_size)
 				self.task_queue.put(task)
 

@@ -71,6 +71,7 @@ class NFSCluster:
                 local_nfs_mount_paths = []
                 mounted_nfs_shares = []
                 for nfs_share in self.config[cluster_ip]:
+                    nfs_share = os.path.abspath(nfs_share)
                     ret,console = self.mount(cluster_ip, nfs_share)
                     if ret == 0:
                         mounted_nfs_shares.append(nfs_share)

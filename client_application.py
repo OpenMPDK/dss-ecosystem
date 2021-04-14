@@ -305,7 +305,7 @@ class ClientApplication:
                                 socket.send_json({"success": 1})  # Send response back to MasterApp
                                 is_index_data_added = True
                             else:
-                                if self.nfs_mount(message["nfs_cluster"], message["dir"]):
+                                if self.nfs_mount(message["nfs_cluster"], message["nfs_share"]):
                                     self.operation_data_queue.put(message) ## Add index to operation_data_queue
                                     socket.send_json({"success": 1})  # Send response back to MasterApp
                                     is_index_data_added = True
@@ -401,7 +401,8 @@ class ClientApplication:
         :return:
         """
         if nfs_cluster_ip and path:
-            nfs_share = "/" + (path.lstrip()).split("/")[1]
+            #nfs_share = "/" + (path.lstrip()).split("/")[1]
+            nfs_share = path
             # Don't mount if the nfs share all ready mounted.
             if nfs_cluster_ip in self.nfs_cluster.local_mounts and nfs_share in self.nfs_cluster.local_mounts[nfs_cluster_ip]:
                 return True
