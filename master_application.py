@@ -330,22 +330,21 @@ class Master:
 			print("INFO: Started Compaction for target-ip:{}".format(client_ip))
 			self.logger_queue.put("INFO: Started Compaction for target-ip:{}".format(client_ip))
 			ssh_client_handler, stdin, stdout, stderr = remoteExecution(client_ip, self.client_user_id, self.client_password,command)
-			compaction_status[client_ip] = []
-			compaction_status[client_ip].append(ssh_client_handler)
-			compaction_status[client_ip].append(stdin)
-			compaction_status[client_ip].append(stdout)
-			compaction_status[client_ip].append(stderr)
-
+			compaction_status[client_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout":stdout,"stderr":stderr}
 
 		while True:
 			is_compaction_done = True
 			for client_ip in compaction_status:
-				if compaction_status[client_ip][0]:
-					if compaction_status[client_ip][2]:
-						status = compaction_status[client_ip][2].channel.exit_status_ready()
+				if "status" in compaction_status[client_ip] and  compaction_status[client_ip]["status"]:
+					continue
+				if "ssh_remote_client" in compaction_status[client_ip] and compaction_status[client_ip]["ssh_remote_client"]:
+					if "stdout" in compaction_status[client_ip] and compaction_status[client_ip]["stdout"]:
+						status = compaction_status[client_ip]["stdout"].channel.exit_status_ready()
 						if status:
 							print("INFO: Compaction is finished for - {}".format(client_ip))
 							self.logger_queue.put("INFO: Compaction is finished for - {}".format(client_ip))
+							compaction_status[client_ip]["status"] = True
+							compaction_status[client_ip]["ssh_remote_client"].close()
 						else:
 							is_compaction_done = False
 			if is_compaction_done:
@@ -354,6 +353,7 @@ class Master:
 
 		compaction_time = (datetime.now() - start_time).seconds
 		print("INFO: Total Compaction time - {} seconds".format(compaction_time))
+
 
 
 
