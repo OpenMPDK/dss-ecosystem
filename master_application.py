@@ -32,7 +32,7 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import os,sys
-from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, uploadFile
+from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, uploadFile, progress_bar
 from utils.config import Config, commandLineArgumentParser, CommandLineArgument
 from utils.signal_handler import SignalHandler
 
@@ -334,6 +334,7 @@ class Master:
 
 		while True:
 			is_compaction_done = True
+			progress_bar("Compaction in Progress")
 			for client_ip in compaction_status:
 				if "status" in compaction_status[client_ip] and  compaction_status[client_ip]["status"]:
 					continue
@@ -341,7 +342,7 @@ class Master:
 					if "stdout" in compaction_status[client_ip] and compaction_status[client_ip]["stdout"]:
 						status = compaction_status[client_ip]["stdout"].channel.exit_status_ready()
 						if status:
-							print("INFO: Compaction is finished for - {}".format(client_ip))
+							print("\nINFO: Compaction is finished for - {}".format(client_ip))
 							self.logger_queue.put("INFO: Compaction is finished for - {}".format(client_ip))
 							compaction_status[client_ip]["status"] = True
 							compaction_status[client_ip]["ssh_remote_client"].close()

@@ -2,7 +2,7 @@
  "tess_clients_ip":[ "202.0.0.135","202.0.0.136"],
   "master": {
     "ip_address": "202.0.0.135",
-    "workers": 10,
+    "workers": 1,
     "max_index_size": 1000,
     "size": "1GB"
   },

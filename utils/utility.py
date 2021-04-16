@@ -228,38 +228,17 @@ def get_s3_prefix(prefix):
     return prefix
 
 
-## TODO
-class MultiprocessingQueue:
-
-    def __init__(self):
-        self.lock = Lock()
-
-    def put(self, data=None):
-        """
-        Write data into queue
-        :param data: Any data structure should be supported.
-        :return: None
-        """
-        pass
-
-    def get(self):
-        """
-        Return the front element
-        :return:
-        """
-        pass
-
-    def size(self):
-        """
-        Return number of element in the queue
-        :return:
-        """
-        pass
-
-    def empty(self):
-        """
-        Return if the queue is empty
-        :return:
-        """
-        pass
-
+def progress_bar(prefix=""):
+    """
+    Display clockwise progress bar with specified prefix.
+    :param prefix: A prefix string gets prepended ahead of progress bar.
+    :return:
+    """
+    for i in range(1, 4):
+        if i % 3 == 1:
+            sys.stdout.write("\r{} |".format(prefix))
+        elif i % 3 == 2:
+            sys.stdout.write("\r{} /".format(prefix))
+        elif i % 3 == 0:
+            sys.stdout.write("\r{} --".format(prefix))
+        time.sleep(0.1)

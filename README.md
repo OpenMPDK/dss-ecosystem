@@ -22,7 +22,7 @@ python3 master_application.py PUT -c 10.1.51.2  --compaction
 python3 master_application.py LIST -c 10.1.51.2
 python3 master_application.py DEL -c 10.1.51.2
 python3 master_application.py DEL -c 10.1.51.2 --prefix bird/
-python3 master_application.py DEL -c 10.1.51.2 --dest_path <Destination Path>
+python3 master_application.py GET -c 10.1.51.2 --dest_path <Destination Path>
 
 Dry Run:
 - Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance
@@ -30,7 +30,7 @@ python3 master_application.py PUT -c 10.1.51.2 --dryrun
 - It performa every steps involved in DELETE operation except actual DELETE from S3 storage.
 python3 master_application.py DEL -c 10.1.51.2 --dryrun
 - It performs every steps involved in GET operation except actual S3 GET operation
-python3 master_application.py DEL -c 10.1.51.2 --dest_path <"Destination File Path"> --dryrun 
+python3 master_application.py GET -c 10.1.51.2 --dest_path <"Destination File Path"> --dryrun 
 NFS Cluster: 10.1.51.2
 ```
 # TESS Master Node and Client Nodes
