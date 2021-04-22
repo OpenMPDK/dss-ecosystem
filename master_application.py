@@ -144,6 +144,9 @@ class Master:
 		if self.operation.upper() == "DEL" or self.operation.upper() == "GET":
 			self.start_listing()
 
+		print("INFO: DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
+		self.logger_queue.put("INFO: DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
+
 	def stop(self):
 		"""
 		Stop master and its all clients and their application.
@@ -532,7 +535,9 @@ def process_put_operation(master):
 
 				master.logger_queue.put("INFO: Indexed data generation is completed!")
 				print("INFO: Indexed data generation is completed!")
-				print("INFO: {} INDEXING Completed in {} seconds".format(master.operation,(datetime.now() - master.operation_start_time).seconds))
+				indexing_time = (datetime.now() - master.operation_start_time).seconds
+				master.logger_queue.put("INFO: {} INDEXING Completed in {} seconds".format(master.operation, indexing_time))
+				print("INFO: {} INDEXING Completed in {} seconds".format(master.operation, indexing_time))
 
 		master.progress_of_indexing_lock.release()
 
@@ -604,8 +609,9 @@ def process_list_operation(master):
 				if listing_completed:
 					break
 		except Exception as e:
-			print("EXECPTION: Listing - {}".format(e))
-		time.sleep(1)
+			print("Exception: Listing - {}".format(e))
+			master.logger_queue.put("Exception: Listing - {}".format(e))
+		#time.sleep(1)
 	master.stop_workers()
 	print("LISTING:{}".format(master.listing_progress))
 
@@ -642,8 +648,9 @@ def process_del_operation(master):
 				master.index_data_generation_complete.value = 1
 				master.logger_queue.put("INFO: Object-Keys generation through listing is completed!")
 				print("INFO: Object-Keys generation through listing is completed!")
-				print("INFO: {} LISTING Completed in {} seconds".format(master.operation, (
-						datetime.now() - master.operation_start_time).seconds))
+				listing_time = (datetime.now() - master.operation_start_time).seconds
+				master.logger_queue.put("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
+				print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
 				# Shutdown workers
 				#master.stop_workers()
 				#workers_stopped = 1
@@ -717,8 +724,9 @@ def process_get_operation(master):
 				master.index_data_generation_complete.value = 1
 				master.logger_queue.put("INFO: Object-Keys generation through listing is completed!")
 				print("INFO: Object-Keys generation through listing is completed!")
-				print("INFO: {} LISTING Completed in {} seconds".format(master.operation, (
-						datetime.now() - master.operation_start_time).seconds))
+				listing_time = (datetime.now() - master.operation_start_time).seconds
+				print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
+				master.logger_queue.put("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
 		# Shutdown workers
 		# master.stop_workers()
 		# workers_stopped = 1
@@ -785,8 +793,9 @@ if __name__ == "__main__":
 
 	if cli.operation.upper() == "PUT":
 		process_put_operation(master)
+		master.nfs_cluster_obj.umount_all()
 	elif cli.operation.upper() == "LIST":
-                print('Unsupported operation')
+		print('Unsupported operation')
 		# process_list_operation(master)
 	elif cli.operation.upper() == "DEL":
 		process_del_operation(master)
@@ -799,7 +808,6 @@ if __name__ == "__main__":
 
 	# Terminate logger at the end.
 	master.stop_logging()  ## Termination5
-	master.nfs_cluster_obj.umount_all()
 	print("INFO: Stopping master")
 	### 10.1.51.238 , 10.1.51.54, 10.1.51.61
 
