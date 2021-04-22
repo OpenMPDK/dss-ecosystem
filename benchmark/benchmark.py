@@ -1,4 +1,5 @@
 import argparse
+import concurrent.futures
 import dss
 import hashlib
 import itertools
@@ -9,7 +10,7 @@ import sys
 import threading
 import time
 
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 
 object_data = None
 object_data_md5 = None
@@ -122,12 +123,20 @@ class DSSClient(object):
             raise e
 
     def get_objects(self, prefix):
+        objects = list()
         try:
-            get_objs = self.client.getObjects(prefix)
-            return get_objs
+            obj_iter = self.client.getObjects(prefix)
+            while True:
+                try:
+                    for file in obj_iter:
+                        objects.append(file)
+                except dss.NoIterator:
+                    break
         except Exception as e:
-            self.logger.exception('Failed to list the objects for prefix %s', prefix)
+            self.logger.exception('Failed to get the objects for prefix %s', prefix)
             raise e
+
+        return objects
 
     def list_objects(self, prefix):
         try:
@@ -146,11 +155,13 @@ class DSSClient(object):
 
 
 def run_data_put_prepare(thr_id, key_prefix, num_ios=0):
+    count = 0
     for count in range(num_ios):
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
         filename = os.path.join(data_dir, key)
         with open(filename, 'wb') as f:
             f.write(object_data)
+    return count+1, 0
 
 
 def run_data_put(thr_id, key_prefix, num_ios=0):
@@ -161,7 +172,7 @@ def run_data_put(thr_id, key_prefix, num_ios=0):
             logger.error('Error in creating DSS client connection')
             return
     except:
-        logger.error('Error in creating DSS client connection')
+        logger.exception('Error in creating DSS client connection for thread ID %d', thr_id)
         return
 
     start_time = time.time()
@@ -182,15 +193,18 @@ def run_data_put(thr_id, key_prefix, num_ios=0):
             fail_count += 1
     end_time = time.time()
     logger.info('PUT objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
-    logger.info('PUT objects - Thr_id %d,  count %d, failed %d,  time %d sec', thr_id, count,
+    logger.info('PUT objects - Thr_id %d,  total_io_count %d, failed_io %d,  time %d sec', thr_id, count,
                 fail_count, (end_time - start_time))
+    return count, fail_count
 
 
 def run_data_put_cleanup(thr_id, key_prefix, num_ios=0):
+    count = 0
     for count in range(num_ios):
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
         filename = os.path.join(data_dir, key)
         os.unlink(filename)
+    return count+1, 0
 
 
 def run_data_get(thr_id, key_prefix, num_ios=0):
@@ -201,7 +215,7 @@ def run_data_get(thr_id, key_prefix, num_ios=0):
             logger.error('Error in creating DSS client connection')
             return
     except:
-        logger.error('Error in creating DSS client connection')
+        logger.exception('Error in creating DSS client connection for thread ID %d', thr_id)
         return
 
     start_time = time.time()
@@ -221,8 +235,9 @@ def run_data_get(thr_id, key_prefix, num_ios=0):
     end_time = time.time()
 
     logger.info('GET objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
-    logger.info('GET objects - Thr_id %d,  count %d, failed %d,  time %d sec', thr_id, count,
+    logger.info('GET objects - Thr_id %d,  total_io_count %d, failed_io %d,  time %d sec', thr_id, count,
                 fail_count, end_time - start_time)
+    return count, fail_count
 
 
 def check_data_after_get(thr_id, key_prefix, num_ios=0):
@@ -239,6 +254,7 @@ def check_data_after_get(thr_id, key_prefix, num_ios=0):
                 logger.error("Key %s didn't match with object data", key)
                 fail_count +=1
     logger.info('CHECK data - total %d, mismatch %d', num_ios, fail_count)
+    return num_ios, fail_count
 
 
 def run_data_del(thr_id, key_prefix, num_ios=0):
@@ -249,7 +265,7 @@ def run_data_del(thr_id, key_prefix, num_ios=0):
             logger.error('Error in creating DSS client connection')
             return
     except:
-        logger.error('Error in creating DSS client connection')
+        logger.exception('Error in creating DSS client connection for thread ID %d', thr_id)
         return
 
     start_time = time.time()
@@ -268,8 +284,9 @@ def run_data_del(thr_id, key_prefix, num_ios=0):
     end_time = time.time()
 
     logger.info('DEL objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
-    logger.info('DEL objects - Thr_id %d,  count %d, failed %d,  time %d us', thr_id, count,
-                fail_count, (end_time - start_time) * 10**6)
+    logger.info('DEL objects - Thr_id %d,  total_io_count %d, failed_io %d,  time %d sec', thr_id, count,
+                fail_count, (end_time - start_time))
+    return count, fail_count
 
 
 def run_data_list(thr_id, key_prefix, num_ios=0):
@@ -280,7 +297,7 @@ def run_data_list(thr_id, key_prefix, num_ios=0):
             logger.error('Error in creating DSS client connection')
             return
     except:
-        logger.error('Error in creating DSS client connection')
+        logger.exception('Error in creating DSS client connection')
         return
 
     start_time = time.time()
@@ -288,17 +305,24 @@ def run_data_list(thr_id, key_prefix, num_ios=0):
     fail_count = 0
     key = '%s-object-%s' % (key_prefix, thr_id)
     try:
-        obj = client_conn.get_objects(key)
-        count = len(obj)
+        objects = client_conn.get_objects(key)
+        for file in objects:
+            count += 1
     except:
-        logger.info('Failed to list objects with prefix %s', key)
+        logger.exception('Failed to list objects with prefix %s', key)
         fail_count += 1
 
     end_time = time.time()
 
     logger.info('LIST objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
-    logger.info('LIST objects - Thr_id %d,  count %d, failed %d,  time %d us', thr_id, count,
-                fail_count, (end_time - start_time) * 10**6)
+    logger.info('LIST objects - Thr_id %d,  count %d, failed %d,  time %d sec', thr_id, count,
+                fail_count, (end_time - start_time))
+    return count, fail_count
+
+
+def get_cpu_count():
+    cpus = os.listdir('/sys/class/cpuid')
+    return len(cpus)
 
 
 if __name__ == '__main__':
@@ -341,6 +365,12 @@ if __name__ == '__main__':
     g_access_key = args.access_key
     g_secret_key = args.secret_key
 
+    cpu_count = get_cpu_count()
+    if cpu_count < 8 and args.thr_cnt > cpu_count/2:
+        max_worker_threads = int(cpu_count/2)
+    else:
+        max_worker_threads = args.thr_cnt
+
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
 
@@ -371,27 +401,40 @@ if __name__ == '__main__':
                1: [run_data_put_prepare, run_data_put, run_data_put_cleanup],
                2: [run_data_get],
                3: [run_data_del],
-               # 4: [run_data_list],
+               4: [run_data_list],
                8: [run_data_put_prepare],
                9: [run_data_put_cleanup]
                }
 
     for loop in range(args.total_loops):
         for fn in fn_list[args.op_type]:
-            with ProcessPoolExecutor(max_workers=args.thr_cnt) as executor:
-                future_tasks = []
+            io_count = 0
+            fail_io_count = 0
+            with ProcessPoolExecutor(max_workers=max_worker_threads) as executor:
+                task_ids = iter(range(args.thr_cnt))
                 start_time = time.time()
-                for i in range(args.thr_cnt):
-                    try:
-                        task = executor.submit(fn, i, args.key_prefix,
-                                               args.num_ios)
-                        future_tasks.append(task)
-                    except Exception as e:
-                        logger.exception('Error in starting the task')
+                try:
+                    futures = {
+                        executor.submit(fn, task_id, args.key_prefix, args.num_ios)
+                        for task_id in itertools.islice(task_ids, max_worker_threads)
+                    }
+                    while futures:
+                        done, futures = concurrent.futures.wait(
+                            futures, return_when=concurrent.futures.FIRST_COMPLETED
+                        )
+                        for fut in done:
+                            res = fut.result()
+                            io_count += res[0]
+                            fail_io_count += res[1]
+                            logger.info('Task result - %s', str(res))
 
-                for task in as_completed(future_tasks):
-                    res = task.result()
-                    # logger.info('Task result - %s', str(res))
+                        for task_id in itertools.islice(task_ids, len(done)):
+                            futures.add(executor.submit(fn, task_id, args.key_prefix, args.num_ios))
+                except Exception as ex:
+                    logger.exception('Exception in running the process')
+                    print(f'Exception occurred while running the process- {ex}. Check the log file')
+                    sys.exit(-1)
+
                 end_time = time.time()
                 time_taken = end_time - start_time
                 logger.info('Time taken for fn %s - %d, start time - %d, end time - %d', str(fn),
@@ -401,9 +444,12 @@ if __name__ == '__main__':
                 elif fn == run_data_put_cleanup:
                     print('Data is removed from the directory')
                 if fn in [run_data_put, run_data_get, run_data_del]:
-                    total_io_size = (args.num_ios * args.thr_cnt * args.object_size * 1024)
+                    actual_ios = io_count - fail_io_count
+                    total_io_size = (actual_ios * args.object_size * 1024)
                     throughput = float(total_io_size)/(time_taken * 1024 * 1024 * 1024)
                     logger.info('Throughput - %f GB/s', throughput)
+                    if fail_io_count:
+                        print('Failed IO - %s' % fail_io_count)
                     if fn == run_data_get:
                         print('GET Throughput - %f GB/s' % throughput)
                     elif fn == run_data_put:
