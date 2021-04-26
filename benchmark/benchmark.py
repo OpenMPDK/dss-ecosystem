@@ -92,20 +92,22 @@ class FastWriteCounter_old(object):
 
 class DSSClient(object):
     def __init__(self, endpoint, access_key, secret_key, logger, region=None):
+        self.access_key = access_key
+        self.secret_key = secret_key
+        self.endpoint = endpoint
+        self.region = region
+        self.logger = logger
         try:
-            self.access_key = access_key
-            self.secret_key = secret_key
-            self.endpoint = endpoint
-            self.region = region
-            self.logger = logger
             option = dss.clientOption()
             option.maxConnections = 1
-            try:
-                self.client = dss.createClient(self.endpoint, self.access_key, self.secret_key, option)
-            except:
-                self.logger.exception('Error in creating client connection')
+            self.client = dss.createClient(self.endpoint, self.access_key, self.secret_key, option)
+        except dss.NetworkError as e:
+            self.logger.error('Exception in instantiating client - Invalid Endpoint or Network error')
+            self.client = None
+            raise e
         except Exception as e:
-            self.logger.exception(e)
+            self.logger.error('Exception in instantiating client')
+            self.client = None
             raise e
 
     def put_object(self, key, value):
@@ -170,10 +172,10 @@ def run_data_put(thr_id, key_prefix, num_ios=0):
         client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
         if not client_conn:
             logger.error('Error in creating DSS client connection')
-            return
+            return 0, 0
     except:
         logger.exception('Error in creating DSS client connection for thread ID %d', thr_id)
-        return
+        return 0, 0
 
     start_time = time.time()
     count = 0
@@ -213,10 +215,10 @@ def run_data_get(thr_id, key_prefix, num_ios=0):
         client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
         if not client_conn:
             logger.error('Error in creating DSS client connection')
-            return
+            return 0, 0
     except:
         logger.exception('Error in creating DSS client connection for thread ID %d', thr_id)
-        return
+        return 0, 0
 
     start_time = time.time()
     count = 0
@@ -263,10 +265,10 @@ def run_data_del(thr_id, key_prefix, num_ios=0):
         client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
         if not client_conn:
             logger.error('Error in creating DSS client connection')
-            return
+            return 0, 0
     except:
         logger.exception('Error in creating DSS client connection for thread ID %d', thr_id)
-        return
+        return 0, 0
 
     start_time = time.time()
     count = 0
@@ -295,10 +297,10 @@ def run_data_list(thr_id, key_prefix, num_ios=0):
         client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
         if not client_conn:
             logger.error('Error in creating DSS client connection')
-            return
+            return 0, 0
     except:
         logger.exception('Error in creating DSS client connection')
-        return
+        return 0, 0
 
     start_time = time.time()
     count = 0
@@ -442,7 +444,7 @@ if __name__ == '__main__':
                 if fn == run_data_put_prepare:
                     print('Data is prepared for PUT/GET/DEL calls')
                 elif fn == run_data_put_cleanup:
-                    print('Data is removed from the directory')
+                    print('Prepared data is removed from the local directory')
                 if fn in [run_data_put, run_data_get, run_data_del]:
                     actual_ios = io_count - fail_io_count
                     total_io_size = (actual_ios * args.object_size * 1024)
