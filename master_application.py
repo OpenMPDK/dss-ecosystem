@@ -326,7 +326,7 @@ class Master:
 
 	def compaction(self):
 		# Spawn the process on target node and wait for response.
-		command = "sudo python3 /usr/dss/nkv-datamover/target_compaction.py"
+		command = "python3 /usr/dss/nkv-datamover/target_compaction.py"
 		compaction_status = {}
 		start_time = datetime.now()
 		for client_ip in self.config["dss_targets"]:
@@ -414,12 +414,12 @@ class Client:
 		#self.setup()
 		print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
 		self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-		command = "sudo python3 /usr/dss/nkv-datamover/client_application.py " + \
+		command = "sh -c \" source /usr/local/bin/setenv-for-gcc510.sh &&  python3 /usr/dss/nkv-datamover/client_application.py " + \
 				                                                " --client_id {} ".format(self.id) + \
 		                                                        " --operation {} ".format(self.operation) + \
 		                                                        " --ip_address {} ".format(self.ip) + \
 			                                                    " --port_index {} ".format(self.port_index) + \
-			                                                    " --port_status {} ".format(self.port_status)
+			                                                    " --port_status {} \" ".format(self.port_status)
 
 		if self.operation.upper() == "GET":
 			command += " --dest_path {} ".format(self.destination_path)
