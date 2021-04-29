@@ -48,7 +48,7 @@ from datetime import datetime
 from utils.utility import exception
 
 
-class Worker:
+class Worker(object):
   def __init__(self,**kwargs):
     self.id = kwargs.get("id", None)
     self.task_queue=kwargs.get("task_queue", None)
@@ -61,12 +61,12 @@ class Worker:
     self.status = Value('i', 1)
     self.lock = Lock()
     self.process = None
-    #self.index_data_count = kwargs.get("index_data_count", None)
+    self.index_data_count = kwargs.get("index_data_count", 0)
 
     # Keep track of progress of indexing : Used by Master Application only.
     self.progress_of_indexing = kwargs.get("progress_of_indexing", {} )
     self.progress_of_indexing_lock = kwargs.get("progress_of_indexing_lock", None)
-    self.index_data_count = kwargs.get("index_data_count", 0)
+    self.indexing_started_flag = kwargs.get('indexing_started_flag')
 
     # Listing variables
     self.listing_progress= kwargs.get("listing_progress", None)
@@ -188,7 +188,8 @@ class Worker:
                    index_data_count=self.index_data_count,
                    listing_progress = self.listing_progress,
                    listing_progress_lock = self.listing_progress_lock,
-                   s3_client = s3_client
+                   s3_client = s3_client,
+                   indexing_started_flag=self.indexing_started_flag
                    )
 
       #time.sleep(1)  # 1 second delay

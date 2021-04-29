@@ -351,7 +351,8 @@ class Task:
                  progress_of_indexing=queue["progress_of_indexing"],
                  progress_of_indexing_lock=queue["progress_of_indexing_lock"],
                  index_data_count=queue["index_data_count"],
-                 max_index_size=self.params.get("max_index_size", 10)
+                 max_index_size=self.params.get("max_index_size", 10),
+                 indexing_started_flag=queue['indexing_started_flag']
                  )
 
     except Exception as e:
@@ -363,6 +364,64 @@ class Task:
 
 
 def indexing(**kwargs):
+    """
+    Create a metadata index during PUT operation only.
+    First Phase:
+    - Create a JOSN structure for each NFS share with a NFS share name.
+      Required information - directory name, file name, counts, total size of directory.
+
+    :return:
+    """
+    # print("Actually at indexing function .... {}".format(kwargs))
+    dir = kwargs["data"]
+    task_queue = kwargs["task_queue"]
+    logger_queue = kwargs["logger_queue"]
+    index_data_queue = kwargs["index_data_queue"]
+    nfs_cluster = kwargs["nfs_cluster"]
+    nfs_share = kwargs["nfs_share"]
+    max_index_size = kwargs["max_index_size"]
+    indexing_started_flag = kwargs["indexing_started_flag"]
+    index_data_count = kwargs["index_data_count"]
+
+    progress_of_indexing = kwargs["progress_of_indexing"]
+    # progress_of_indexing_lock = kwargs["progress_of_indexing_lock"]
+    if dir not in progress_of_indexing:
+        logger_queue.put('Directory {} not present in index'.format(dir))
+    elif progress_of_indexing[dir] != 'Pending':
+        logger_queue.put('Directory {} is not in pending state - {}'.format(dir, progress_of_indexing[dir]))
+
+    progress_of_indexing[dir] = 'Progress'
+    if not indexing_started_flag.value:
+        indexing_started_flag.value = True
+        logger_queue.put('INFO: Indexing on the shares started')
+        print('INFO: Indexing on the shares started')
+
+    for result in iterate_dir(data=dir, task_queue=task_queue, logger_queue=logger_queue,
+                              max_index_size=max_index_size):
+        # If files a directory, then create a task
+        if "dir" in result and "files" in result:
+            # print("Received Files: {}".format(result))
+            msg = {"dir": result["dir"], "files": result["files"], "size": result["size"],
+                   "nfs_cluster": nfs_cluster,
+                   "nfs_share": nfs_share}
+            index_data_queue.put(msg)
+            index_data_count.value += len(result["files"])
+            logger_queue.put("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
+                result["dir"], len(result["files"]), index_data_queue.qsize()))
+        elif "dir" in result:
+            subdir = result['dir']
+            if subdir in progress_of_indexing and progress_of_indexing[subdir] in ['Pending', 'Progress']:
+                logger_queue.put('SKIPPING the dir {} already present'.format(subdir))
+                continue
+            progress_of_indexing[subdir] = 'Pending'
+            task = Task(operation="indexing", data=subdir, nfs_cluster=nfs_cluster, nfs_share=nfs_share,
+                        max_index_size=max_index_size)
+            task_queue.put(task)
+
+    progress_of_indexing.pop(dir)
+
+
+def indexing_with_file_counters(**kwargs):
     """
     Create a metadata index during PUT operation only.
     First Phase:
@@ -475,22 +534,20 @@ def iterate_dir(**kwargs):
     logger_queue = kwargs["logger_queue"]
     max_index_size = kwargs["max_index_size"]
 
-
-    for file in os.listdir(dir):
+    for entry in os.scandir(dir):
         # Check if the file a directory, then create a task
-        path = os.path.abspath(dir + "/" + file)
-
-        if os.path.isdir(path):
-            yield { "dir": path }
+        path = entry.path
+        if entry.is_dir():
+            yield {"dir": path}
         else:
             if len(file_set) == max_index_size:
                 yield {"dir": dir, "files": file_set, "size": file_set_size}
-                #print("Files:{}".format(file_set))
-                file_set = [file]
-                file_set_size = os.path.getsize(path)
+                # print("Files:{}".format(file_set))
+                file_set = [entry.name]
+                file_set_size = entry.stat().st_size
             else:
-                file_set.append(file)
-                file_set_size += os.path.getsize(path)
+                file_set.append(entry.name)
+                file_set_size += entry.stat().st_size
 
     # Remaining files to be added.
     if file_set:
