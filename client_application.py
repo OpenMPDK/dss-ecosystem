@@ -343,6 +343,8 @@ class ClientApplication:
         self.logger_queue.put("DEBUG: MessageHandler-Status Socket Address-{}".format(socket_address))
         socket.bind(socket_address)
 
+        local_index_buffer = {} # Keeps all prefix which doesn't belong to global shared index_buffer
+
         while True:
 
             # Check messaging flag  and break the loop
@@ -362,31 +364,35 @@ class ClientApplication:
                     # Decrement index_buffer as those files have been processed.
                     if status_message["dir"] in index_buffer:
                         index_buffer[status_message["dir"]] -= ( status_message["success"] + status_message["failure"])
+                        if index_buffer[status_message["dir"]] == 0:
+                            del index_buffer[status_message["dir"]]
+                    else:
+                        # This may arise when received index data is sent for process, but have not ben updated yet to
+                        # global shared buffer "index_buffer"
+                        if status_message["dir"] in local_index_buffer:
+                            local_index_buffer[status_message["dir"]] +=  ( status_message["success"] + status_message["failure"])
+                        else:
+                            local_index_buffer[status_message["dir"]] = ( status_message["success"] + status_message["failure"])
 
                 # TODO - Optimization required.
                 if self.index_data_receive_completed.value:
                     #self.logger_queue.put("YYYYYYYY -INDEX BUFFER:{}".format(index_buffer))
                     for dir_prefix, processed_file_count in index_buffer.items():
+                        # Check in local buffer if that key exists
+                        if dir_prefix in local_index_buffer:
+                            processed_file_count -= local_index_buffer[dir_prefix]
+                            del local_index_buffer[dir_prefix]
+
                         if processed_file_count == 0:
                             del index_buffer[dir_prefix]
-                    """
-                    if status_message and index_buffer[status_message["dir"]] == 0:
-                        self.logger_queue.put("DEBUG: Remove dir IIIIIIII:{}:{}".format(status_message , index_buffer ))
-                        try:
-                            del index_buffer[status_message["dir"]]
-                        except Exception as e:
-                            self.logger_queue.put("EXCEPTION: Unable to remove shared index count : {}".format(e))
-                    """
 
             except Exception as e:
                 self.logger_queue.put("EXCEPTION: MessageHandler-Status {}".format(e))
 
-            if self.index_data_receive_completed.value and   not index_buffer  :
+            if self.index_data_receive_completed.value and not index_buffer:
                 self.logger_queue.put("INFO: All operation status sent to Master. Closing Monitor-StatusHandler !")
                 self.operation_status_send_completed.value = 1
                 break
-
-            #time.sleep(1)
 
         socket.close()
         self.logger_queue.put("INFO: Monitor-StatusHandler is terminated gracefully !")

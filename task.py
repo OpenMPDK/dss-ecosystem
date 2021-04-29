@@ -427,7 +427,7 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
         |-C
         The numeric value beside the dir name shows number of children of A. B, C are two leaf directories and
         contains only files. Hence, their value is set to 0.
-        preogress_of_indexing = {"/A":2,"/B":0,"/C":0}
+        progress_of_indexing = {"/A":2,"/B":0,"/C":0}
         As B,C finishes indexing through iterator, it decrement values of its parent. The parent is found from hash key.
     :param progress_of_indexing: A shared memory contains a shared dictionary to be used by multiple processes.
     :param progress_of_indexing_lock: A lock applied for all READ/write operation on shared dict.
@@ -436,25 +436,29 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
     :return:
     """
     hierarchical_dirs = dir.split("/")
-    hash_key = "/".join(hierarchical_dirs)
+    hash_key = dir
     if hash_key in progress_of_indexing:
         try:
+            key_remove_error = ""
+            all_children_processed = False  # True for all parent with processed children, except root, that we don't want to delete.
             progress_of_indexing_lock.acquire()
-            if progress_of_indexing[hash_key] > 0:
+            if hash_key in progress_of_indexing and  progress_of_indexing[hash_key] > 0:
                 progress_of_indexing[hash_key] -= 1
+
+            if progress_of_indexing[hash_key] == 0 and len(dir) > len(nfs_share):
+                all_children_processed = True
+                # Remove child directory under NFS share
+                key_remove_error = progress_of_indexing.pop(hash_key,"KEY_DOESNOT_EXIST")
+
             progress_of_indexing_lock.release()
             # To check if all the children processed for a prefix dir, Should stop when it reaches to NFS share root .
-            if progress_of_indexing[hash_key] == 0 and len(dir) > len(nfs_share) :
-                # Remove child directory under NFS share
-                progress_of_indexing_lock.acquire()
-                del progress_of_indexing[hash_key]
-                progress_of_indexing_lock.release()
-                # Check parent node with parent_hash_key
+            if all_children_processed  :
                 parent_hash_key = "/".join(hierarchical_dirs[:-1])
                 check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock, parent_hash_key, nfs_share, logger_queue)
+
         except Exception as e:
-            logger_queue.put("EXCEPTION:{}: {} ".format(__file__, e))
-            #print("EXCEPTION:{}: {} ".format(__file__, e))
+            logger_queue.put("EXCEPTION:{}: {} : {}".format(__file__, e, key_remove_error))
+
 
 def iterate_dir(**kwargs):
     """

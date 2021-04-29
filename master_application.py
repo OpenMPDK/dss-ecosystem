@@ -414,12 +414,12 @@ class Client:
 		#self.setup()
 		print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
 		self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-		command = "sh -c \" source /usr/local/bin/setenv-for-gcc510.sh &&  python3 /usr/dss/nkv-datamover/client_application.py " + \
+		command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
 				                                                " --client_id {} ".format(self.id) + \
 		                                                        " --operation {} ".format(self.operation) + \
 		                                                        " --ip_address {} ".format(self.ip) + \
 			                                                    " --port_index {} ".format(self.port_index) + \
-			                                                    " --port_status {} \" ".format(self.port_status)
+			                                                    " --port_status {}  ".format(self.port_status)
 
 		if self.operation.upper() == "GET":
 			command += " --dest_path {} ".format(self.destination_path)
@@ -428,7 +428,7 @@ class Client:
 		if self.dryrun:
 			command += " --dryrun "
 
-
+		command = "sh -c \" source /usr/local/bin/setenv-for-gcc510.sh && " + command + " \""
 		self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
 		self.remote_stdin = stdin
 		self.remote_stdout = stdout
@@ -529,9 +529,9 @@ def process_put_operation(master):
 			## Check if index generation is completed by the worker processes.
 			if indexing_done and master.index_data_generation_complete.value == 0:
 				# Shut down Monitor-Index at Master
-				master.index_data_lock.acquire()
+				#master.index_data_lock.acquire()
 				master.index_data_generation_complete.value = 1
-				master.index_data_lock.release()
+				#master.index_data_lock.release()
 
 				master.logger_queue.put("INFO: Indexed data generation is completed!")
 				print("INFO: Indexed data generation is completed!")
