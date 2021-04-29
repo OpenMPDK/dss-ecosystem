@@ -52,7 +52,7 @@ import json
 
 manager = Manager()
 
-class Master:
+class Master(object):
 	"""
 	Master application initiate
 	-
@@ -86,6 +86,7 @@ class Master:
 		self.index_data_queue = Queue()  # Index data stored by workers
 		self.index_data_lock = Lock()
 		self.index_data_generation_complete = Value('i', 0)   ##TODO - Set value when all indexing is done.
+		self.indexing_started_flag = Value('i', False)
 
 		# Operation LIST
 		self.prefix = config.get("prefix", None)
@@ -178,7 +179,8 @@ class Master:
 					   index_data_count=self.index_data_count,
 					   listing_progress=self.listing_progress,
 					   listing_progress_lock=self.listing_progress_lock,
-					   s3_config=self.s3_config
+					   s3_config=self.s3_config,
+					   indexing_started_flag=self.indexing_started_flag
 					   )
 			w.start()
 			self.workers.append(w)
@@ -367,7 +369,7 @@ class Master:
 
 
 
-class Client:
+class Client(object):
 
 	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg", dryrun=False, message_port={}, dest_path=""):
 		self.id = id
@@ -521,27 +523,24 @@ def process_put_operation(master):
 	while True:
 		# Check for completion of indexing, Shutdown workers
 		indexing_done = True
-		master.progress_of_indexing_lock.acquire()
-		# len( ["/bird","/cat","/dog"] ) == len ( {"/bird":0, "/cat":0, "/dog":0} )
-		if (len(master.nfs_shares) == len(master.progress_of_indexing)) and not workers_stopped:
-			for nfs_share, status in master.progress_of_indexing.items():
-				if status:
-					indexing_done = False
 
-			## Check if index generation is completed by the worker processes.
-			if indexing_done and master.index_data_generation_complete.value == 0:
-				# Shut down Monitor-Index at Master
-				#master.index_data_lock.acquire()
-				master.index_data_generation_complete.value = 1
-				#master.index_data_lock.release()
+		if not master.indexing_started_flag.value:
+			master.logger_queue.put('INFO: Indexing on the shares not yet started')
+			print('INFO: Indexing not yet started')
+			time.sleep(1)
+			continue
 
-				master.logger_queue.put("INFO: Indexed data generation is completed!")
-				print("INFO: Indexed data generation is completed!")
-				indexing_time = (datetime.now() - master.operation_start_time).seconds
-				master.logger_queue.put("INFO: {} INDEXING Completed in {} seconds".format(master.operation, indexing_time))
-				print("INFO: {} INDEXING Completed in {} seconds".format(master.operation, indexing_time))
+		if len(master.progress_of_indexing) and not workers_stopped:
+			indexing_done = False
 
-		master.progress_of_indexing_lock.release()
+		## Check if index generation is completed by the worker processes.
+		if indexing_done and master.index_data_generation_complete.value == 0:
+			# Shut down Monitor-Index at Master
+			master.logger_queue.put('INFO: Indexing the shares completed')
+			print('INFO: Indexing the shares completed')
+			master.index_data_lock.acquire()
+			master.index_data_generation_complete.value = 1
+			master.index_data_lock.release()
 
 		# Check all the ClientApplications once they are finished
 		all_clients_completed = 1
