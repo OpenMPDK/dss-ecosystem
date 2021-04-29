@@ -48,7 +48,7 @@ manager = Manager()
 
 class Monitor:
 
-    def  __init__(self, clients, index_data_queue, index_data_lock, index_data_generation_complete, logger_queue, logger_lock, operation):
+    def  __init__(self, clients, index_data_queue, index_data_lock, index_data_generation_complete, index_data_count, logger_queue, logger_lock, operation):
         self.clients = clients
         self.index_data_queue=index_data_queue
         self.index_data_lock = index_data_lock
@@ -60,7 +60,7 @@ class Monitor:
         self.status_queue = Queue()
         self.status_lock  = Lock()
         self.stop_status_poller = Value('i', 0)
-        self.index_data_count = Value('i', 0)
+        self.index_data_count = index_data_count
         self.prefix_index_data = manager.dict()
 
         self.all_index_data_distributed = Value('i', 0)
@@ -180,7 +180,7 @@ class Monitor:
 
                     #print("===>>INFO: Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
                     if self.send_index_data(client.socket_index, data):
-                        self.index_data_count.value += len(data.get("files", []))
+                        #self.index_data_count.value += len(data.get("files", []))
                         previous_client_operation_status = 1
                         # Just for OPERATION stats collection
                         if first_index_distribution == 0:
@@ -189,7 +189,7 @@ class Monitor:
                     else: # Re-send once again
                         previous_client_operation_status = 0
                         if self.send_index_data(client.socket_index, data):
-                            self.index_data_count.value += len(data.get("files", []))
+                            #self.index_data_count.value += len(data.get("files", []))
                             previous_client_operation_status = 1
 
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():

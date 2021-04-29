@@ -175,6 +175,7 @@ class Master:
 					   index_data_queue=self.index_data_queue,
 					   progress_of_indexing= self.progress_of_indexing,
 					   progress_of_indexing_lock=self.progress_of_indexing_lock,
+					   index_data_count=self.index_data_count,
 					   listing_progress=self.listing_progress,
 					   listing_progress_lock=self.listing_progress_lock,
 					   s3_config=self.s3_config
@@ -238,6 +239,7 @@ class Master:
 							   self.index_data_queue,
 							   self.index_data_lock,
 							   self.index_data_generation_complete,
+							   self.index_data_count,
 							   self.logger_queue,
 							   self.logger_lock,
 							   self.operation
@@ -563,6 +565,8 @@ def process_put_operation(master):
 				master.monitor.monitor_status_poller.value and \
 				master.monitor.monitor_progress_status.value:
 			monitors_stopped = 1
+			print("INFO: All Monitors belongs to Master terminated!")
+			master.logger_queue.put("INFO: All monitors belongs to Master terminated!")
 		master.monitor.status_lock.release()
 
 		# Un-mount device once all monitors are stopped. Because, if ClientApp is launches at the same node of master, then

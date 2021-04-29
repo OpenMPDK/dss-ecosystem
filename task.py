@@ -350,6 +350,7 @@ class Task:
                  logger_queue=queue["logger_queue"],
                  progress_of_indexing=queue["progress_of_indexing"],
                  progress_of_indexing_lock=queue["progress_of_indexing_lock"],
+                 index_data_count=queue["index_data_count"],
                  max_index_size=self.params.get("max_index_size", 10)
                  )
 
@@ -381,6 +382,7 @@ def indexing(**kwargs):
 
     progress_of_indexing = kwargs["progress_of_indexing"]
     progress_of_indexing_lock = kwargs["progress_of_indexing_lock"]
+    index_data_count = kwargs["index_data_count"]
 
     is_dir_only_consist_files = True
 
@@ -397,7 +399,7 @@ def indexing(**kwargs):
             msg = {"dir": result["dir"], "files": result["files"] , "size": result["size"], "nfs_cluster": nfs_cluster, "nfs_share": nfs_share}
             index_data_queue.put(msg)
             logger_queue.put("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format( result["dir"], len(result["files"]) , index_data_queue.qsize()))
-
+            index_data_count.value += len(result["files"])
 
         elif "dir" in result:
             task = Task(operation="indexing", data=result["dir"], nfs_cluster=nfs_cluster, nfs_share=nfs_share, max_index_size=max_index_size )
