@@ -82,7 +82,7 @@ def put(s3_client, **kwargs):
                         else:
                             failure_files_size += os.path.getsize(file)
                 except Exception as e:
-                    self.logger_queue.put("EXCEPTION: PUT - {}".format(e))
+                    logger_queue.put("EXCEPTION: PUT - {}".format(e))
                     failure_files_size += os.path.getsize(file)
             else:
                 logger_queue.put("ERROR: Task-Upload: File-{} doesn't exist".format(file))

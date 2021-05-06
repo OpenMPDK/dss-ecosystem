@@ -416,8 +416,8 @@ class Client(object):
         """
 		# Setup
 		#self.setup()
-		print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-		self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
+		#print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
+		#self.logger_queue.put("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
 		command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
 				                                                " --client_id {} ".format(self.id) + \
 		                                                        " --operation {} ".format(self.operation) + \
