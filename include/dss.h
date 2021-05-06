@@ -100,23 +100,27 @@ class DSSInit {
 public:
 	DSSInit(): m_options() 
 	{
-		char *c = NULL;
+		char *s = NULL;
 		unsigned l = 0;
 
-		if ((c = getenv("DSS_AWS_LOG"))) {
-			l = *c - '0';
+		if ((s = getenv("DSS_AWS_LOG"))) {
+			l = *s - '0';
 
 			if (l > (int) Aws::Utils::Logging::LogLevel::Trace) {
 				pr_err("AWS log level out of range\n");
 				l = 0;
 			}
+    		m_options.loggingOptions.logLevel = (Aws::Utils::Logging::LogLevel) l;
 		}
 
-		c = (char*) "AWS_EC2_METADATA_DISABLED=true";
-		if (putenv(c))
+		if ((s = getenv("DSS_AWS_LOG_FILENAME"))) {
+			m_options.loggingOptions.defaultLogPrefix = s;
+		}
+
+		s = (char*) "AWS_EC2_METADATA_DISABLED=true";
+		if (putenv(s))
 			pr_err("Failed to set AWS_EC2_METADATA_DISABLED\n");
 
-    	m_options.loggingOptions.logLevel = (Aws::Utils::Logging::LogLevel) l;
     	Aws::InitAPI(m_options);
 	}
 

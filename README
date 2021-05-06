@@ -48,6 +48,9 @@ enum class LogLevel : int
 	Trace = 6
 };
 
+In case you need to run client lib in multiple processes, you can direct each client
+process to have it's own aws log file name using env var DSS_AWS_LOG_FILENAME.
+
 To enable dss logging, set env var DSS_DEBUG to the source file names seperated by
 comma, e.g. DSS_DEBUG=/path/to/src/dss_client.cpp python3 test/test.py
 
