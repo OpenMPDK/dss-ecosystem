@@ -304,7 +304,7 @@ ClusterMap::DownloadClusterConf()
 	if (!r.IsSuccess()) {
 		auto err = r.GetErrorType();
 		if (err == Aws::S3::S3Errors::NETWORK_CONNECTION)
-			throw NetworkError();
+			throw NetworkError(r.GetErrorMsg().c_str());
  
 		throw DiscoverError("Failed to download conf.json: " + r.GetErrorMsg()); 	
 		return -1;
