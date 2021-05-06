@@ -84,7 +84,7 @@ public:
 class GenericError : std::exception {
 public:
     GenericError(std::string msg) : m_msg(msg) {}
-    const char* what() const noexcept {return "Generic error\n";}
+    const char* what() const noexcept {return m_msg.c_str();}
 private:
     std::string m_msg;
 };
