@@ -420,12 +420,15 @@ class Monitor:
         success_operation_size_in_byte= original_file_size_in_byte
 
         print("***** Operation Statistics *****")
+        self.logger_queue.put("***** Operation Statistics *****")
         if operation_success_count:
             success_percentage = (operation_success_count / self.index_data_count.value) * 100
             print("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
+            self.logger_queue.put("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
         if operation_failure_count:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
             print("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
+            self.logger_queue.put("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
 
         bandwidth = 0
@@ -434,7 +437,9 @@ class Monitor:
         operation_size_in_gb = success_operation_size_in_byte / ( 1024 * 1024 * 1024)
 
         print("INFO: Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
+        self.logger_queue.put("INFO: Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
         print("INFO: Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
-        print("INFO: Monitor-Progress-Status terminated!")
+        self.logger_queue.put("INFO: Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
         self.monitor_progress_status.value = 1
+        print("INFO: Monitor-Progress-Status terminated!")
         self.logger_queue.put("INFO: Monitor-Progress-Status terminated! ")
