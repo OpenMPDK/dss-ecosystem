@@ -78,13 +78,17 @@ private:
 
 class NetworkError : std::exception {
 public:
-    const char* what() const noexcept {return "Endpoint cannot be reached\n";}
+    NetworkError() : m_msg() {}
+    NetworkError(std::string msg) : m_msg(std::move(msg)) {}
+    const char* what() const noexcept { return m_msg.c_str(); }
+private:
+	std::string m_msg;
 };
 
 class GenericError : std::exception {
 public:
-    GenericError(std::string msg) : m_msg(msg) {}
-    const char* what() const noexcept {return m_msg.c_str();}
+    GenericError(std::string msg) : m_msg(std::move(msg)) {}
+    const char* what() const noexcept { return m_msg.c_str(); }
 private:
     std::string m_msg;
 };
