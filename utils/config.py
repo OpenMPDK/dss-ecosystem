@@ -227,6 +227,8 @@ class CommandLineArgument:
                                 help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify operation type such as read=r write=w , wr...')
+        subparser.add_argument("--compaction", "-com", required=False, action='store_true',
+                               help='Enable target compaction')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual delete')

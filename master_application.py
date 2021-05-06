@@ -806,7 +806,7 @@ if __name__ == "__main__":
 		process_get_operation(master)
 
 	# Start Compaction
-	if cli.operation == "PUT" and "compaction" in params and params["compaction"]:
+	if "compaction" in params and params["compaction"]:
 		master.compaction()
 
 	# Terminate logger at the end.

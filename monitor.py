@@ -179,7 +179,7 @@ class Monitor:
                             self.prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
 
                     #print("===>>INFO: Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
-                    if self.send_index_data(client.socket_index, data):
+                    if self.send_index_data(client, data):
                         #self.index_data_count.value += len(data.get("files", []))
                         previous_client_operation_status = 1
                         # Just for OPERATION stats collection
@@ -188,7 +188,11 @@ class Monitor:
                             first_index_distribution =1
                     else: # Re-send once again
                         previous_client_operation_status = 0
-                        if self.send_index_data(client.socket_index, data):
+                        if client.socket_index.closed():
+                            client.socket_index = context.socket(zmq.REQ)
+                            client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
+                            self.logger_queue.put("INFO: Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip))
+                        if self.send_index_data(client, data):
                             #self.index_data_count.value += len(data.get("files", []))
                             previous_client_operation_status = 1
 
@@ -201,8 +205,8 @@ class Monitor:
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
                     data = {"indexing_done": 1}
-                    if not self.send_index_data(client.socket_index, data):
-                        if not self.send_index_data(client.socket_index, data):
+                    if not self.send_index_data(client, data):
+                        if not self.send_index_data(client, data):
                             self.logger_queue.put("ERROR: Unable to send indexing completion message to client-{}".format(client.id))
                     print("INFO: Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
                 # Intimidated all the clients, exit the loop.
@@ -210,13 +214,17 @@ class Monitor:
 
         # Closing all socket connection
         try:
+            # Close all sockets associated with clients.
             for client in self.clients:
                 client.socket_index.close()
+            # Terminate context
+            context.term()
+
         except Exception as e:
-            self.logger_queue.put("EXCEPTION:{}: monitor-index, {}".format(e))
+            self.logger_queue.put("EXCEPTION:{}: monitor-index Closing Socket {}".format(e))
 
         # Update MasterApplication about termination of Monitor
-        self.monitor_index_data_sender.value = 1
+        #self.monitor_index_data_sender.value = 1
 
         # Storing prefix index data to persistent storage
         if self.operation.upper() == "PUT":
@@ -226,15 +234,20 @@ class Monitor:
                 prefix_index_data[key] = value.copy()
 
             print("INFO: Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
-            with open(prefix_storage_file, "w") as persistent_storage:
-                json.dump(prefix_index_data, persistent_storage)
+            try:
+                with open(prefix_storage_file, "w") as persistent_storage:
+                    json.dump(prefix_index_data, persistent_storage)
+                self.logger_queue.put("INFO: Stored file index data to {}".format(prefix_storage_file))
+            except Exception as e:
+                self.logger_queue.put("Exception: Dump Persistent Data - {}".format(e))
 
+        self.monitor_index_data_sender.value = 1
         print("INFO: Monitor-Index-Distribution is terminated gracefully!")
         self.logger_queue.put("INFO: Monitor-Index-Distribution is terminated gracefully! ")
 
 
 
-    def send_index_data(self, socket, data):
+    def send_index_data(self, client, data):
         """
         Send index data for a socket client. On failure, resend once.
         :param socket: client socket
@@ -242,6 +255,7 @@ class Monitor:
         :return: success/failure 1/0
         """
         status = {}
+        socket = client.socket_index
         try:
             socket.send_json(data) # Send index data
             # Wait (3sec) for ClientApplication's response on operation. Otherwise re-send index data.
@@ -253,6 +267,8 @@ class Monitor:
         except Exception as e:
             self.logger_queue.put("EXCEPTION: Monitor-Index -{}".format(e))
             print("EXCEPTION: Monitor-Index -{}".format(e))
+            socket.close()
+            self.logger_queue.put("INFO: Closed socket for Client-{}:{}".format(client.id,client.ip))
 
         # status = {"success": 1} or {"success": 0}  for failure, try second time
         if status.get("success", False) and status["success"] == 1:
@@ -268,7 +284,7 @@ class Monitor:
         Collect the status from all the clients and add status to status_queue
         :return:
         """
-        #print("INFO: Poller Started ....")
+
         context = zmq.Context()
 
         for client in self.clients:
@@ -308,6 +324,8 @@ class Monitor:
         try:
             for client in self.clients:
                 client.socket_status.close()
+            # Terminate context.
+            context.term()
         except Exception as e:
             self.logger_queue.put("EXCEPTION:{}: minitor-poller, {}".format(e))
 
@@ -384,7 +402,7 @@ class Monitor:
                 self.status_lock.release()
 
 
-        self.monitor_progress_status.value = 1
+        #self.monitor_progress_status.value = 1
         total_operation_time = (datetime.now() - self.operation_start_time).seconds
 
         # Calculate operation BandWidth
@@ -418,4 +436,5 @@ class Monitor:
         print("INFO: Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
         print("INFO: Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
         print("INFO: Monitor-Progress-Status terminated!")
+        self.monitor_progress_status.value = 1
         self.logger_queue.put("INFO: Monitor-Progress-Status terminated! ")

@@ -48,7 +48,7 @@ ds = mgr.dict()
 """
 Need to be updated 
 """
-@exception
+
 #def put(s3_client, params, status_queue , logger_queue):
 def put(s3_client, **kwargs):
     params = kwargs["params"]
@@ -67,23 +67,27 @@ def put(s3_client, **kwargs):
         for file_name in index_data["files"]:
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
             if os.path.exists(file):
-                if params.get("dryrun", False):
-                    # Read file for the purpose of testing
-                    with open(file, "rb") as FH:
-                        lines = FH.readlines()
-                        #logger_queue.put("FileName:{}, Lines-{}, Size-{}".format(file, (len(lines)), os.path.getsize(file)))
-                    lines = []
-                    success +=1
-                else:
-                    if s3_client.putObject(minio_bucket, file):
-                        uploaded_files.append(file_name)
+                try:
+                    if params.get("dryrun", False):
+                        # Read file for the purpose of testing
+                        with open(file, "rb") as FH:
+                            lines = FH.readlines()
+                            #logger_queue.put("FileName:{}, Lines-{}, Size-{}".format(file, (len(lines)), os.path.getsize(file)))
+                        lines = []
                         success +=1
                     else:
-                        failure_files_size += os.path.getsize(file)
+                        if s3_client.putObject(minio_bucket, file):
+                            uploaded_files.append(file_name)
+                            success +=1
+                        else:
+                            failure_files_size += os.path.getsize(file)
+                except Exception as e:
+                    self.logger_queue.put("EXCEPTION: PUT - {}".format(e))
+                    failure_files_size += os.path.getsize(file)
             else:
                 logger_queue.put("ERROR: Task-Upload: File-{} doesn't exist".format(file))
     else:
-        logger_queue.put("ERROR: Unable to connect to Minio for upload with {}".format(minio_config))
+        logger_queue.put("ERROR: Unable to connect to S3 Storage for upload")
 
     #logger_queue.put("DEBUG: Minio Uploaded files {}:{}".format(index_data["dir"], uploaded_files ))
     # Update following section for upload status.
@@ -110,6 +114,7 @@ def list(s3_client, **kwargs):
     logger_queue = kwargs["logger_queue"]
     listing_progress = kwargs["listing_progress"] # The shared memory is used to hold progress status.
     listing_progress_lock = kwargs["listing_progress_lock"]
+    index_data_count = kwargs["index_data_count"]
 
     max_index_size = params["max_index_size"]
 
@@ -137,6 +142,7 @@ def list(s3_client, **kwargs):
             for result in list_object_keys(object_keys_iterator, prefix_index_data,max_index_size, s3_client_library):
                 if "object_keys" in result:
                     index_data_message ={"dir": prefix, "files": result["object_keys"]}
+                    index_data_count.value += len(result["object_keys"])
                     #print("=====>>> TASK-INFO: Index Data Message - {}".format(index_data_message))
                     index_data_queue.put(index_data_message)
                 else:
@@ -329,6 +335,7 @@ class Task:
         list(s3_client, params=self.params,
                         task_queue=queue["task_queue"],
                         index_data_queue=queue["index_data_queue"] ,
+                        index_data_count=queue["index_data_count"],
                         logger_queue=self.logger_queue,
                         listing_progress=queue["listing_progress"],
                         listing_progress_lock=queue["listing_progress_lock"])

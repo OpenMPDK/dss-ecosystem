@@ -138,7 +138,6 @@ class MultiprocessingLogger:
             print("Exception: {}".format(e))
         finally:
             fh.close()
-        #print("Logger actually stopped!")
 
 
 
