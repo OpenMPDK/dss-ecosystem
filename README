@@ -54,6 +54,10 @@ process to have it's own aws log file name using env var DSS_AWS_LOG_FILENAME.
 To enable dss logging, set env var DSS_DEBUG to the source file names seperated by
 comma, e.g. DSS_DEBUG=/path/to/src/dss_client.cpp python3 test/test.py
 
+To feed conf.json from local filesystem, set env var DSS_CONFIG_FILE to the path
+pointing to the config file
+e.g. DSS_CONFIG_FILE=/root/jerry/dss_client/conf.jso python3 test/example.py 
+
 Setup build enviroment:
 
 The easiest way to setup the build env is to use Anaconda, and thru it you can
