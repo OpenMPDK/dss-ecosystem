@@ -188,7 +188,7 @@ class Monitor:
                             first_index_distribution =1
                     else: # Re-send once again
                         previous_client_operation_status = 0
-                        if client.socket_index.closed():
+                        if client.socket_index.closed:
                             client.socket_index = context.socket(zmq.REQ)
                             client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
                             self.logger_queue.put("INFO: Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip))
@@ -209,6 +209,7 @@ class Monitor:
                         if not self.send_index_data(client, data):
                             self.logger_queue.put("ERROR: Unable to send indexing completion message to client-{}".format(client.id))
                     print("INFO: Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
+                    self.logger_queue.put("INFO: Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
                 # Intimidated all the clients, exit the loop.
                 break
 
@@ -259,7 +260,7 @@ class Monitor:
         try:
             socket.send_json(data) # Send index data
             # Wait (3sec) for ClientApplication's response on operation. Otherwise re-send index data.
-            received_response = socket.poll(timeout=2000)  # Wait 3 secs
+            received_response = socket.poll(timeout=1500)  # Wait 3 secs
             if received_response:
                 status = socket.recv_json()
             else:

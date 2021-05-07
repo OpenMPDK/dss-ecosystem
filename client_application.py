@@ -131,7 +131,7 @@ class ClientApplication:
         self.logger_queue.put("INFO: Started Client Application for id:{} on node {}".format(self.id, self.host_name))
         self.start_workers()
         self.start_message()
-        self.start_task_creation()
+        #self.start_task_creation()
 
 
     def stop(self):
@@ -145,12 +145,14 @@ class ClientApplication:
         """
         self.stop_workers()
         self.stop_message()
+        """
         while self.process_task.is_alive():
             time.sleep(1)
             try:
                 self.process_task.terminate()
             except Exception as e:
                 self.logger_queue.put("EXCEPTION: Task - {}".format(e))
+        """
         print("Make sure all workers has stopped the move to stopping logger")
 
         ## TODO - Update self.nfs_cluster.local_mounts instead and call umount_all
@@ -301,12 +303,14 @@ class ClientApplication:
                         ## Message validation, NFS Mounting if not already mounted on client node
                         if "nfs_cluster" in message and "dir" in message:
                             if self.config.get("master_node", None) and self.config["master_node"] == 1:
-                                self.operation_data_queue.put(message)  ## Add index to operation_data_queue
+                                #self.operation_data_queue.put(message)  ## Add index to operation_data_queue
+                                self.add_task(message)
                                 socket.send_json({"success": 1})  # Send response back to MasterApp
                                 is_index_data_added = True
                             else:
                                 if self.nfs_mount(message["nfs_cluster"], message["nfs_share"]):
-                                    self.operation_data_queue.put(message) ## Add index to operation_data_queue
+                                    #self.operation_data_queue.put(message) ## Add index to operation_data_queue
+                                    self.add_task(message)
                                     socket.send_json({"success": 1})  # Send response back to MasterApp
                                     is_index_data_added = True
                                 else:
@@ -334,7 +338,18 @@ class ClientApplication:
             #time.sleep(1)
 
         socket.close()
+        context.term()
         self.logger_queue.put("INFO: Monitor-Index-Receiver terminated gracefully !")
+
+
+    def add_task(self,message):
+        task_data = {"dir": message["dir"], "files": message["files"]}
+        task = Task(operation=self.operation,
+                    data=task_data,
+                    s3config=self.s3_config,
+                    dryrun=self.dryrun,
+                    dest_path=self.config.get("dest_path", ""))
+        self.task_queue.put(task)  # Enqueue task to TaskQ
 
     def message_server_status(self):
         context = zmq.Context()
@@ -574,6 +589,7 @@ if __name__ == "__main__":
             ca.logger_queue.put("INFO: Terminated all message handler !")
 
             # Stop create process, if not stopped yet
+            """
             if ca.create_task_completed.value == 0 and ca.process_task.is_alive():
                 time.sleep(1)
                 try:
@@ -582,7 +598,7 @@ if __name__ == "__main__":
                     ca.logger_queue.put("EXCEPTION: Create-Task - {}".format(e))
 
                 ca.logger_queue.put("INFO: Monitor Create-Task is terminated!")
-
+            """
             # Stop workers
             ca.stop_workers()
             ca.logger_queue.put("INFO: All workers terminated !")
