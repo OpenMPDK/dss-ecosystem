@@ -98,7 +98,7 @@ private:
    global, ShutdownAPI() would crash */
 class DSSInit {
 public:
-	DSSInit(): m_options() 
+	DSSInit(): m_local_config(nullptr), m_options()
 	{
 		char *s = NULL;
 		unsigned l = 0;
@@ -117,6 +117,10 @@ public:
 			m_options.loggingOptions.defaultLogPrefix = s;
 		}
 
+		if ((s = getenv("DSS_CONFIG_FILE"))) {
+			m_local_config = s;
+		}
+	
 		s = (char*) "AWS_EC2_METADATA_DISABLED=true";
 		if (putenv(s))
 			pr_err("Failed to set AWS_EC2_METADATA_DISABLED\n");
@@ -129,10 +133,12 @@ public:
 		Aws::ShutdownAPI(m_options);
 	}
 
+	const char* GetConfPath() { return m_local_config; }
 	std::mutex& mutex() { return m_mutex; }
 
 private:
 	std::mutex m_mutex;
+	const char* m_local_config;
 	Aws::SDKOptions m_options;
 };
 
@@ -340,7 +346,8 @@ private:
 
 class ClusterMap {
 public:
-	ClusterMap(Client *c) : m_client(c) {}
+	ClusterMap(Client *c, DSSInit& i) :
+		m_client(c), m_init(i) {}
 
 	~ClusterMap()
 	{
@@ -360,7 +367,8 @@ public:
 
 
 	void GetCluster(Request* req);
-	int DownloadClusterConf();
+	const char* GetClusterConfFromLocal() { return m_init.GetConfPath(); }
+	int AcquireClusterConf();
 	int VerifyClusterConf();
 
 	const std::vector<Cluster*>& GetClusters() { return m_clusters; }
@@ -394,6 +402,7 @@ public:
 	
 private:
 	Client* m_client;
+	DSSInit& m_init;
 	std::hash<std::string> m_hash;
 	std::vector<Cluster*> m_clusters;
 #if 0

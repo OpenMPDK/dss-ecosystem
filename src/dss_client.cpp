@@ -298,22 +298,42 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os)
 }
 
 int
-ClusterMap::DownloadClusterConf()
+ClusterMap::AcquireClusterConf()
 {
-	Result r = m_client->GetClusterConfig();
-	if (!r.IsSuccess()) {
-		auto err = r.GetErrorType();
-		if (err == Aws::S3::S3Errors::NETWORK_CONNECTION)
-			throw NetworkError(r.GetErrorMsg().c_str());
+	//TODO: redo this function
+	Result r; 
+	std::fstream file;
+
+	if (!GetClusterConfFromLocal()) {
+		r = m_client->GetClusterConfig();
+		if (!r.IsSuccess()) {
+			auto err = r.GetErrorType();
+			if (err == Aws::S3::S3Errors::NETWORK_CONNECTION)
+				throw NetworkError(r.GetErrorMsg().c_str());
  
-		throw DiscoverError("Failed to download conf.json: " + r.GetErrorMsg()); 	
-		return -1;
+			throw DiscoverError("Failed to download conf.json: " + r.GetErrorMsg()); 	
+			return -1;
+		}
+	} else {
+		file.open(GetClusterConfFromLocal(), std::ios::in);
+		if (file.fail()) {
+			char err_msg[256];
+			snprintf(err_msg, 256, "Local config file error (%s): %s\n",
+					 std::strerror(errno), GetClusterConfFromLocal());
+			throw GenericError(err_msg);
+			return -1;
+		}
 	}
 
 	using json = nlohmann::json;
 
 	try {
-    	json conf = json::parse(r.GetIOStream());
+		json conf;
+		if (GetClusterConfFromLocal())
+    		conf = json::parse(file);
+		else
+			conf = json::parse(r.GetIOStream());
+
 		for (auto &c : conf["clusters"]) {
 			Cluster* cluster = InsertCluster(c["id"]);
 			pr_debug("Adding cluster %u\n", (uint32_t)c["id"]);
@@ -334,7 +354,7 @@ ClusterMap::VerifyClusterConf()
 	empty.resize(m_clusters.size());
 
 	{
-		std::lock_guard<std::mutex> lock(dss_init.mutex());
+		std::lock_guard<std::mutex> lock(m_init.mutex());
 		for (auto c : m_clusters) {
 			Result r = c->HeadBucket();
         	if (!r.IsSuccess())
@@ -504,8 +524,8 @@ Client::~Client()
 int
 Client::InitClusterMap()
 {
-	ClusterMap* map = new ClusterMap(this);
-	if (map->DownloadClusterConf() < 0)
+	ClusterMap* map = new ClusterMap(this, dss_init);
+	if (map->AcquireClusterConf() < 0)
 		return -1;
 	if (map->VerifyClusterConf() < 0)
 		return -1;
