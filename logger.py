@@ -125,7 +125,7 @@ class MultiprocessingLogger:
 
                 while not queue.empty():
                     message = queue.get()
-                    fh.write(message + "\n")  # Need to update to format the message based on severity
+                    fh.write(str(time.ctime()) + ": "+ message + "\n")  # Need to update to format the message based on severity
                 self.stop_lock.acquire()
                 stop = stop_logging.value
                 self.stop_lock.release()

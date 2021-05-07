@@ -41,7 +41,6 @@ import platform
 from multiprocessing import Process,Queue,Value, Lock
 from minio_client import MinioClient
 from s3_client import S3
-from dss_client import DssClientLib
 import time
 from task import Task
 from datetime import datetime
@@ -94,6 +93,11 @@ class Worker(object):
         s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
       elif s3_client_lib_name == "dss_client":
         os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
+        # To enable DSS CLIENT LOGS, uncomment the below 2 lines
+        # os.environ['DSS_AWS_LOG'] = '2'
+        # os.environ['DSS_AWS_LOG_FILENAME'] = 'aws_sdk_' + str(os.getpid()) + '_'
+        from dss_client import DssClientLib
+        self.logger_queue.put('PROCESS ENVIRONMENT DETAILS - {}, PID - {}'.format(os.environ, os.getpid()))
         s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
 
       elif s3_client_lib_name == "boto3":
