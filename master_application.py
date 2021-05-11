@@ -212,12 +212,7 @@ class Master(object):
 							client_ip,
 							self.operation,
 							self.logger_queue,
-							self.config["master"]["ip_address"],
-							self.client_user_id,
-							self.client_password,
-							self.config["dryrun"],
-							self.config["message"],
-							self.config.get("dest_path",""))
+							self.config)
 			client.start()
 			self.logger_queue.put("INFO: Started ClientApplication-{} at node - {}".format(client.id,client_ip))
 			self.clients.append(client)
@@ -371,21 +366,52 @@ class Master(object):
 
 class Client(object):
 
-	def __init__(self, id, ip, operation, logger_queue, master_ip, username="root", password="msl-ssg", dryrun=False, message_port={}, dest_path=""):
+	def __init__(self, id, ip, operation, logger_queue, config):
+		"""
+		Client object initiation
+		:param id: A id for each ClientApplication
+		:param ip: IP address of the node in which ClienApplication will run
+		:param operation: PUT|GET|DEL|LIST
+		:param logger_queue: Shared Queue to be used by multiple process/workers.
+		:param config: configuration.
+		"""
 		self.id = id
 		self.ip = ip
 		self.operation=operation
-		self.username = username
-		self.password = password
+		# Logger
+		self.logger_queue = logger_queue
+
+		# Variable from config
+		self.username = "ansible"
+		self.password = "ansible"
+		if "client" in config:
+			if "user_id" in config["client"]:
+				self.username = config["client"]["user_id"]
+			if "password" in config["client"]:
+				self.password = config["client"]["password"]
 		self.status = None
 		self.ssh_client_handler = None
-		self.master_ip_address = master_ip
-		self.dryrun = dryrun
-		self.destination_path = dest_path # Only to be used for GET operation
+		self.master_ip_address = config["master"]["ip_address"]
+		self.dryrun = config.get("dryrun",False)
+		self.destination_path = config.get("dest_path","") # Only to be used for GET operation
+
+		self.env_gcc_source = None
+		self.env_gcc_required =  True
+		if "environment" in config and "gcc" in config["environment"]:
+			self.env_gcc_required = config["environment"]["gcc"].get("required", True)
+			if self.env_gcc_required:
+				self.env_gcc_source = config["environment"]["gcc"].get("source", "/usr/local/bin/setenv-for-gcc510.sh")
+				self.logger_queue.put("INFO: Sourcing GCC environment from {} for GCC v-{}".format(self.env_gcc_source,
+									config["environment"]["gcc"].get("version","GCC-VERSION-NOT-SPECIFIED")))
+				self.logger_queue.put("INFO: Using GCC v-{} for dss_client library ".format(config["environment"]["gcc"].get("version","GCC-VERSION-NOT-SPECIFIED")))
 
 		# Messaging service configuration
-		self.port_index = message_port["port_index"]  # Need to configure from configuration file.
-		self.port_status = message_port["port_status"]
+		if "message" in config:
+			self.port_index = config["message"].get("port_index", "6000")  # Need to configure from configuration file.
+			self.port_status =config["message"].get("port_status", "6001")
+		else:
+			self.port_index = "6000"
+			self.port_status = "6001"
 		self.socket_index = None
 		self.socket_status = None
 
@@ -397,9 +423,6 @@ class Client(object):
 
 		# Execution status
 		self.status = False
-
-		# Logger
-		self.logger_queue = logger_queue
 
 	def __del__(self):
 		"""
@@ -432,7 +455,8 @@ class Client(object):
 		if self.dryrun:
 			command += " --dryrun "
 
-		command = "sh -c \" source /usr/local/bin/setenv-for-gcc510.sh && " + command + " \""
+		if self.env_gcc_required and self.env_gcc_source:
+			command = "sh -c \" source {} && {} \"".format(self.env_gcc_source, command)
 		self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
 		self.remote_stdin = stdin
 		self.remote_stdout = stdout

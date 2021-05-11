@@ -75,7 +75,6 @@ class ClientApplication(object):
         self.task_queue = mgr.Queue()
         self.task_lock = Lock()
         self.task_id = 0
-        self.create_task_completed = Value('i', 0)
 
         # Workers
         self.workers = []
@@ -130,7 +129,6 @@ class ClientApplication(object):
         self.logger_queue.put("INFO: Started Client Application for id:{} on node {}".format(self.id, self.host_name))
         self.start_workers()
         self.start_message()
-        #self.start_task_creation()
 
     def stop(self):
         """
@@ -143,14 +141,6 @@ class ClientApplication(object):
         """
         self.stop_workers()
         self.stop_message()
-        """
-        while self.process_task.is_alive():
-            time.sleep(1)
-            try:
-                self.process_task.terminate()
-            except Exception as e:
-                self.logger_queue.put("EXCEPTION: Task - {}".format(e))
-        """
         print("Make sure all workers has stopped the move to stopping logger")
 
         ## TODO - Update self.nfs_cluster.local_mounts instead and call umount_all
@@ -324,7 +314,7 @@ class ClientApplication(object):
                                               "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id, message)})
 
                     elif self.operation.upper() == "DEL" or self.operation.upper() == "GET":
-                        self.operation_data_queue.put(message)  ## Add index to operation_data_queue
+                        #self.operation_data_queue.put(message)  ## Add index to operation_data_queue
                         socket.send_json({"success": 1})  # Send response back to MasterApp
                         is_index_data_added = True
 
@@ -336,15 +326,20 @@ class ClientApplication(object):
                             index_buffer[message["dir"]] = len(message["files"])
             except Exception as e:
                 self.logger_queue.put("EXCEPTION: Monitor-Index - {}".format(e))
-
-            # time.sleep(1)
-
-        socket.close()
-        context.term()
-        self.logger_queue.put("INFO: Monitor-Index-Receiver terminated gracefully !")
-
+        # Close socket connection and destroy context
+        try:
+            socket.close()
+            context.term()
+            self.logger_queue.put("INFO: Monitor-Index-Receiver terminated gracefully !")
+        except Exception as e:
+            self.logger_queue.put("EXCEPTION: Monitor-Index-Receiver - {}".fromat(e))
 
     def add_task(self,message):
+        """
+        Add a task to task_queue to be consumed by a worker.
+        :param message:
+        :return:
+        """
         task_data = {"dir": message["dir"], "files": message["files"]}
         task = Task(operation=self.operation,
                     data=task_data,
@@ -354,6 +349,10 @@ class ClientApplication(object):
         self.task_queue.put(task)  # Enqueue task to TaskQ
 
     def message_server_status(self):
+        """
+        The Monitor StatusHandler receive all the status from workers and send back to master for aggregation.
+        :return:
+        """
         context = zmq.Context()
         socket_address = "tcp://{}:{}".format(self.ip_address, self.port_status)
         socket = context.socket(zmq.PUSH)
@@ -366,7 +365,6 @@ class ClientApplication(object):
 
             # Check messaging flag  and break the loop
             stop_messaging = self.stop_messaging.value
-
             if stop_messaging == 0:
                 break
 
@@ -393,7 +391,6 @@ class ClientApplication(object):
                             local_index_buffer[status_message["dir"]] = (
                                     status_message["success"] + status_message["failure"])
 
-                # TODO - Optimization required.
                 if self.index_data_receive_completed.value:
                     # self.logger_queue.put("YYYYYYYY -INDEX BUFFER:{}".format(index_buffer))
                     for dir_prefix, processed_file_count in index_buffer.items():
@@ -412,10 +409,13 @@ class ClientApplication(object):
                 self.logger_queue.put("INFO: All operation status sent to Master. Closing Monitor-StatusHandler !")
                 self.operation_status_send_completed.value = 1
                 break
-
-        socket.close()
-        self.logger_queue.put("INFO: Monitor-StatusHandler is terminated gracefully !")
-        # self.logger_queue.put("XXXXXXXXXXXXXXX- index_buffer {}".format(index_buffer))
+        # Close socket and destroy context.
+        try:
+            socket.close()
+            context.term()
+            self.logger_queue.put("INFO: Monitor-StatusHandler is terminated gracefully !")
+        except Exception as e:
+            self.logger_queue.put("EXCEPTION: Monitor-StatusHandler - {}".format(e))
 
     @exception
     def nfs_mount(self, nfs_cluster_ip=None, path=None):
@@ -469,85 +469,10 @@ class ClientApplication(object):
         if not self.logger.status():
             self.logger.stop()
 
-    def start_task_creation(self):
-        self.process_task = Process(target=self.create_task, args=(self.task_queue,))
-        self.process_task.start()
-
-    def create_task(self, task_queue):
-        """
-        Create a TASk and add that task to task_queue.
-        - Loop
-          - Read data from NFS Index Queue/ operation_data_queue
-          - Create a task with at least 5 file index ( Variable )
-          - If more than 5 task exist in the message, then split them to more tasks.
-        - Terminate Loop:
-          - Received all index data : self.index_data_receive_completed.value == 1
-          - Created tasks for all received data: operation_data_queue.empty() == True
-
-        :return:
-        """
-        self.logger_queue.put("INFO: CreateTask Process started !!!")
-
-        while True:
-
-            stop_messaging = self.stop_messaging.value
-            if stop_messaging == 0:
-                break
-
-            index_data = {}
-            # De-queue index data from "operation_data_queue" and create Task
-            if not self.operation_data_queue.empty():
-                index_data = self.operation_data_queue.get()
-
-            # Validate Minio configuration to proceed
-            if not self.s3_config:
-                self.logger_queue.put("ERROR: S3 configuration information required! Stopping CreateTask process")
-                break
-
-            # print("Create Task - Index Data - {}".format(index_data))
-            # Received index data {"dir": "/dir1/dir11", "files":["f1","f2"]}
-            if index_data and "dir" in index_data and "files" in index_data:
-                # index_data = index_data["index"]  # remove this
-                # self.logger_queue.put("====>TASK started index data - {}:{}".format(index_data,self.operation))
-                # print("CreateTask:{}".format(index_data))
-
-                index = 0
-                while index < len(index_data["files"]):
-                    try:
-                        # task = Task(self.task_id, put, index_data[index:index+2], self.logger_queue)
-                        task_data = {"dir": index_data["dir"], "files": index_data["files"][
-                                                                        index:index + self.client_config.get(
-                                                                            "max_index_size", 2)]}
-                        task = Task(operation=self.operation,
-                                    data=task_data,
-                                    s3config=self.s3_config,
-                                    dryrun=self.dryrun,
-                                    dest_path=self.config.get("dest_path", ""))
-                        self.task_queue.put(task)  # Enqueue task to TaskQ
-                    except Exception as e:
-                        print("Exception: create_task - {}".format(e))
-                        self.logger_queue.put("Exception: Create_Task  - {}".format(e))
-                    self.task_id += 1
-
-                    index += self.client_config.get("max_index_size", 2)
-            # time.sleep(1)
-
-            # How to stop it?
-            ## index_data receive is completed and  operation_data_queue is empty.
-            if self.index_data_receive_completed.value and self.operation_data_queue.empty():
-                self.logger_queue.put("INFO: Tasks have been created for all received index_data from master.")
-                self.create_task_completed.value = 1
-                break
-
-        self.logger_queue.put("INFO: Create Task Monitor is terminated gracefully!")
-
-
 """
 # TODO 
 Replace above client messaging through this class.
 """
-
-
 class ClientMessage(object):
 
     def __init__(self):
@@ -590,17 +515,6 @@ if __name__ == "__main__":
             ca.stop_message()  # May not be required, Already those process stopped.
             ca.logger_queue.put("INFO: Terminated all message handler !")
 
-            # Stop create process, if not stopped yet
-            """
-            if ca.create_task_completed.value == 0 and ca.process_task.is_alive():
-                time.sleep(1)
-                try:
-                    ca.process_task.terminate()
-                except Exception as e:
-                    ca.logger_queue.put("EXCEPTION: Create-Task - {}".format(e))
-
-                ca.logger_queue.put("INFO: Monitor Create-Task is terminated!")
-            """
             # Stop workers
             ca.stop_workers()
             ca.logger_queue.put("INFO: All workers terminated !")
@@ -623,4 +537,3 @@ if __name__ == "__main__":
     ### Check all outstanding logging message is written to a file./var/log/client_application.log
 
     ### 10.110.
-

@@ -26,5 +26,12 @@
   },
   "operations": ["PUT","GET","DEL","LIST"],
   "logging_path": "/var/log/dss",
-  "dss_targets": ["202.0.0.104"]
+  "dss_targets": ["202.0.0.104"],
+  "environment": {
+    "gcc" : {
+      "version": "5.1",
+      "source" : "/usr/local/bin/setenv-for-gcc510.sh",
+      "required": true
+    }
+  }
 }
