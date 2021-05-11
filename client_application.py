@@ -314,7 +314,7 @@ class ClientApplication(object):
                                               "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id, message)})
 
                     elif self.operation.upper() == "DEL" or self.operation.upper() == "GET":
-                        #self.operation_data_queue.put(message)  ## Add index to operation_data_queue
+                        self.add_task(message)  # Add message to task queue to be consumed by workers.
                         socket.send_json({"success": 1})  # Send response back to MasterApp
                         is_index_data_added = True
 
@@ -392,7 +392,6 @@ class ClientApplication(object):
                                     status_message["success"] + status_message["failure"])
 
                 if self.index_data_receive_completed.value:
-                    # self.logger_queue.put("YYYYYYYY -INDEX BUFFER:{}".format(index_buffer))
                     for dir_prefix, processed_file_count in index_buffer.items():
                         # Check in local buffer if that key exists
                         if dir_prefix in local_index_buffer:
