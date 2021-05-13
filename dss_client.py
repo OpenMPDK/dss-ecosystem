@@ -39,9 +39,9 @@ from datetime import datetime
 
 
 class DssClientLib:
-    def __init__(self, s3_endpoint, access_key, secret_key, logger_queue=None):
+    def __init__(self, s3_endpoint, access_key, secret_key, logger=None):
         self.s3_endpoint = "http://" + s3_endpoint
-        self.logger_queue = logger_queue
+        self.logger = logger
         self.dss_client = self.create_client(self.s3_endpoint, access_key, secret_key)
 
     def create_client(self, endpoint, access_key, secret_key):
@@ -56,12 +56,12 @@ class DssClientLib:
         try:
             dss_client =  dss.createClient(endpoint, access_key,secret_key)
             if not dss_client:
-                self.logger_queue.put("ERROR: Failed to create s3 client from - {}".format(endpoint))
+                self.logger.error("Failed to create s3 client from - {}".format(endpoint))
         except dss.DiscoverError as e:
-            self.logger_queue.put("EXCEPTION: {}".format(e))
+            self.logger.exception("DiscoverError -  {}".format(e))
         except dss.NetworkError as e:
             #print("EXCEPTION: NetworkError - {}".format(e))
-            self.logger_queue.put("EXCEPTION: NetworkError - {} , {}".format(endpoint, e))
+            self.logger.exception("NetworkError - {} , {}".format(endpoint, e))
 
         return dss_client
 
@@ -76,11 +76,11 @@ class DssClientLib:
                 if ret == 0:
                     return True
                 elif ret == -1:
-                    self.logger_queue.put("ERROR: Upload Failed for  key - {}".format(object_key))
+                    self.logger.error("Upload Failed for  key - {}".format(object_key))
             except dss.NoSuchResouceError as e:
-                self.logger_queue.put("EXCEPTION: NoSuchResourceError putObject - {}".format(e))
+                self.logger.exception("NoSuchResourceError putObject - {}".format(e))
             except dss.GenericError as e:
-                self.logger_queue.put("EXCEPTION: putObject {}".format(e))
+                self.logger.exception("putObject {}".format(e))
         return False
 
     def listObjects_old(self, bucket=None,  prefix="", delimiter="/"):
@@ -90,24 +90,24 @@ class DssClientLib:
             #if object_keys:
             #    yield object_keys
         except dss.NoSuchResouceError as e:
-            self.logger_queue.put("EXCEPTION: NoSuchResourceError - {}".format(e))
+            self.logger.exception("NoSuchResourceError - {}".format(e))
         except dss.GenericError as e:
-            self.logger_queue.put("EXCEPTION: listObjects - {}".format(e))
+            self.logger.exception("listObjects - {}".format(e))
 
         return object_keys
 
     def deleteObject(self, bucket=None, object_key=""):
-        #self.logger_queue.put("DELETE ......{}".format(object_key))
+        #self.logger.delete("......{}".format(object_key))
         if object_key:
             try:
                 if self.dss_client.deleteObject(object_key) == 0:
                     return True
                 elif self.dss_client.deleteObject(object_key) == -1:
-                    self.logger_queue.put("ERROR: delete object filed for key - {}".format(object_key))
+                    self.logger.error("deleteObject filed for key - {}".format(object_key))
             except dss.NoSuchResouceError as e:
-                self.logger_queue.put("EXCEPTION: deleteOBject - {}, {}".format(object_key,e))
+                self.logger.exception("deleteObject - {}, {}".format(object_key,e))
             except dss.GenericError as e:
-                self.logger_queue.put("EXCEPTION: deleteObject - {}".format(e))
+                self.logger.exception("deleteObject - {}".format(e))
         return False
 
 
@@ -123,9 +123,9 @@ class DssClientLib:
             try:
                 return  self.dss_client.getObject(object_key, dest_file_path)
             except dss.NoSuchResouceError as e:
-                self.logger_queue.put("EXCEPTION: getObject - {} , {}".format(object_key, e))
+                self.logger.exception("NoSuchResourceError - getObject - {} , {}".format(object_key, e))
             except dss.GenericError as e:
-                self.logger_queue.put("EXCEPTION: GenericError - {}".format(e))
+                self.logger.exception("GenericError - getObject - {}".format(e))
         return False
 
     def listObjects(self, bucket=None,  prefix="", delimiter="/"):
@@ -143,9 +143,9 @@ class DssClientLib:
             for obj_key in self.dss_client.getObjects(prefix, delimiter):
                 object_keys.append(obj_key)
         except dss.NoSuchResouceError as e:
-            self.logger_queue.put("EXCEPTION: NoSuchResourceError - {}".format(e))
+            self.logger.exception("NoSuchResourceError - {}".format(e))
         except dss.GenericError as e:
-            self.logger_queue.put("EXCEPTION: listObjects - {}".format(e))
+            self.logger.exception("listObjects - {}".format(e))
 
         return object_keys
 

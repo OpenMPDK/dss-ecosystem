@@ -37,6 +37,7 @@ import  zmq
 from multiprocessing import Process,Queue,Value, Lock, Manager
 from datetime import datetime
 import json
+from logger import  MultiprocessingLogger
 
 """
 Monitor the progress of operation.
@@ -48,14 +49,13 @@ manager = Manager()
 
 class Monitor:
 
-    def  __init__(self, clients, index_data_queue, index_data_lock, index_data_generation_complete, index_data_count, logger_queue, logger_lock, operation):
+    def  __init__(self, clients, index_data_queue, index_data_lock, index_data_generation_complete, index_data_count, logger_queue, logger_lock, logger_status, operation):
         self.clients = clients
         self.index_data_queue=index_data_queue
         self.index_data_lock = index_data_lock
         self.index_data_generation_complete = index_data_generation_complete
         self.operation = operation
-        self.logger_queue = logger_queue
-        self.logger_lock  = logger_lock
+        self.logger = MultiprocessingLogger(logger_queue, logger_lock, logger_status)
 
         self.status_queue = Queue()
         self.status_lock  = Lock()
@@ -112,7 +112,7 @@ class Monitor:
             except Exception as e:
                 print("EXCEPTION: Unable to terminate MessageHandler - StatusPoller ...\n {}".format(e))
 
-        self.logger_queue.put("INFO: Stopped all monitor processes ... ")
+        self.logger.info("Stopped all monitor processes ... ")
         print("INFO: All monitor stopped ...")
 
 
@@ -141,7 +141,7 @@ class Monitor:
         for client in self.clients:
             client.socket_index = context.socket(zmq.REQ)
             print("INFO: Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
-            self.logger_queue.put("INFO: Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
+            self.logger.info("Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
             client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
 
         # Buffer to store prefix index and file count  {"prefix":<file count>}
@@ -154,7 +154,7 @@ class Monitor:
             stop = self.stop_status_poller.value
             self.status_lock.release()
             if stop :
-                self.logger_queue.put("ERROR: Forcefully shutting down Monitor-index!")
+                self.logger.error("Forcefully shutting down Monitor-index!")
                 break
 
             previous_client_operation_status = 1
@@ -191,25 +191,25 @@ class Monitor:
                         if client.socket_index.closed:
                             client.socket_index = context.socket(zmq.REQ)
                             client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
-                            self.logger_queue.put("INFO: Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip))
+                            self.logger.info("Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip))
                         if self.send_index_data(client, data):
                             #self.index_data_count.value += len(data.get("files", []))
                             previous_client_operation_status = 1
 
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
-                self.logger_queue.put("INFO: Indexed data distribution is completed! {}".format(self.index_data_queue.qsize()))
+                self.logger.info("Indexed data distribution is completed! {}".format(self.index_data_queue.qsize()))
                 self.all_index_data_distributed.value = 1
                 print("INFO: Index Distribution FINISHED,  time - {}".format((datetime.now() - self.operation_start_time).seconds))
-                self.logger_queue.put("INFO: Index Distribution FINISHED,  time - {}".format((datetime.now() - self.operation_start_time).seconds))
+                self.logger.info("Index Distribution FINISHED,  time - {}".format((datetime.now() - self.operation_start_time).seconds))
 
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
                     data = {"indexing_done": 1}
                     if not self.send_index_data(client, data):
                         if not self.send_index_data(client, data):
-                            self.logger_queue.put("ERROR: Unable to send indexing completion message to client-{}".format(client.id))
+                            self.logger.error("Unable to send indexing completion message to client-{}".format(client.id))
                     print("INFO: Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
-                    self.logger_queue.put("INFO: Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
+                    self.logger.info("Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
                 # Intimidated all the clients, exit the loop.
                 break
 
@@ -222,7 +222,7 @@ class Monitor:
             context.term()
 
         except Exception as e:
-            self.logger_queue.put("EXCEPTION:{}: monitor-index Closing Socket {}".format(e))
+            self.logger.exception("{}: monitor-index Closing Socket {}".format(e))
 
         # Update MasterApplication about termination of Monitor
         #self.monitor_index_data_sender.value = 1
@@ -238,13 +238,13 @@ class Monitor:
             try:
                 with open(prefix_storage_file, "w") as persistent_storage:
                     json.dump(prefix_index_data, persistent_storage)
-                self.logger_queue.put("INFO: Stored file index data to {}".format(prefix_storage_file))
+                self.logger.info("INFO: Stored file index data to {}".format(prefix_storage_file))
             except Exception as e:
-                self.logger_queue.put("Exception: Dump Persistent Data - {}".format(e))
+                self.logger.info("Dump Persistent Data - {}".format(e))
 
         self.monitor_index_data_sender.value = 1
         print("INFO: Monitor-Index-Distribution is terminated gracefully!")
-        self.logger_queue.put("INFO: Monitor-Index-Distribution is terminated gracefully! ")
+        self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
 
 
 
@@ -266,16 +266,15 @@ class Monitor:
             else:
                 print("WARNING: Monitor-Index -- RSP not received from ClientApp - {}".format(status))
         except Exception as e:
-            self.logger_queue.put("EXCEPTION: Monitor-Index -{}".format(e))
+            self.logger.exception("Monitor-Index -{}".format(e))
             print("EXCEPTION: Monitor-Index -{}".format(e))
             socket.close()
-            self.logger_queue.put("INFO: Closed socket for Client-{}:{}".format(client.id,client.ip))
+            self.logger.info("Closed socket for Client-{}:{}".format(client.id,client.ip))
 
         # status = {"success": 1} or {"success": 0}  for failure, try second time
         if status.get("success", False) and status["success"] == 1:
             return 1
 
-        print("ERROR: Monitor-INDEX -- ClientApp response - {}".format(status))
         return 0
 
 
@@ -292,7 +291,7 @@ class Monitor:
             # print("Client IP: {}, PORT Index-{}, PORT Status-{}".format(client.ip, client.port_index, client.port_status))
             client.socket_status = context.socket(zmq.PULL)
             print("INFO: Monitor-Poller, Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
-            self.logger_queue.put("INFO: Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
+            self.logger.info("Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
             client.socket_status.connect("tcp://{}:{}".format(client.ip, client.port_status))
 
         while True:
@@ -316,7 +315,7 @@ class Monitor:
                     received_response = client.socket_status.poll(timeout=1000)  # Wait 1 secs
                     if received_response:
                         status = client.socket_status.recv_json()
-                        self.logger_queue.put("DEBUG: Monitor-Poller Operation Status for client-{}, Status - {}".format(client.id, status))
+                        self.logger.debug("Monitor-Poller Operation Status for client-{}, Status - {}".format(client.id, status))
                         self.status_queue.put(status)
                 except Exception as e:
                     print("EXCEPTION: Monitor-Status-Poller {} ".format(e))
@@ -328,13 +327,13 @@ class Monitor:
             # Terminate context.
             context.term()
         except Exception as e:
-            self.logger_queue.put("EXCEPTION:{}: minitor-poller, {}".format(e))
+            self.logger.exception("{}: minitor-poller, {}".format(e))
 
         self.status_lock.acquire()
         self.monitor_status_poller.value = 1
         self.status_lock.release()
         print("INFO: Monitor-Status-Poller terminated gracefully! ")
-        self.logger_queue.put("INFO: Monitor-Status-Poller terminated gracefully! ")
+        self.logger.info("Monitor-Status-Poller terminated gracefully! ")
 
 
 
@@ -376,13 +375,13 @@ class Monitor:
                 file_index_count = operation_success_count + operation_failure_count
                 #upload_parcentage = (file_index_count / self.index_data_count.value) * 100
                 #print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
-                #self.logger_queue.put("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
+                #self.logger.info("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
 
                 if self.index_data_count.value:
                     upload_percentage = (file_index_count / self.index_data_count.value) * 100
                     if upload_percentage > display_percentage:
                         print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
-                        self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
+                        self.logger.info("Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
                         display_percentage +=10
 
             """
@@ -391,7 +390,7 @@ class Monitor:
                     upload_percentage = (file_index_count / self.index_data_count.value) * 100
                     if upload_percentage > display_percentage:
                         print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
-                        self.logger_queue.put("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
+                        self.logger.info("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
                         display_percentage +=10
             """
 
@@ -421,15 +420,15 @@ class Monitor:
         success_operation_size_in_byte= original_file_size_in_byte
 
         print("***** Operation Statistics *****")
-        self.logger_queue.put("***** Operation Statistics *****")
+        self.logger.info("***** Operation Statistics *****")
         if operation_success_count:
             success_percentage = (operation_success_count / self.index_data_count.value) * 100
             print("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
-            self.logger_queue.put("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
+            self.logger.info("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
         if operation_failure_count:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
             print("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
-            self.logger_queue.put("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
+            self.logger.info("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
 
         bandwidth = 0
@@ -438,9 +437,9 @@ class Monitor:
         operation_size_in_gb = success_operation_size_in_byte / ( 1024 * 1024 * 1024)
 
         print("INFO: Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
-        self.logger_queue.put("INFO: Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
+        self.logger.info("Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
         print("INFO: Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
-        self.logger_queue.put("INFO: Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
+        self.logger.info("Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
         self.monitor_progress_status.value = 1
         print("INFO: Monitor-Progress-Status terminated!")
-        self.logger_queue.put("INFO: Monitor-Progress-Status terminated! ")
+        self.logger.info("Monitor-Progress-Status terminated! ")

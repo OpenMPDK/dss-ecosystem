@@ -25,7 +25,7 @@
     "client_lib": "dss_client"
   },
   "operations": ["PUT","GET","DEL","LIST"],
-  "logging_path": "/var/log/dss",
+  "logging": { "path": "/var/log/dss", "level": "INFO"},
   "dss_targets": ["202.0.0.104"],
   "environment": {
     "gcc" : {

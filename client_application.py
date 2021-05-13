@@ -60,6 +60,7 @@ class ClientApplication(object):
         self.host_name = socket.gethostname()
         self.operation = config["operation"]
         self.dryrun = config["dryrun"]
+        self.debug = config.get("debug", False)
 
         # Message communication
         self.operation_data_queue = Queue()  # Hold file index data
@@ -81,9 +82,13 @@ class ClientApplication(object):
         self.workers_count = self.client_config.get("workers", 10)
 
         # Multiprocessing Logging
-        self.logging_path = config.get("logging_path", "/var/log")
+        self.logging_path = config["logging"].get("path", "/var/log/dss")
+        self.logging_level = config["logging"].get("level", "INFO")
+        if self.debug:
+            self.logging_level = "DEBUG"
         self.logger_queue = Queue()
         self.logger_lock = Lock()
+        self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
         self.logger = None
 
         # AWS log
@@ -99,7 +104,7 @@ class ClientApplication(object):
         self.message_lock = Lock()
 
         # Mount NFS Share locally
-        self.nfs_cluster = NFSCluster({}, self.logger_queue)
+        self.nfs_cluster = NFSCluster({}, self.logger)
         self.nfs_share_list = Queue()
 
     def __del__(self):
@@ -108,8 +113,8 @@ class ClientApplication(object):
         # Make sure all NFS shares are unounted and removed
         while not self.nfs_share_list.empty():
             nfs_share = self.nfs_share_list.get()
-            self.logger_queue.put(
-                "INFO: Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
+            self.logger.info(
+                "Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
             self.nfs_cluster.umount(nfs_share["nfs_share"])
         """
         self.stop_workers()
@@ -126,7 +131,7 @@ class ClientApplication(object):
         # Start workers based on number of CPU available
         # Start messaging service
         self.start_logging()
-        self.logger_queue.put("INFO: Started Client Application for id:{} on node {}".format(self.id, self.host_name))
+        self.logger.info("Started Client Application for id:{} on node {}".format(self.id, self.host_name))
         self.start_workers()
         self.start_message()
 
@@ -146,8 +151,8 @@ class ClientApplication(object):
         ## TODO - Update self.nfs_cluster.local_mounts instead and call umount_all
         while not self.nfs_share_list.empty():
             nfs_share = self.nfs_share_list.get()
-            self.logger_queue.put(
-                "INFO: Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
+            self.logger.info(
+                "Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
             self.nfs_cluster.umount(nfs_share["nfs_share"])
         # self.nfs_cluster.umount_all()  # Un-mount all mounted shares
         self.stop_logging()
@@ -166,6 +171,8 @@ class ClientApplication(object):
                        status_queue=self.operation_status_queue,
                        index_data_queue=self.operation_data_queue,
                        logger_queue=self.logger_queue,
+                       logger_lock=self.logger_lock,
+                       logger_status=self.logger_status,
                        s3_config=self.s3_config,
                        aws_log_debug_val=self.aws_log_debug_val)
             # self.logger.write("DEBUG: Starting worker-{}\n".format(index))
@@ -201,7 +208,7 @@ class ClientApplication(object):
         self.process_status = Process(target=self.message_server_status)
         self.process_status.start()
 
-        self.logger_queue.put("INFO: Started message server ...")
+        self.logger.info("Started message server ...")
 
     @exception
     def stop_message(self):
@@ -230,11 +237,13 @@ class ClientApplication(object):
             try:
                 self.process_status.terminate()
                 print("INFO: Terminated MessageHandler - Status ...")
+                self.logger.info("Terminated MessageHandler - Status ...")
             except Exception as e:
                 print("EXCEPTION: Terminated MessageHandler - Status  - {} ".format(e))
+                self.logger.exception("Terminated MessageHandler - Status  - {} ".format(e))
 
         print("DEBUG: Stopped all MessageHandler ...")
-        self.logger_queue.put("INFO: Stopped all MessageHandlers ... ")
+        self.logger.info("Stopped all MessageHandlers ... ")
 
     def message_server_index(self):
         """
@@ -259,7 +268,7 @@ class ClientApplication(object):
         socket_index_address = "tcp://{}:{}".format(self.ip_address, self.port_index)
         socket = context.socket(zmq.REP)
         socket.bind(socket_index_address)
-        self.logger_queue.put("INFO: Client Index-Monitor listening to - {}".format(socket_index_address))
+        self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
 
         while True:
 
@@ -270,21 +279,21 @@ class ClientApplication(object):
                 break
 
             # Index Msg: {"dir":<>, "files":["f1","f2"]}
-            # self.logger_queue.put("DEBUG: Client-{}, Waiting to receive INDEX the message".format(self.id))
+            # self.logger.debug("Client-{}, Waiting to receive INDEX the message".format(self.id))
             message = {}
             ####
             try:
                 received_response = socket.poll(timeout=1000)  # Wait 1 secs
                 if received_response:
                     message = socket.recv_json()
-                    # self.logger_queue.put("DEBUG: Received index message - {}".format(message))
+                    # self.logger.debug("Received index message - {}".format(message))
                     # Check the end message arrived, exit loop
                     if "indexing_done" in message and message["indexing_done"]:
-                        self.logger_queue.put("INFO: Receiving Index-data completed. Closing Monitor-Index-Receiver! ")
+                        self.logger.info("Receiving Index-data completed. Closing Monitor-Index-Receiver! ")
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
-                    # self.logger_queue.put("DEBUG: Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message["files"]))
+                    # self.logger.debug("Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message["files"]))
                     is_index_data_added = False  #
                     # Add indexing data to the "operation_data_queue".
                     if self.operation.upper() == "PUT":
@@ -302,14 +311,14 @@ class ClientApplication(object):
                                     socket.send_json({"success": 1})  # Send response back to MasterApp
                                     is_index_data_added = True
                                 else:
-                                    self.logger_queue.put("ERROR: Issue with mounting! ")
+                                    self.logger.error("Issue with mounting! ")
                                     ## Send the success/failure status to master
                                     socket.send_json({"success": 0,
                                                       "ERROR": "Client-{} , Failed NFS -{} mounting".format(self.id,
                                                                                                             message[
                                                                                                                 "dir"])})
                         else:
-                            self.logger_queue.put("ERROR: Bad formed message -{}".format(message))
+                            self.logger.error("Bad formed message -{}".format(message))
                             socket.send_json({"success": 0,
                                               "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id, message)})
 
@@ -325,14 +334,14 @@ class ClientApplication(object):
                         else:
                             index_buffer[message["dir"]] = len(message["files"])
             except Exception as e:
-                self.logger_queue.put("EXCEPTION: Monitor-Index - {}".format(e))
+                self.logger.exception("Monitor-Index - {}".format(e))
         # Close socket connection and destroy context
         try:
             socket.close()
             context.term()
-            self.logger_queue.put("INFO: Monitor-Index-Receiver terminated gracefully !")
+            self.logger.info("Monitor-Index-Receiver terminated gracefully !")
         except Exception as e:
-            self.logger_queue.put("EXCEPTION: Monitor-Index-Receiver - {}".fromat(e))
+            self.logger.exception("Monitor-Index-Receiver - {}".fromat(e))
 
     def add_task(self,message):
         """
@@ -356,7 +365,7 @@ class ClientApplication(object):
         context = zmq.Context()
         socket_address = "tcp://{}:{}".format(self.ip_address, self.port_status)
         socket = context.socket(zmq.PUSH)
-        self.logger_queue.put("DEBUG: MessageHandler-Status Socket Address-{}".format(socket_address))
+        self.logger.info("MessageHandler-Status Socket Address-{}".format(socket_address))
         socket.bind(socket_address)
 
         local_index_buffer = {}  # Keeps all prefix which doesn't belong to global shared index_buffer
@@ -374,7 +383,7 @@ class ClientApplication(object):
                     status_message = self.operation_status_queue.get()  ## {"success": <>, "failure":<>}
                 # Send response after adding data to operation data_queue as success
                 if status_message:
-                    self.logger_queue.put("DEBUG: PUSH - Sending message - {}".format(status_message))
+                    self.logger.debug("PUSH - Sending message - {}".format(status_message))
                     socket.send_json(status_message)
                     # Decrement index_buffer as those files have been processed.
                     if status_message["dir"] in index_buffer:
@@ -402,19 +411,19 @@ class ClientApplication(object):
                             del index_buffer[dir_prefix]
 
             except Exception as e:
-                self.logger_queue.put("EXCEPTION: MessageHandler-Status {}".format(e))
+                self.logger.exception("MessageHandler-Status {}".format(e))
 
             if self.index_data_receive_completed.value and not index_buffer:
-                self.logger_queue.put("INFO: All operation status sent to Master. Closing Monitor-StatusHandler !")
+                self.logger.info("All operation status sent to Master. Closing Monitor-StatusHandler !")
                 self.operation_status_send_completed.value = 1
                 break
         # Close socket and destroy context.
         try:
             socket.close()
             context.term()
-            self.logger_queue.put("INFO: Monitor-StatusHandler is terminated gracefully !")
+            self.logger.info("Monitor-StatusHandler is terminated gracefully !")
         except Exception as e:
-            self.logger_queue.put("EXCEPTION: Monitor-StatusHandler - {}".format(e))
+            self.logger.exception("Monitor-StatusHandler - {}".format(e))
 
     @exception
     def nfs_mount(self, nfs_cluster_ip=None, path=None):
@@ -435,7 +444,7 @@ class ClientApplication(object):
             ret, console = self.nfs_cluster.mount(nfs_cluster_ip, nfs_share)
             if ret == 0:
                 print("INFO: Mounted NFS share {}:{}".format(nfs_cluster_ip, nfs_share))
-                self.logger_queue.put("INFO: Mounted NFS share {}:{}".format(nfs_cluster_ip, nfs_share))
+                self.logger.info("Mounted NFS share {}:{}".format(nfs_cluster_ip, nfs_share))
                 self.nfs_share_list.put({"nfs_cluster_ip": nfs_cluster_ip, "nfs_share": nfs_share})
 
                 if nfs_cluster_ip not in self.nfs_cluster.local_mounts:
@@ -447,8 +456,8 @@ class ClientApplication(object):
                 return True
             else:
                 print("ERROR:NFS mounting failed \n {}".format(console))
-                self.logger_queue.put(
-                    "ERROR:{}: NFS Mounting failed for {}:{}\n  {}".format(__file__, nfs_cluster_ip, path, console))
+                self.logger.error(
+                    "{}: NFS Mounting failed for {}:{}\n  {}".format(__file__, nfs_cluster_ip, path, console))
 
         return False
 
@@ -457,7 +466,8 @@ class ClientApplication(object):
         Start Multiprocessing logger
         :return:
         """
-        self.logger = MultiprocessingLogger(self.logging_path, __file__, self.logger_queue, self.logger_lock)
+        self.logger = MultiprocessingLogger(self.logger_queue, self.logger_lock, self.logger_status)
+        self.logger.config(self.logging_path, __file__, self.logging_level)
         self.logger.start()
 
     def stop_logging(self):
@@ -465,8 +475,7 @@ class ClientApplication(object):
         Stop multiprocessing logger
         :return:
         """
-        if not self.logger.status():
-            self.logger.stop()
+        self.logger.stop()
 
 """
 # TODO 
@@ -491,37 +500,36 @@ if __name__ == "__main__":
     config_obj = Config(params)
     config = config_obj.get_config()
     client_config = config.get("client", {})
-    logging_path = config.get("logging_path", "/var/log/dss")
+    #logging_path = config.get("logging_path", "/var/log/dss")
 
     ca = ClientApplication(params.get("id", 1), config)
-    ca.logger_queue.put("CONFIG:{}".format(config))
-    ca.logger_queue.put("INFO: Starting client application ...")
-    # print("INFO: Created client application ... ")
     ca.start()
+    ca.logger.info("CONFIG:{}".format(config))
+    ca.logger.info("Starting client application ...")
 
     while True:
         if ca.index_data_receive_completed.value and ca.operation_status_send_completed.value:
             # Un-mount local NFS shares
             while not ca.nfs_share_list.empty():
                 nfs_share = ca.nfs_share_list.get()
-                ca.logger_queue.put(
-                    "INFO: Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
+                ca.logger.info(
+                    "Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
                 ret, console = ca.nfs_cluster.umount(nfs_share["nfs_share"])
                 if ret:
-                    ca.logger_queue.put("ERROR: Unmount failed! {}".format(console))
+                    ca.logger.error("Unmount failed! {}".format(console))
 
             # Stop message-handler
             ca.stop_message()  # May not be required, Already those process stopped.
-            ca.logger_queue.put("INFO: Terminated all message handler !")
+            ca.logger.info("Terminated all message handler !")
 
             # Stop workers
             ca.stop_workers()
-            ca.logger_queue.put("INFO: All workers terminated !")
+            ca.logger.info("INFO: All workers terminated !")
             break
 
         time.sleep(1)
 
-    ca.logger_queue.put("INFO: Stopping client application")
+    ca.logger.info("Stopping client application")
     ca.stop_logging()
     # ca.stop()
     print("INFO: Stopped client application")

@@ -41,7 +41,7 @@ class MinioClient:
   def __init__(self, url, access_key="minio", secret_key="minio123", logger=None):
     self.minio_url = url
     self.client = self.get_client(url,access_key, secret_key)
-    self.logger_queue = logger
+    self.logger = logger
 
   def get_client(self,url,access_key, secret_key):
     #print("Minio Server: http://{}, Access Key:{} , Secret Key:{}".format(url, access_key, secret_key))
@@ -71,7 +71,7 @@ class MinioClient:
       if bucket:
         objects = self.client.list_objects(bucket_name=bucket,prefix=prefix,recursive=recursive)
     except err:
-      self.logger_queue.put("Exception:{}".format(err))
+      self.logger.exception("{}".format(err))
 
     return objects
 
@@ -81,7 +81,7 @@ class MinioClient:
     try:
       self.client.fput_object(bucket_name=bucket,object_name=data[1:],file_path=data,content_type="text/plain")
     except err:
-      self.logger_queue.put("Exception:{}".format(err))
+      self.logger.exception("{}".format(err))
       return False
     return True
   def get(self, bucket=None ):
@@ -100,7 +100,7 @@ class MinioClient:
         """
         self.client.remove_object(bucket_name=bucket, object_name=prefix)
     except err:
-      self.logger_queue.put("Exception:{}".format(err))
+      self.logger.exception("{}".format(err))
       return False
     return True
 
@@ -117,7 +117,7 @@ class MinioClient:
         self.client.fget_object(bucket, object_key, dest_path)
         return True
       except Exception as e:
-        self.logger_queue.put("Exception: {}".format(e))
+        self.logger.exception("{}".format(e))
     return False
 
 if __name__=="__main__":

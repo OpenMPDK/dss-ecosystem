@@ -42,28 +42,31 @@ from multiprocessing import Process, Queue, Value, Lock
 - Allow application to start and stop as logger.start(), logger.stop()
 """
 
+LOGGING_LEVEL = [
+    "INFO",
+    "DEBUG",
+    "WARNING",
+    "ERROR",
+    "EXCEPTION",
+    "FATAL"
+]
 
-
-class Logger:
-
-    def __init__(self):
-        pass
-    def start(self):
-        pass
-    def stop(self):
-        pass
-
+LOGGER_STATE = [
+    "NOT-STARTED",
+    "RUNNING",
+    "STOPPED"
+]
 
 ####
 class MultiprocessingLogger:
 
-    def __init__(self, path, file_name, queue, lock):
-        self.path = path
-        self.logfile = self.get_log_file(file_name)
+    def __init__(self, queue, lock, status):
         self.queue = queue
         self.logger_lock = lock
+        self.logger_status = status  # 0=NOT-STARTED, 1=RUNNING, 2= STOPPED
         self.stop_logging = Value('i', 0)
         self.stop_lock = Lock()
+
 
         self.process = None
 
@@ -74,14 +77,35 @@ class MultiprocessingLogger:
         if not self.path:
             self.path = "/var/log"
         if not os.path.isdir(self.path):
-            os.path.mkdir(self.path)
+            os.makedirs(self.path)
         file_name = file_name.replace("py", "log")
         return os.path.abspath(self.path + "/" + file_name)
 
+    def set_logging_level(self,level):
+        """
+        Set LOG Level , default is INFO mode
+        :param level: INFO|DEBUG|WARN|ERROR|EXCEPTION
+        :return: Numeric log level.
+        """
+        logging_level = 0
+        if level in LOGGING_LEVEL:
+            logging_level = LOGGING_LEVEL.index(level, 0, 4)
+
+        return logging_level
+
+    def config(self, path, file_name, logging_level="INFO"):
+        self.logging_level = self.set_logging_level(logging_level)
+        self.path = path
+        self.logfile = self.get_log_file(file_name)
+
     def start(self):
-        if self.queue and self.logger_lock:
-            self.process = Process(target=self.logging, args=(self.queue, self.logger_lock, self.stop_logging))
-            self.process.start()
+        if self.logger_status.value == 0 :
+            if self.queue and self.logger_lock:
+                self.process = Process(target=self.logging, args=(self.queue, self.logger_lock, self.stop_logging))
+                self.process.start()
+                self.logger_status.value = 1
+        else:
+            print("WARNING: Logger already started!")
 
     def stop(self):
 
@@ -105,13 +129,26 @@ class MultiprocessingLogger:
         print("INFO: LOGGER Stopped !!!")
 
     def status(self):
-        self.stop_lock.acquire()
-        s = self.stop_logging.value
-        self.stop_lock.release()
-        return s
+        """
+        Return the status of logger , 3 state it can be
+        NOT-STARTED
+        RUNNING
+        STOPPED
+        :return:
+        """
+        return LOGGER_STATE[self.logger_status.value]
 
     @exception
     def logging(self, queue, lock, stop_logging):
+        """
+        This is the main function which gets executed in a process.
+        It consume messages from shared logger_queue and write into log file.
+        A filter is applied to print message based on severity.
+        :param queue: A shared queue. All the workers produce the messages and logging function consume those message.
+        :param lock: A shared lock is used to guard concurrent write operation on shared logger queue.
+        :param stop_logging: A atomic shared variable to stop the loop.
+        :return: None
+        """
         try:
             print("Log file:{}".format(self.logfile))
             # Move existing log file to log1
@@ -125,7 +162,15 @@ class MultiprocessingLogger:
 
                 while not queue.empty():
                     message = queue.get()
-                    fh.write(str(time.ctime()) + ": "+ message + "\n")  # Need to update to format the message based on severity
+                    if type(message) == tuple:
+                        (message_level,message_value) = message
+                        # NON--Debug mode discard debug message
+                        if self.logging_level != 1 and  message_level == 1:
+                            continue
+                        else:
+                            fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
+                    else:
+                        fh.write(str(time.ctime()) + ": "+ message + "\n")
                 self.stop_lock.acquire()
                 stop = stop_logging.value
                 self.stop_lock.release()
@@ -139,12 +184,44 @@ class MultiprocessingLogger:
         finally:
             fh.close()
 
+    @exception
+    def info(self, message):
+        msg = (0, message)
+        self.logger_lock.acquire()
+        self.queue.put(msg)
+        self.logger_lock.release()
 
+    @exception
+    def debug(self, message):
+        msg = (1, message)
+        self.logger_lock.acquire()
+        self.queue.put(msg)
+        self.logger_lock.release()
 
+    @exception
+    def warn(self, message):
+        msg = (2, message)
+        self.logger_lock.acquire()
+        self.queue.put(msg)
+        self.logger_lock.release()
 
+    @exception
+    def error(self, message):
+        msg = (3, message)
+        self.logger_lock.acquire()
+        self.queue.put(msg)
+        self.logger_lock.release()
 
+    @exception
+    def exception(self, message):
+        msg = (4, message)
+        self.logger_lock.acquire()
+        self.queue.put(msg)
+        self.logger_lock.release()
 
-
-
-
-
+    @exception
+    def fatal(self, message):
+        msg = (5, message)
+        self.logger_lock.acquire()
+        self.queue.put(msg)
+        self.logger_lock.release()

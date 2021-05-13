@@ -144,6 +144,9 @@ def ClientApplicationArgumentParser():
     parser.add_argument("--port_index", "-pi", type=str, required=True, help='Specify index port')
     parser.add_argument("--port_status", "-ps", type=str, required=True, help='Specify status port')
     parser.add_argument("--dest_path", "-dp", type=str, required=False, help='Specify Destination Directory for GET operation only')
+    parser.add_argument("--debug", "-d", required=False, action='store_true',
+                        help='Run DataMover in debug mode')
+
 
     options = vars(parser.parse_args())
     return options
@@ -194,6 +197,8 @@ class CommandLineArgument:
         subparser.add_argument("--compaction", "-com", required=False, action='store_true', help='Enable target compaction')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual upload')
+        subparser.add_argument("--debug", "-d", required=False, action='store_true',
+                               help='Run DataMover in debug mode')
 
     def get(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -207,6 +212,8 @@ class CommandLineArgument:
         subparser.add_argument("--dest_path", "-d", type=str, required=True, help='Specify destination file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual download')
+        subparser.add_argument("--debug", "-d", required=False, action='store_true',
+                               help='Run DataMover in debug mode')
 
     def list(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -219,6 +226,8 @@ class CommandLineArgument:
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual listing')
+        subparser.add_argument("--debug", "-d", required=False, action='store_true',
+                               help='Run DataMover in debug mode')
     def delete(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
                                 help='Specify number of Jobs to be used for parallel processing. ')
@@ -232,5 +241,7 @@ class CommandLineArgument:
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual delete')
+        subparser.add_argument("--debug", "-d", required=False, action='store_true',
+                               help='Run DataMover in debug mode')
     def get_operation(self):
         return sys.argv[1:2][0]

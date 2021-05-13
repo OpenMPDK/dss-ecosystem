@@ -37,6 +37,7 @@ import os
 from multiprocessing import Process, Value, Lock
 from minio_client import MinioClient
 from s3_client import S3
+from logger import MultiprocessingLogger
 import time
 
 
@@ -46,6 +47,10 @@ class Worker(object):
         self.task_queue = kwargs.get("task_queue", None)
         self.index_data_queue = kwargs.get("index_data_queue", None)
         self.logger_queue = kwargs.get("logger_queue", None)  # A multiprocessing logger queue
+        self.logger = MultiprocessingLogger(self.logger_queue,
+                                            kwargs.get("logger_lock", None),
+                                            kwargs.get("logger_status", None)
+                                            )
         self.operation_status_queue = kwargs.get("status_queue", None)  # Used by only client Application
 
         self.s3_config = kwargs.get("s3_config", None)
@@ -83,7 +88,7 @@ class Worker(object):
         try:
             s3_client_lib_name = (self.s3_config["client_lib"]).lower()
             if s3_client_lib_name == "minio":
-                s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
+                s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key, self.logger)
             elif s3_client_lib_name == "dss_client":
                 os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
                 # To enable DSS CLIENT LOGS, uncomment the below 2 lines
@@ -91,19 +96,19 @@ class Worker(object):
                     os.environ['DSS_AWS_LOG'] = self.aws_log_debug_val
                     os.environ['DSS_AWS_LOG_FILENAME'] = 'aws_sdk_' + str(os.getpid()) + '_'
                 from dss_client import DssClientLib
-                self.logger_queue.put('PROCESS ENVIRONMENT DETAILS - {}, PID - {}'.format(os.environ, os.getpid()))
-                s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger_queue)
+                self.logger.debug('PROCESS ENVIRONMENT DETAILS - {}, PID - {}'.format(os.environ, os.getpid()))
+                s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger)
 
             elif s3_client_lib_name == "boto3":
                 config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio",
                           "minio_secret_key": "minio123"}
                 s3_client = S3(config)
             else:
-                self.logger_queue.put(
-                    "ERROR: S3 Client-{} doesn't exist! Supported S3 clients [\"minio\",\"dss_client\", \"boto3\"] ".format(
+                self.logger.error(
+                    "S3 Client-{} doesn't exist! Supported S3 clients [\"minio\",\"dss_client\", \"boto3\"] ".format(
                         s3_client_lib_name))
         except Exception as e:
-            self.logger_queue.put("EXCEPTION: BAD s3_client {}".format(e))
+            self.logger.exception("BAD s3_client {}".format(e))
 
         return s3_client
 
@@ -116,9 +121,9 @@ class Worker(object):
             self.process = Process(target=self.run)
             self.process.start()
         except Exception as e:
-            self.logger_queue.put("EXCEPTION: {}".format(e))
+            self.logger.exception("{}".format(e))
 
-        self.logger_queue.put("INFO:Worker-{} started ... ".format(self.id))
+        self.logger.info("Worker-{} started ... ".format(self.id))
 
     def stop(self):
         """
@@ -134,8 +139,8 @@ class Worker(object):
             try:
                 self.process.terminate()
             except Exception as e:
-                self.logger_queue.put("EXCEPTION: Unable to terminate Worker-{} - {}".format(self.id, e))
-        self.logger_queue.put("INFO: Worker-{} stopped!".format(self.id))
+                self.logger.exception("Unable to terminate Worker-{} - {}".format(self.id, e))
+        self.logger.info("Worker-{} stopped!".format(self.id))
 
     def get_status(self):
         """
@@ -166,21 +171,21 @@ class Worker(object):
             if self.task_queue and self.task_queue.qsize():
                 try:
                     # print("DEBUG: TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(), self.id))
-                    # self.logger_queue.put("DEBUG: TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(),self.id))
+                    # self.logger.debug("TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(),self.id))
                     task = self.task_queue.get()
                 except Exception as e:
-                    self.logger_queue.put("EXCEPTION:WORKER-{}:{}".format(self.id, e))
+                    self.logger.exception("WORKER-{}:{}".format(self.id, e))
             else:
                 pass
 
             if task:
                 # print("DEBUG: Task-{} is being processed by worker-{}".format(task.id, self.id))
-                # self.logger_queue.put("DEBUG: Task-{} is being processed by worker-{}".format(task.id, self.id))
+                # self.logger.debug("Task-{} is being processed by worker-{}".format(task.id, self.id))
                 # Start Task - May be a PUT,LIST,DEL,GET or indexing operation
                 task.start(task_queue=self.task_queue,
                            index_data_queue=self.index_data_queue,
                            status_queue=self.operation_status_queue,
-                           logger_queue=self.logger_queue,
+                           logger=self.logger,
                            progress_of_indexing=self.progress_of_indexing,
                            progress_of_indexing_lock=self.progress_of_indexing_lock,
                            index_data_count=self.index_data_count,

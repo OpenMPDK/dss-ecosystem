@@ -37,6 +37,7 @@ from multiprocessing import Value,Manager
 from minio_client import MinioClient
 from s3_client import S3
 import json
+from datetime import datetime
 
 task_id = Value('i', 1)
 
@@ -49,21 +50,27 @@ ds = mgr.dict()
 Need to be updated 
 """
 
-#def put(s3_client, params, status_queue , logger_queue):
 def put(s3_client, **kwargs):
+    """
+    Upload operation
+    :param s3_client:
+    :param kwargs: conatins params, status_queue, logger
+    :return:
+    """
     params = kwargs["params"]
     status_queue = kwargs["status_queue"]
-    logger_queue = kwargs["logger_queue"]
+    logger = kwargs["logger"]
 
     index_data = params.get("data",{})
     s3config   = params["s3config"]
     minio_bucket = s3config.get("bucket","bucket")
 
     success = 0
-    #logger_queue.put("TASK:PUT DATA  {}".format(index_data))
+    #logger.debug("TASK:PUT DATA  {}".format(index_data))
     uploaded_files = []
     failure_files_size = 0
     if s3_client:
+        start_time = datetime.now()
         for file_name in index_data["files"]:
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
             if os.path.exists(file):
@@ -72,7 +79,7 @@ def put(s3_client, **kwargs):
                         # Read file for the purpose of testing
                         with open(file, "rb") as FH:
                             lines = FH.readlines()
-                            #logger_queue.put("FileName:{}, Lines-{}, Size-{}".format(file, (len(lines)), os.path.getsize(file)))
+                            #logger.debug("FileName:{}, Lines-{}, Size-{}".format(file, (len(lines)), os.path.getsize(file)))
                         lines = []
                         success +=1
                     else:
@@ -82,18 +89,20 @@ def put(s3_client, **kwargs):
                         else:
                             failure_files_size += os.path.getsize(file)
                 except Exception as e:
-                    logger_queue.put("EXCEPTION: PUT - {}".format(e))
+                    logger.exception("EXCEPTION: PUT - {}".format(e))
                     failure_files_size += os.path.getsize(file)
             else:
-                logger_queue.put("ERROR: Task-Upload: File-{} doesn't exist".format(file))
+                logger.error("ERROR: Task-Upload: File-{} doesn't exist".format(file))
+        upload_time = (datetime.now() - start_time).seconds
+        logger.debug("Upload Time: {} sec".format(upload_time))
     else:
-        logger_queue.put("ERROR: Unable to connect to S3 Storage for upload")
+        logger.error("ERROR: Unable to connect to S3 Storage for upload")
 
-    #logger_queue.put("DEBUG: Minio Uploaded files {}:{}".format(index_data["dir"], uploaded_files ))
+    #logger.debug("Minio Uploaded files {}:{}".format(index_data["dir"], uploaded_files ))
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(index_data["files"]) - success) , "dir": index_data["dir"] , "size" : failure_files_size}
     status_queue.put(status_message)
-    #logger_queue.put("DEBUG: Minio Upload Status - {} - {}".format(status_message, status_queue.qsize()))
+    #logger.debug("Minio Upload Status - {} - {}".format(status_message, status_queue.qsize()))
 
 @exception
 def list(s3_client, **kwargs):
@@ -103,7 +112,7 @@ def list(s3_client, **kwargs):
     :param params:
     :param task_queue: Holds the task
     :param index_data_queue:  Holds the list index message to be distributed among the client nodes.
-    :param logger_queue: A shared queue used among the running processes
+    :param logger: A logger with shared queue used among the running processes
     :param listing_progress: it holds the
     :param listing_progress_lock:
     :return:
@@ -111,7 +120,7 @@ def list(s3_client, **kwargs):
     params = kwargs["params"]
     task_queue = kwargs["task_queue"]  # Contains task Object
     index_data_queue = kwargs["index_data_queue"] # Contains index_data
-    logger_queue = kwargs["logger_queue"]
+    logger = kwargs["logger"]
     listing_progress = kwargs["listing_progress"] # The shared memory is used to hold progress status.
     listing_progress_lock = kwargs["listing_progress_lock"]
     index_data_count = kwargs["index_data_count"]
@@ -156,9 +165,9 @@ def list(s3_client, **kwargs):
                         listing_progress[prefix] = 1
             if lowest_level_directory:
                 listing_progress[prefix] = 0
-                check_listing_progress(listing_progress,listing_progress_lock,prefix, logger_queue)
+                check_listing_progress(listing_progress,listing_progress_lock,prefix, logger)
         else:
-            logger_queue.put("ERROR: No object keys belongs to the prefix-{}".format(prefix))
+            logger.error("No object keys belongs to the prefix-{}".format(prefix))
     else:
         object_keys = s3_client.listObjects(minio_bucket, prefix)
         if object_keys:
@@ -174,7 +183,7 @@ def list(s3_client, **kwargs):
                 task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                 task_queue.put(task)
         else:
-            logger_queue.put("ERROR: No object keys belongs to the prefix-{}".format(prefix))
+            logger.error("ERROR: No object keys belongs to the prefix-{}".format(prefix))
             print("ERROR: No object keys belongs to the prefix-{}".format(prefix))
 
 
@@ -208,7 +217,7 @@ def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size, s3
         yield {"object_keys": object_keys}
 
 
-def check_listing_progress(listing_progress,listing_progress_lock, prefix, logger_queue):
+def check_listing_progress(listing_progress,listing_progress_lock, prefix, logger):
     if prefix in listing_progress:
         try:
             listing_progress_lock.acquire()
@@ -227,17 +236,17 @@ def check_listing_progress(listing_progress,listing_progress_lock, prefix, logge
 
                 if parent_prefix in listing_progress:
                     #print("KKKKKKKKKKK:{}=>{}".format(parent_prefix, listing_progress[parent_prefix]))
-                    check_listing_progress(listing_progress,listing_progress_lock, parent_prefix, logger_queue)
+                    check_listing_progress(listing_progress,listing_progress_lock, parent_prefix, logger)
 
         except Exception as e:
-            logger_queue.put("EXCEPTION:{}: {} =={}".format(__file__, e, listing_progress))
+            logger.exception("{}: {} =={}".format(__file__, e, listing_progress))
             print("EXCEPTION:{}: {} =={} ".format(__file__, e, listing_progress))
 
 @exception
 def get(s3_client,**kwargs):
     params = kwargs["params"]
     status_queue = kwargs["status_queue"]
-    logger_queue = kwargs["logger_queue"]
+    logger = kwargs["logger"]
     dest_path = params.get("dest_path","")
 
     s3config = params["s3config"]
@@ -256,7 +265,7 @@ def get(s3_client,**kwargs):
           os.makedirs(dest_dir)
 
         for object_key in object_keys["files"]:
-            # logger_queue.put("TASK: Going to removed object key {}".format(object_key))
+            # logger.debug("TASK: Going to removed object key {}".format(object_key))
             if params.get("dryrun", False):  # Dry run
                 success += 1
             else: # Actual operation
@@ -264,19 +273,19 @@ def get(s3_client,**kwargs):
                 if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
                     success += 1
     else:
-        logger_queue.put("ERROR: Unable to connect to Minio for upload with {}".format(minio_config))
+        logger.error("Unable to connect to Minio for upload with {}".format(minio_config))
 
-    # logger_queue.put("DEBUG: downloaded  object keys-{}".format(removed_objects ))
+    # logger.debug("downloaded  object keys-{}".format(removed_objects ))
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
-    #logger_queue.put("DEBUG: Task GET Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
+    #logger.debug("Task GET Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
     status_queue.put(status_message)
 
 @exception
 def delete(s3_client,**kwargs):
     params = kwargs["params"]
     status_queue = kwargs["status_queue"]
-    logger_queue = kwargs["logger_queue"]
+    logger = kwargs["logger"]
 
     s3config = params["s3config"]
     minio_bucket = s3config.get("bucket", "bucket")
@@ -287,23 +296,23 @@ def delete(s3_client,**kwargs):
     object_keys = params["data"]
     if s3_client:
         for object_key in object_keys["files"]:
-            #logger_queue.put("TASK: Going to removed object key {}".format(object_key))
+            #logger.debug("TASK: Going to removed object key {}".format(object_key))
             if params.get("dryrun", False):
                 # Dry run
                 success +=1
             else:
                 # Actual operation
                 if s3_client.deleteObject(minio_bucket, object_key):
-                    #logger_queue.put("TASK: Removed object key {}".format(object_key))
+                    #logger.debug("TASK: Removed object key {}".format(object_key))
                     removed_objects.append(object_key)
                     success += 1
     else:
-        logger_queue.put("ERROR: Unable to connect to Minio for upload with {}".format(minio_config))
+        logger.error("Unable to connect to Minio for upload with {}".format(minio_config))
 
-    #logger_queue.put("DEBUG: DELETED object keys-{}".format(removed_objects ))
+    #logger.debug("DELETED object keys-{}".format(removed_objects ))
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
-    #logger_queue.put("DEBUG: Task DELETE Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
+    #logger.debug("Task DELETE Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
     status_queue.put(status_message)
 
 
@@ -318,43 +327,42 @@ class Task:
     self.params = kwargs
 
   def start(self, **queue):
-    self.logger_queue = queue["logger_queue"]
+    self.logger = queue["logger"]
     self.task_queue   = queue["task_queue"]
     self.index_data_queue = queue["index_data_queue"]
 
     s3_client = queue["s3_client"]
 
-    #self.logger_queue.put("====>>INFO: TASK: Started task for operation-{} - {}".format(self.operation, self.params))
     try:
-      self.params["logger_queue"] = self.logger_queue
+      self.params["logger"] = self.logger
       if self.operation.lower() == "put":
         put(s3_client, params=self.params,
                        status_queue=queue["status_queue"],
-                       logger_queue=self.logger_queue)
+                       logger=self.logger)
       elif self.operation.lower() == "list":
         list(s3_client, params=self.params,
                         task_queue=queue["task_queue"],
                         index_data_queue=queue["index_data_queue"] ,
                         index_data_count=queue["index_data_count"],
-                        logger_queue=self.logger_queue,
+                        logger=self.logger,
                         listing_progress=queue["listing_progress"],
                         listing_progress_lock=queue["listing_progress_lock"])
       elif self.operation.lower() == "del":
         delete(s3_client, params=self.params,
                           status_queue=queue["status_queue"],
-                          logger_queue=self.logger_queue)
+                          logger=self.logger)
 
       elif self.operation.lower() == "get":
         get(s3_client, params=self.params,
                        status_queue=queue["status_queue"],
-                       logger_queue=self.logger_queue)
+                       logger=self.logger)
       elif self.operation.lower() == "indexing":
         indexing(data=self.params["data"],
                  nfs_cluster=self.params["nfs_cluster"],
                  nfs_share=self.params["nfs_share"],
 				 task_queue=queue["task_queue"],
 				 index_data_queue=queue["index_data_queue"],
-                 logger_queue=queue["logger_queue"],
+                 logger=self.logger,
                  progress_of_indexing=queue["progress_of_indexing"],
                  progress_of_indexing_lock=queue["progress_of_indexing_lock"],
                  index_data_count=queue["index_data_count"],
@@ -363,7 +371,7 @@ class Task:
                  )
 
     except Exception as e:
-        self.logger_queue.put("Exception:{}:Task: {}!".format(__file__,e))
+        self.logger.exception("Exception:{}:Task: {}!".format(__file__,e))
         print("Exception:{}:{}:{}".format(__file__,e, self.params["data"] ))
 
   def stop(self):
@@ -382,7 +390,7 @@ def indexing(**kwargs):
     # print("Actually at indexing function .... {}".format(kwargs))
     dir = kwargs["data"]
     task_queue = kwargs["task_queue"]
-    logger_queue = kwargs["logger_queue"]
+    logger = kwargs["logger"]
     index_data_queue = kwargs["index_data_queue"]
     nfs_cluster = kwargs["nfs_cluster"]
     nfs_share = kwargs["nfs_share"]
@@ -393,17 +401,17 @@ def indexing(**kwargs):
     progress_of_indexing = kwargs["progress_of_indexing"]
     # progress_of_indexing_lock = kwargs["progress_of_indexing_lock"]
     if dir not in progress_of_indexing:
-        logger_queue.put('Directory {} not present in index'.format(dir))
+        logger.warn('Directory {} not present in index'.format(dir))
     elif progress_of_indexing[dir] != 'Pending':
-        logger_queue.put('Directory {} is not in pending state - {}'.format(dir, progress_of_indexing[dir]))
+        logger.warn('Directory {} is not in pending state - {}'.format(dir, progress_of_indexing[dir]))
 
     progress_of_indexing[dir] = 'Progress'
     if not indexing_started_flag.value:
         indexing_started_flag.value = True
-        logger_queue.put('INFO: Indexing on the shares started')
+        logger.info('INFO: Indexing on the shares started')
         print('INFO: Indexing on the shares started')
 
-    for result in iterate_dir(data=dir, task_queue=task_queue, logger_queue=logger_queue,
+    for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger,
                               max_index_size=max_index_size):
         # If files a directory, then create a task
         if "dir" in result and "files" in result:
@@ -413,12 +421,12 @@ def indexing(**kwargs):
                    "nfs_share": nfs_share}
             index_data_queue.put(msg)
             index_data_count.value += len(result["files"])
-            logger_queue.put("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
+            logger.info("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
                 result["dir"], len(result["files"]), index_data_queue.qsize()))
         elif "dir" in result:
             subdir = result['dir']
             if subdir in progress_of_indexing and progress_of_indexing[subdir] in ['Pending', 'Progress']:
-                logger_queue.put('SKIPPING the dir {} already present'.format(subdir))
+                logger.warn('SKIPPING the dir {} already present'.format(subdir))
                 continue
             progress_of_indexing[subdir] = 'Pending'
             task = Task(operation="indexing", data=subdir, nfs_cluster=nfs_cluster, nfs_share=nfs_share,
@@ -440,7 +448,7 @@ def indexing_with_file_counters(**kwargs):
     #print("Actually at indexing function .... {}".format(kwargs))
     dir = kwargs["data"]
     task_queue = kwargs["task_queue"]
-    logger_queue = kwargs["logger_queue"]
+    logger = kwargs["logger"]
     index_data_queue = kwargs["index_data_queue"]
     nfs_cluster = kwargs["nfs_cluster"]
     nfs_share = kwargs["nfs_share"]
@@ -457,14 +465,14 @@ def indexing_with_file_counters(**kwargs):
         progress_of_indexing[dir] = 0
         progress_of_indexing_lock.release()
 
-    for result in iterate_dir(data=dir, task_queue=task_queue, logger_queue=logger_queue, max_index_size=max_index_size):
+    for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger, max_index_size=max_index_size):
 
         # If files a directory, then create a task
         if "dir" in result and "files" in result:
             #print("Received Files: {}".format(result))
             msg = {"dir": result["dir"], "files": result["files"] , "size": result["size"], "nfs_cluster": nfs_cluster, "nfs_share": nfs_share}
             index_data_queue.put(msg)
-            logger_queue.put("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format( result["dir"], len(result["files"]) , index_data_queue.qsize()))
+            logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format( result["dir"], len(result["files"]) , index_data_queue.qsize()))
             index_data_count.value += len(result["files"])
 
         elif "dir" in result:
@@ -483,11 +491,11 @@ def indexing_with_file_counters(**kwargs):
 
     #print("####### Shared Dict: dir{}:{}".format(dir,progress_of_indexing))
     if is_dir_only_consist_files:
-        check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock ,dir, nfs_share, logger_queue)
+        check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock ,dir, nfs_share, logger)
     #print("============ Shared Dict: dir{}:{}".format(dir, progress_of_indexing))
 
 
-def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock,  dir, nfs_share, logger_queue):
+def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock,  dir, nfs_share, logger):
     """
     This function helps to detect that indexing for hierarchical directory structure is completed.
         A               A=2
@@ -500,7 +508,7 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
     :param progress_of_indexing: A shared memory contains a shared dictionary to be used by multiple processes.
     :param progress_of_indexing_lock: A lock applied for all READ/write operation on shared dict.
     :param dir: hash_key , here "/A", "/A/B", "/A/C" etc
-    :param logger_queue: A shared process safe queue.
+    :param logger: A shared process safe queue.
     :return:
     """
     hierarchical_dirs = dir.split("/")
@@ -522,10 +530,10 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
             # To check if all the children processed for a prefix dir, Should stop when it reaches to NFS share root .
             if all_children_processed  :
                 parent_hash_key = "/".join(hierarchical_dirs[:-1])
-                check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock, parent_hash_key, nfs_share, logger_queue)
+                check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock, parent_hash_key, nfs_share, logger)
 
         except Exception as e:
-            logger_queue.put("EXCEPTION:{}: {} : {}".format(__file__, e, key_remove_error))
+            logger.exception("EXCEPTION:{}: {} : {}".format(__file__, e, key_remove_error))
 
 
 def iterate_dir(**kwargs):
@@ -538,7 +546,7 @@ def iterate_dir(**kwargs):
     file_set = []
     file_set_size = 0
     dir = kwargs["data"]
-    logger_queue = kwargs["logger_queue"]
+    logger = kwargs["logger"]
     max_index_size = kwargs["max_index_size"]
 
     for entry in os.scandir(dir):
