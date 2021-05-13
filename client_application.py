@@ -240,7 +240,7 @@ class ClientApplication(object):
                 self.logger.info("Terminated MessageHandler - Status ...")
             except Exception as e:
                 print("EXCEPTION: Terminated MessageHandler - Status  - {} ".format(e))
-                self.logger.exception("Terminated MessageHandler - Status  - {} ".format(e))
+                self.logger.excep("Terminated MessageHandler - Status  - {} ".format(e))
 
         print("DEBUG: Stopped all MessageHandler ...")
         self.logger.info("Stopped all MessageHandlers ... ")
@@ -334,14 +334,14 @@ class ClientApplication(object):
                         else:
                             index_buffer[message["dir"]] = len(message["files"])
             except Exception as e:
-                self.logger.exception("Monitor-Index - {}".format(e))
+                self.logger.excep("Monitor-Index - {}".format(e))
         # Close socket connection and destroy context
         try:
             socket.close()
             context.term()
             self.logger.info("Monitor-Index-Receiver terminated gracefully !")
         except Exception as e:
-            self.logger.exception("Monitor-Index-Receiver - {}".fromat(e))
+            self.logger.excep("Monitor-Index-Receiver - {}".fromat(e))
 
     def add_task(self,message):
         """
@@ -411,7 +411,7 @@ class ClientApplication(object):
                             del index_buffer[dir_prefix]
 
             except Exception as e:
-                self.logger.exception("MessageHandler-Status {}".format(e))
+                self.logger.excep("MessageHandler-Status {}".format(e))
 
             if self.index_data_receive_completed.value and not index_buffer:
                 self.logger.info("All operation status sent to Master. Closing Monitor-StatusHandler !")
@@ -423,7 +423,7 @@ class ClientApplication(object):
             context.term()
             self.logger.info("Monitor-StatusHandler is terminated gracefully !")
         except Exception as e:
-            self.logger.exception("Monitor-StatusHandler - {}".format(e))
+            self.logger.excep("Monitor-StatusHandler - {}".format(e))
 
     @exception
     def nfs_mount(self, nfs_cluster_ip=None, path=None):

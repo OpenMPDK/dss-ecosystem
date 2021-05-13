@@ -655,7 +655,7 @@ def process_list_operation(master):
 					break
 		except Exception as e:
 			print("Exception: Listing - {}".format(e))
-			master.logger.exception("Listing - {}".format(e))
+			master.logger.excep("Listing - {}".format(e))
 		#time.sleep(1)
 	master.stop_workers()
 	print("LISTING:{}".format(master.listing_progress))

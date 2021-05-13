@@ -67,7 +67,7 @@ def put(s3_client, **kwargs):
 
     success = 0
     #logger.debug("TASK:PUT DATA  {}".format(index_data))
-    uploaded_files = []
+    #uploaded_files = []
     failure_files_size = 0
     if s3_client:
         start_time = datetime.now()
@@ -84,19 +84,19 @@ def put(s3_client, **kwargs):
                         success +=1
                     else:
                         if s3_client.putObject(minio_bucket, file):
-                            uploaded_files.append(file_name)
+                            #uploaded_files.append(file_name)
                             success +=1
                         else:
                             failure_files_size += os.path.getsize(file)
                 except Exception as e:
-                    logger.exception("EXCEPTION: PUT - {}".format(e))
+                    logger.excep("PUT - {}".format(e))
                     failure_files_size += os.path.getsize(file)
             else:
-                logger.error("ERROR: Task-Upload: File-{} doesn't exist".format(file))
+                logger.error("Task-Upload: File-{} doesn't exist".format(file))
         upload_time = (datetime.now() - start_time).seconds
         logger.debug("Upload Time: {} sec".format(upload_time))
     else:
-        logger.error("ERROR: Unable to connect to S3 Storage for upload")
+        logger.error("Unable to connect to S3 Storage for upload")
 
     #logger.debug("Minio Uploaded files {}:{}".format(index_data["dir"], uploaded_files ))
     # Update following section for upload status.
@@ -183,7 +183,7 @@ def list(s3_client, **kwargs):
                 task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                 task_queue.put(task)
         else:
-            logger.error("ERROR: No object keys belongs to the prefix-{}".format(prefix))
+            logger.error("No object keys belongs to the prefix-{}".format(prefix))
             print("ERROR: No object keys belongs to the prefix-{}".format(prefix))
 
 
@@ -239,7 +239,7 @@ def check_listing_progress(listing_progress,listing_progress_lock, prefix, logge
                     check_listing_progress(listing_progress,listing_progress_lock, parent_prefix, logger)
 
         except Exception as e:
-            logger.exception("{}: {} =={}".format(__file__, e, listing_progress))
+            logger.excep("{}: {} =={}".format(__file__, e, listing_progress))
             print("EXCEPTION:{}: {} =={} ".format(__file__, e, listing_progress))
 
 @exception
@@ -371,7 +371,7 @@ class Task:
                  )
 
     except Exception as e:
-        self.logger.exception("Exception:{}:Task: {}!".format(__file__,e))
+        self.logger.excep("{}:Task: {}!".format(__file__,e))
         print("Exception:{}:{}:{}".format(__file__,e, self.params["data"] ))
 
   def stop(self):
@@ -408,7 +408,7 @@ def indexing(**kwargs):
     progress_of_indexing[dir] = 'Progress'
     if not indexing_started_flag.value:
         indexing_started_flag.value = True
-        logger.info('INFO: Indexing on the shares started')
+        logger.info('Indexing on the shares started')
         print('INFO: Indexing on the shares started')
 
     for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger,
@@ -421,7 +421,7 @@ def indexing(**kwargs):
                    "nfs_share": nfs_share}
             index_data_queue.put(msg)
             index_data_count.value += len(result["files"])
-            logger.info("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
+            logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
                 result["dir"], len(result["files"]), index_data_queue.qsize()))
         elif "dir" in result:
             subdir = result['dir']
@@ -533,7 +533,7 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
                 check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock, parent_hash_key, nfs_share, logger)
 
         except Exception as e:
-            logger.exception("EXCEPTION:{}: {} : {}".format(__file__, e, key_remove_error))
+            logger.excep("{}: {} : {}".format(__file__, e, key_remove_error))
 
 
 def iterate_dir(**kwargs):

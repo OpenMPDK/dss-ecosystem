@@ -108,7 +108,7 @@ class Worker(object):
                     "S3 Client-{} doesn't exist! Supported S3 clients [\"minio\",\"dss_client\", \"boto3\"] ".format(
                         s3_client_lib_name))
         except Exception as e:
-            self.logger.exception("BAD s3_client {}".format(e))
+            self.logger.excep("BAD s3_client {}".format(e))
 
         return s3_client
 
@@ -121,7 +121,7 @@ class Worker(object):
             self.process = Process(target=self.run)
             self.process.start()
         except Exception as e:
-            self.logger.exception("{}".format(e))
+            self.logger.excep("{}".format(e))
 
         self.logger.info("Worker-{} started ... ".format(self.id))
 
@@ -139,7 +139,7 @@ class Worker(object):
             try:
                 self.process.terminate()
             except Exception as e:
-                self.logger.exception("Unable to terminate Worker-{} - {}".format(self.id, e))
+                self.logger.excep("Unable to terminate Worker-{} - {}".format(self.id, e))
         self.logger.info("Worker-{} stopped!".format(self.id))
 
     def get_status(self):
@@ -174,7 +174,7 @@ class Worker(object):
                     # self.logger.debug("TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(),self.id))
                     task = self.task_queue.get()
                 except Exception as e:
-                    self.logger.exception("WORKER-{}:{}".format(self.id, e))
+                    self.logger.excep("WORKER-{}:{}".format(self.id, e))
             else:
                 pass
 

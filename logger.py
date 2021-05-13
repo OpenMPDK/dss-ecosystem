@@ -213,7 +213,7 @@ class MultiprocessingLogger:
         self.logger_lock.release()
 
     @exception
-    def exception(self, message):
+    def excep(self, message):
         msg = (4, message)
         self.logger_lock.acquire()
         self.queue.put(msg)

@@ -222,7 +222,7 @@ class Monitor:
             context.term()
 
         except Exception as e:
-            self.logger.exception("{}: monitor-index Closing Socket {}".format(e))
+            self.logger.excep("{}: monitor-index Closing Socket {}".format(e))
 
         # Update MasterApplication about termination of Monitor
         #self.monitor_index_data_sender.value = 1
@@ -266,7 +266,7 @@ class Monitor:
             else:
                 print("WARNING: Monitor-Index -- RSP not received from ClientApp - {}".format(status))
         except Exception as e:
-            self.logger.exception("Monitor-Index -{}".format(e))
+            self.logger.excep("Monitor-Index -{}".format(e))
             print("EXCEPTION: Monitor-Index -{}".format(e))
             socket.close()
             self.logger.info("Closed socket for Client-{}:{}".format(client.id,client.ip))
@@ -327,7 +327,7 @@ class Monitor:
             # Terminate context.
             context.term()
         except Exception as e:
-            self.logger.exception("{}: minitor-poller, {}".format(e))
+            self.logger.excep("{}: minitor-poller, {}".format(e))
 
         self.status_lock.acquire()
         self.monitor_status_poller.value = 1
