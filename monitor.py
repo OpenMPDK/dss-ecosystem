@@ -49,18 +49,19 @@ manager = Manager()
 
 class Monitor:
 
-    def  __init__(self, clients, index_data_queue, index_data_lock, index_data_generation_complete, index_data_count, logger_queue, logger_lock, logger_status, operation):
-        self.clients = clients
-        self.index_data_queue=index_data_queue
-        self.index_data_lock = index_data_lock
-        self.index_data_generation_complete = index_data_generation_complete
-        self.operation = operation
-        self.logger = MultiprocessingLogger(logger_queue, logger_lock, logger_status)
+    def  __init__(self, **kwargs):
+        self.clients = kwargs.get("clients",[])
+        self.index_data_queue = kwargs["index_data_queue"]
+        self.index_data_lock = kwargs["index_data_lock"]
+        self.index_data_generation_complete = kwargs["index_data_generation_complete"]
+        self.index_data_count = kwargs["index_data_count"]
+        self.logger = kwargs["logger"]
+        self.operation = kwargs["operation"]
+        self.operation_start_time = kwargs["operation_start_time"]
 
         self.status_queue = Queue()
         self.status_lock  = Lock()
         self.stop_status_poller = Value('i', 0)
-        self.index_data_count = index_data_count
         self.prefix_index_data = manager.dict()
 
         self.all_index_data_distributed = Value('i', 0)
@@ -69,9 +70,6 @@ class Monitor:
         self.monitor_index_data_sender = Value('i', 0)
         self.monitor_status_poller = Value('i', 0)
         self.monitor_progress_status = Value('i', 0)
-
-        self.operation_start_time = datetime.now()
-
 
 
     def start(self):
@@ -146,6 +144,7 @@ class Monitor:
 
         # Buffer to store prefix index and file count  {"prefix":<file count>}
         first_index_distribution  = 0
+        index_distribution_start_time = datetime.now()
 
         while True:
 
@@ -184,7 +183,7 @@ class Monitor:
                         previous_client_operation_status = 1
                         # Just for OPERATION stats collection
                         if first_index_distribution == 0:
-                            self.operation_start_time = datetime.now()
+                            index_distribution_start_time = datetime.now()
                             first_index_distribution =1
                     else: # Re-send once again
                         previous_client_operation_status = 0
@@ -199,8 +198,7 @@ class Monitor:
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
                 self.logger.info("Indexed data distribution is completed! {}".format(self.index_data_queue.qsize()))
                 self.all_index_data_distributed.value = 1
-                #print("INFO: Index Distribution FINISHED,  time - {}".format((datetime.now() - self.operation_start_time).seconds))
-                self.logger.info("Index Distribution FINISHED,  time - {}".format((datetime.now() - self.operation_start_time).seconds))
+                self.logger.info("Index Distribution FINISHED,  time - {}".format((datetime.now() - index_distribution_start_time).seconds))
 
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
@@ -208,7 +206,6 @@ class Monitor:
                     if not self.send_index_data(client, data):
                         if not self.send_index_data(client, data):
                             self.logger.error("Unable to send indexing completion message to client-{}".format(client.id))
-                    #print("INFO: Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
                     self.logger.info("Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
                 # Intimidated all the clients, exit the loop.
                 break
@@ -381,7 +378,6 @@ class Monitor:
                 if self.index_data_count.value:
                     upload_percentage = (file_index_count / self.index_data_count.value) * 100
                     if upload_percentage > display_percentage:
-                        #print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
                         self.logger.info(" ** Monitor-Progress - Operation Status Progress - {:.2f}% **".format(upload_percentage))
                         display_percentage +=10
 
@@ -402,8 +398,6 @@ class Monitor:
                 self.stop_status_poller.value = 1   # This will stop Monitor-Poller
                 self.status_lock.release()
 
-
-        #self.monitor_progress_status.value = 1
         total_operation_time = (datetime.now() - self.operation_start_time).seconds
 
         # Calculate operation BandWidth
@@ -414,21 +408,17 @@ class Monitor:
         else:
             prefix_index_data = self.prefix_index_data
         original_file_size_in_byte = 0
-        #print("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:{}".format(self.prefix_index_data))
         for prefix,value in prefix_index_data.items():
             original_file_size_in_byte += value["size"]
 
         success_operation_size_in_byte= original_file_size_in_byte
 
-        print("***** Operation Statistics *****")
         self.logger.info("***** Operation Statistics *****")
         if operation_success_count:
             success_percentage = (operation_success_count / self.index_data_count.value) * 100
-            print("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
             self.logger.info("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
         if operation_failure_count:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
-            print("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
             self.logger.info("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
 
@@ -437,10 +427,7 @@ class Monitor:
             bandwidth = success_operation_size_in_byte / ( 1024 * 1024 * total_operation_time)
         operation_size_in_gb = success_operation_size_in_byte / ( 1024 * 1024 * 1024)
 
-        print("INFO: Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
         self.logger.info("Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
-        print("INFO: Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
         self.logger.info("Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
         self.monitor_progress_status.value = 1
-        print("INFO: Monitor-Progress-Status terminated!")
         self.logger.info("Monitor-Progress-Status terminated! ")
