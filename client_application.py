@@ -228,21 +228,21 @@ class ClientApplication(object):
             time.sleep(1)
             try:
                 self.process_index.terminate()
-                print("INFO: Terminated MessageHandler - Index ...")
+                self.logger.info("Terminated MessageHandler - Index ...")
             except Exception as e:
-                print("EXCEPTION: Terminated MessageHandler - Index - {} ".format(e))
+                self.logger.execp("Terminated MessageHandler - Index - {} ".format(e))
 
         while self.process_status.is_alive():
             time.sleep(1)
             try:
                 self.process_status.terminate()
-                print("INFO: Terminated MessageHandler - Status ...")
+                #print("INFO: Terminated MessageHandler - Status ...")
                 self.logger.info("Terminated MessageHandler - Status ...")
             except Exception as e:
-                print("EXCEPTION: Terminated MessageHandler - Status  - {} ".format(e))
+                #print("EXCEPTION: Terminated MessageHandler - Status  - {} ".format(e))
                 self.logger.excep("Terminated MessageHandler - Status  - {} ".format(e))
 
-        print("DEBUG: Stopped all MessageHandler ...")
+        #print("DEBUG: Stopped all MessageHandler ...")
         self.logger.info("Stopped all MessageHandlers ... ")
 
     def message_server_index(self):
@@ -443,7 +443,7 @@ class ClientApplication(object):
 
             ret, console = self.nfs_cluster.mount(nfs_cluster_ip, nfs_share)
             if ret == 0:
-                print("INFO: Mounted NFS share {}:{}".format(nfs_cluster_ip, nfs_share))
+                #print("INFO: Mounted NFS share {}:{}".format(nfs_cluster_ip, nfs_share))
                 self.logger.info("Mounted NFS share {}:{}".format(nfs_cluster_ip, nfs_share))
                 self.nfs_share_list.put({"nfs_cluster_ip": nfs_cluster_ip, "nfs_share": nfs_share})
 
@@ -455,7 +455,7 @@ class ClientApplication(object):
 
                 return True
             else:
-                print("ERROR:NFS mounting failed \n {}".format(console))
+                #print("ERROR:NFS mounting failed \n {}".format(console))
                 self.logger.error(
                     "{}: NFS Mounting failed for {}:{}\n  {}".format(__file__, nfs_cluster_ip, path, console))
 

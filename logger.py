@@ -105,14 +105,12 @@ class MultiprocessingLogger:
                 self.process.start()
                 self.logger_status.value = 1
         else:
-            print("WARNING: Logger already started!")
+            self.warn("WARNING: Logger already started!")
 
     def stop(self):
 
         ## DEBUG - Remove letter
-        self.logger_lock.acquire()
-        self.queue.put("INFO: LOGGER Stopping logging!")
-        self.logger_lock.release()
+        self.info("LOGGER Stopping logging!")
 
         self.stop_lock.acquire()
         self.stop_logging.value = 1
@@ -168,6 +166,7 @@ class MultiprocessingLogger:
                         if self.logging_level != 1 and  message_level == 1:
                             continue
                         else:
+                            print("{}: {}".format(LOGGING_LEVEL[message_level], message_value))
                             fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
                     else:
                         fh.write(str(time.ctime()) + ": "+ message + "\n")

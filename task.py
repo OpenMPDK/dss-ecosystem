@@ -184,7 +184,7 @@ def list(s3_client, **kwargs):
                 task_queue.put(task)
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
-            print("ERROR: No object keys belongs to the prefix-{}".format(prefix))
+            #print("ERROR: No object keys belongs to the prefix-{}".format(prefix))
 
 
 
@@ -240,7 +240,7 @@ def check_listing_progress(listing_progress,listing_progress_lock, prefix, logge
 
         except Exception as e:
             logger.excep("{}: {} =={}".format(__file__, e, listing_progress))
-            print("EXCEPTION:{}: {} =={} ".format(__file__, e, listing_progress))
+            #print("EXCEPTION:{}: {} =={} ".format(__file__, e, listing_progress))
 
 @exception
 def get(s3_client,**kwargs):
@@ -372,7 +372,7 @@ class Task:
 
     except Exception as e:
         self.logger.excep("{}:Task: {}!".format(__file__,e))
-        print("Exception:{}:{}:{}".format(__file__,e, self.params["data"] ))
+        #print("Exception:{}:{}:{}".format(__file__,e, self.params["data"] ))
 
   def stop(self):
     pass
@@ -409,7 +409,7 @@ def indexing(**kwargs):
     if not indexing_started_flag.value:
         indexing_started_flag.value = True
         logger.info('Indexing on the shares started')
-        print('INFO: Indexing on the shares started')
+        #print('INFO: Indexing on the shares started')
 
     for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger,
                               max_index_size=max_index_size):
