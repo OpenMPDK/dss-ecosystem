@@ -44,13 +44,8 @@ namespace dss {
 #define DSS_PAGINATION_DEFAULT	100UL
 
 class Endpoint;
-class DSSInit;
-class Objects;
-class Request;
 class Result;
 class ClusterMap;
-class Cluster;
-class Client;
 
 using Credentials = Aws::Auth::AWSCredentials;
 using Config = Aws::Client::ClientConfiguration;
