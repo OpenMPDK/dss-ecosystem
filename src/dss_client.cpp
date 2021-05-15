@@ -36,8 +36,9 @@
 #include <fcntl.h>
 #include <mutex>
 #include <sys/stat.h>
-
 #include <unistd.h>
+
+#include <linux/limits.h>
 
 #include <aws/core/Aws.h>
 #include <aws/core/client/ClientConfiguration.h>
@@ -56,10 +57,15 @@
 #include <aws/s3/model/CommonPrefix.h>
 
 #include "dss.h"
+#include "dss_internal.h"
+#include "json.hpp"
+#include "pr.h"
 
 namespace dss {
 
 using namespace Aws;
+
+static const char* DSS_ALLOC_TAG = "DSS";
 
 DSSInit dss_init;
 
@@ -126,16 +132,58 @@ Endpoint::GetObject(const Aws::String& bn, const Aws::String& objectName)
         return Result(true, out.GetResultWithOwnership());
     } else {
 		return Result(false, out.GetError());
-#if 0
-		auto err = outcome.GetError();
-        if (err.GetErrorType() == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
-        	throw NoSuchResourceError();
-		else
-			throw GenericError(err.GetMessage().c_str());
-
-        return false;
-#endif
     }
+}
+
+void GetObjectAsyncDone(const Aws::S3::S3Client* s3Client, 
+    const Aws::S3::Model::GetObjectRequest& request, 
+    const Aws::S3::Model::GetObjectOutcome& outcome,
+    const std::shared_ptr<const Aws::Client::AsyncCallerContext>& context)
+{
+	const std::shared_ptr<const CallbackCtx> ctx = 
+			std::static_pointer_cast<const CallbackCtx>(context);
+
+    if (outcome.IsSuccess()) {
+        Callback cb = ctx->getCbFunc();
+		Request* req = (Request*)ctx->getCbArgs();
+
+        std::fstream local_file;
+        local_file.open(req->file.c_str(), std::ios::out | std::ios::binary);
+        auto& aws_result = outcome.GetResult();
+        auto& object_stream = const_cast<Aws::S3::Model::GetObjectResult&>(aws_result).GetBody();
+
+		//TODO: revist performance
+        local_file << object_stream.rdbuf();
+        local_file.flush();
+        local_file.close();
+ 
+        cb(req->done_arg, req->key,
+           outcome.GetError().GetMessage().c_str(), 0);
+    } else {
+        std::cout << "Error: PutObjectAsyncDone: " <<
+            outcome.GetError().GetMessage() << std::endl;
+    }
+
+    //upload_variable.notify_one();
+}
+
+Result
+Endpoint::GetObjectAsync(const Aws::String& bn, Request* req)
+{
+    Aws::S3::Model::GetObjectRequest request;
+    request.WithBucket(bn).SetKey(Aws::String(req->key.c_str()));
+
+    // Create and configure the context for the asynchronous put object request.
+    std::shared_ptr<Aws::Client::AsyncCallerContext> context =
+    		Aws::MakeShared<CallbackCtx>(DSS_ALLOC_TAG, req->done_func, req);
+    context->SetUUID(Aws::String(req->key.c_str()));
+
+    // Make the asynchronous put object call. Queue the request into a 
+    // thread executor and call the GetObjectAsyncDone function when the 
+    // operation has finished. 
+    m_ses.GetObjectAsync(request, GetObjectAsyncDone, context);
+
+    return true;
 }
 
 void PutObjectAsyncDone(const Aws::S3::S3Client* s3Client, 
@@ -150,7 +198,8 @@ void PutObjectAsyncDone(const Aws::S3::S3Client* s3Client,
         Callback cb = ctx->getCbFunc();
 		Request* req = (Request*)ctx->getCbArgs();
 
-        cb(req->done_arg, req->key, req->key, 0);
+        cb(req->done_arg, req->key,
+           outcome.GetError().GetMessage().c_str(), 0);
     } else {
         std::cout << "Error: PutObjectAsyncDone: " <<
             outcome.GetError().GetMessage() << std::endl;
@@ -158,7 +207,6 @@ void PutObjectAsyncDone(const Aws::S3::S3Client* s3Client,
 
     //upload_variable.notify_one();
 }
-
 
 Result
 Endpoint::PutObjectAsync(const Aws::String& bn, Request* req)
@@ -169,9 +217,8 @@ Endpoint::PutObjectAsync(const Aws::String& bn, Request* req)
 	request.SetBody(req->io_stream);
 
     // Create and configure the context for the asynchronous put object request.
-
     std::shared_ptr<Aws::Client::AsyncCallerContext> context =
-    		Aws::MakeShared<CallbackCtx>("PutObjectAllocationTag", req->done_func, req);
+    		Aws::MakeShared<CallbackCtx>(DSS_ALLOC_TAG, req->done_func, req);
     context->SetUUID(Aws::String(req->key.c_str()));
 
     // Make the asynchronous put object call. Queue the request into a 
@@ -393,7 +440,7 @@ ClusterMap::GetCluster(Request* req)
 	unsigned id = 0, max_w = GetCLWeight(0, req->key.c_str());
 	for (unsigned i=1; i<m_clusters.size(); i++) {
 		unsigned w = GetCLWeight(i, req->key.c_str());
-		 pr_debug("key %s: cluster %u weight %0x\n", req->key.c_str(), i, w);
+		pr_debug("key %s: cluster %u weight %0x\n", req->key.c_str(), i, w);
 		if (w > max_w) {
 			id = i;
 			max_w = w;
@@ -439,6 +486,12 @@ Result
 Cluster::GetObject(Request* r)
 {
 	return GetEndpoint(r)->GetObject(m_bucket, r);
+}
+
+Result
+Cluster::GetObjectAsync(Request* r)
+{
+	return GetEndpoint(r)->GetObjectAsync(m_bucket, r);
 }
 
 Result
@@ -577,18 +630,48 @@ int Client::PutObjectAsync(const std::string& objectName, const std::string& src
 	Request* req = new Request(objectName.c_str(), src_fn.c_str(), cb, cb_arg);
 
     if (stat(src_fn.c_str(), &buffer) == -1) {
-        pr_err("Error: PutObject: File '%s' does not exist.",
+        pr_err("Error: PutObjectAsync: File '%s' does not exist.",
         		src_fn.c_str());
-        return false;
+        return -1;
     }
 
-	req->io_stream = Aws::MakeShared<Aws::FStream>("Client::PutObject",
+	req->io_stream = Aws::MakeShared<Aws::FStream>(DSS_ALLOC_TAG,
             			src_fn.c_str(),
             			std::ios_base::in | std::ios_base::binary);
 
 	m_cluster_map->GetCluster(req);
 	r = std::move(req->Submit(&Cluster::PutObjectAsync));
 
+    if (r.IsSuccess()) {
+        return 0;
+    } else {
+        auto err = r.GetErrorType();
+        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
+                throw NoSuchResourceError();
+        else
+            throw GenericError(r.GetErrorMsg().c_str());
+
+        return -1;
+    }
+}
+
+int Client::GetObjectAsync(const std::string& objectName, const std::string& dst_fn,
+						   Callback cb, void* cb_arg)
+{
+	Result r;
+//    struct stat buffer;
+	Request* req = new Request(objectName.c_str(), dst_fn.c_str(), cb, cb_arg);
+/*
+	if (stat(dst_fn.c_str(), &buffer) == -1) {
+		char msg_buf[PATH_MAX];
+		snprintf(msg_buf, PATH_MAX,
+				 "GetObject: File '%s' does not exist.", dst_fn.c_str());
+        throw GenericError(msg_buf);
+        return false;
+    }
+*/
+	m_cluster_map->GetCluster(req);
+	r = std::move(req->Submit(&Cluster::GetObjectAsync));
     if (r.IsSuccess()) {
         return 0;
     } else {
@@ -609,12 +692,14 @@ int Client::PutObject(const Aws::String& objectName, const Aws::String& src_fn, 
 	std::unique_ptr<Request> req_guard(new Request(objectName.c_str(), src_fn.c_str()));
 
     if (stat(src_fn.c_str(), &buffer) == -1) {
-        pr_err("Error: PutObject: File '%s' does not exist.",
-        		src_fn.c_str());
+		char msg_buf[PATH_MAX];
+		snprintf(msg_buf, PATH_MAX,
+				 "GetObject: File '%s' does not exist.", src_fn.c_str());
+        throw GenericError(msg_buf);
         return false;
     }
 
-	req_guard->io_stream = Aws::MakeShared<Aws::FStream>("Client::PutObject",
+	req_guard->io_stream = Aws::MakeShared<Aws::FStream>(DSS_ALLOC_TAG,
             			src_fn.c_str(),
             			std::ios_base::in | std::ios_base::binary);
 
@@ -722,75 +807,17 @@ int Objects::GetObjKeys()
     return 0;
 }
 
+std::unique_ptr<Objects>
+Client::GetObjects(std::string prefix, std::string delimiter,
+    			   uint32_t page_size) {
+	return std::unique_ptr<Objects>(new Objects(m_cluster_map, prefix, delimiter, page_size));
+};
+
+Client::Client(const std::string& url, const std::string& user, const std::string& pwd,
+			const SesOptions& opts) {
+		m_cfg = ExtractOptions(opts);
+		m_cred = Aws::Auth::AWSCredentials(user.c_str(), pwd.c_str());
+		m_discover_ep = new Endpoint(m_cred, url, m_cfg);
+}
+
 } // namespace dss
-
-void
-test_put_done(void* ptr, std::string key, std::string message, int err)
-{
-	printf("%s: key %s\n", __func__, key.c_str());
-}
-
-void*
-do_work(void*) 
-{
-	std::unique_ptr<dss::Client> client
-		= dss::Client::CreateClient("http://127.0.0.1:9001", "minioadmin", "minioadmin");
-	if (!client)
-		fprintf(stderr, "Failed to create client\n");
-
-	sleep(2);
-
-	return NULL;
-}
-
-int main()
-{
-	const Aws::String object_name = "test_obj";
-    const Aws::String fname = "/root/jerry/dss_client/src/dss_client.cpp";
-
-    for (int i=0; i<5; i++) {
-    	pthread_t t; 
-    	pthread_create(&t, NULL, do_work, NULL);	
-    }
-
-	std::unique_ptr<dss::Client> client
-		= dss::Client::CreateClient("http://127.0.0.1:9001", "minioadmin", "minioadmin");
-	if (!client) {
-		fprintf(stderr, "Failed to create client\n");
-		return -1;
-	}
-
-/*
-	for (unsigned i=0; i<2; i++) {
-		Aws::String key = object_name + std::to_string(i).c_str();
-       	client->PutObject(key, fname, true);
-       	
-		if (!client->GetObject(key, "/tmp/" + key)) {
-           	return 1;
-        }
-        
-    }
-    */
-	std::string key = std::string(object_name.c_str()) + std::to_string(0).c_str();
-   	client->PutObjectAsync(key, std::string(fname.c_str()), test_put_done, nullptr);
-
-   	sleep(2);
-	
-/*
-	Aws::String key = Aws::String("test_obj9991");
-   	client->PutObject(key, fname);
-	if (!client->GetObject(key, "/tmp/" + key)) {
-       	return 1;
-    }
-*/       
-    //dss::Objects *objs = client->GetObjects();
-    //while (!objs->GetObjKeys()) {;}
-
-	//auto result = client->ListObjects("");
-	//for (auto k : result)
-	//	printf("%s\n", k.c_str());
-
-	//client.DeleteBucket(bucket_name, true);
-
-    return 0;
-}

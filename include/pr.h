@@ -31,8 +31,8 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __INSDB_INC_PR_H
-#define __INSDB_INC_PR_H
+#ifndef DSS_PR_H
+#define DSS_PR_H
 
 #include <stdint.h>
 #include <stdarg.h>

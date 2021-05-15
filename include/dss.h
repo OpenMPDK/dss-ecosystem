@@ -31,35 +31,30 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <iostream>
-#include <fstream>
-#include <sys/stat.h>
+#ifndef DSS_H
+#define DSS_H
 
-#include <aws/core/Aws.h>
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/auth/AWSCredentials.h>
-
 #include <aws/s3/S3Client.h>
-#include <aws/s3/model/GetObjectRequest.h>
-#include <aws/s3/model/PutObjectRequest.h>
-#include <aws/s3/model/DeleteObjectRequest.h>
-#include <aws/s3/model/ListObjectsRequest.h>
-#include <aws/s3/model/CreateBucketRequest.h>
-#include <aws/s3/model/DeleteBucketRequest.h>
-
-#include <aws/s3/model/BucketLocationConstraint.h>
-
-#include "json.hpp"
-#include "pr.h"
 
 namespace dss {
+
+#define DSS_VER					"20210217"
+#define DSS_PAGINATION_DEFAULT	100UL
+
+class Endpoint;
+class DSSInit;
+class Objects;
+class Request;
+class Result;
+class ClusterMap;
+class Cluster;
+class Client;
 
 using Credentials = Aws::Auth::AWSCredentials;
 using Config = Aws::Client::ClientConfiguration;
 using Callback = std::function<void(void*, std::string, std::string, int)>;
-
-#define DSS_VER					"20210217"
-#define DSS_PAGINATION_DEFAULT	100UL
 
 class NoSuchResourceError : std::exception {
 public:
@@ -93,60 +88,6 @@ private:
     std::string m_msg;
 };
 
-/* Not using __attribute__((destructor)) b/c it is only called
-   after global var is destructed, so if options is declared
-   global, ShutdownAPI() would crash */
-class DSSInit {
-public:
-	DSSInit(): m_local_config(nullptr), m_options()
-	{
-		char *s = NULL;
-		unsigned l = 0;
-
-		if ((s = getenv("DSS_AWS_LOG"))) {
-			l = *s - '0';
-
-			if (l > (int) Aws::Utils::Logging::LogLevel::Trace) {
-				pr_err("AWS log level out of range\n");
-				l = 0;
-			}
-    		m_options.loggingOptions.logLevel = (Aws::Utils::Logging::LogLevel) l;
-		}
-
-		if ((s = getenv("DSS_AWS_LOG_FILENAME"))) {
-			m_options.loggingOptions.defaultLogPrefix = s;
-		}
-
-		if ((s = getenv("DSS_CONFIG_FILE"))) {
-			m_local_config = s;
-		}
-	
-		s = (char*) "AWS_EC2_METADATA_DISABLED=true";
-		if (putenv(s))
-			pr_err("Failed to set AWS_EC2_METADATA_DISABLED\n");
-
-    	Aws::InitAPI(m_options);
-	}
-
-	~DSSInit() 
-	{
-		Aws::ShutdownAPI(m_options);
-	}
-
-	const char* GetConfPath() { return m_local_config; }
-	std::mutex& mutex() { return m_mutex; }
-
-private:
-	std::mutex m_mutex;
-	const char* m_local_config;
-	Aws::SDKOptions m_options;
-};
-
-class Result;
-class Client;
-class ClusterMap;
-class Cluster;
-
 struct SesOptions {
 	SesOptions()
 	{
@@ -168,52 +109,6 @@ struct SesOptions {
     int connectTimeoutMs;
     int enableTcpKeepAlive;
     int tcpKeepAliveIntervalMs;
-
-	static const std::string HTTP_SCHEME;
-	static const std::string HTTPS_SCHEME;
-};
-
-const std::string SesOptions::HTTP_SCHEME = "http";
-const std::string SesOptions::HTTPS_SCHEME = "https";
-
-struct Request {
-	typedef Result (Cluster::*Handler) (Request* r);
-
-	Request(const char* k) :
-		key(k) {}
-	Request(const char* k, const char* f) :
-		key(k),
-		file(f) {}
-	Request(const char* k, const char* f, Callback cb, void* cb_arg) :
-		key(k),
-		file(f),
-		done_func(cb),
-		done_arg(cb_arg) {}
-
-	Result Submit(Handler h);
-
-	const std::string	key;
-	const std::string	file;
-	Callback			done_func;
-	void*				done_arg;
-	uint32_t			key_hash;
-	Cluster*			cluster;
-	std::shared_ptr<Aws::IOStream> io_stream;
-};
-
-class CallbackCtx : public Aws::Client::AsyncCallerContext {
-public:
-	CallbackCtx(Callback func, void* args) {
-		cb_func = func;
-		cb_args = args;
-	}
-
-	Callback getCbFunc() const { return cb_func; }
-	void* getCbArgs() const { return cb_args; } 
-
-private:
-	Callback cb_func;
-	void* cb_args;
 };
 
 class Objects {
@@ -240,183 +135,11 @@ private:
 	std::string m_delim;
 	uint32_t m_pagesize;
     std::set<std::string> m_page;
+
 public:
     decltype(m_page.cbegin()) begin() const { return m_page.cbegin(); }
     decltype(m_page.cend()) end() const { return m_page.cend(); }
 };
-
-class Result {
-public:
-	Result() {}
-	Result(bool success) : r_success(success) {}
-	Result(bool success, Aws::S3::Model::GetObjectResult gor) :
-			r_success(success), r_object(std::move(gor)) {}
-	Result(bool success, Aws::S3::S3Error e) :
-		r_success(success),
-		r_err_type(e.GetErrorType()),
-		r_err_msg("Exception: " + e.GetExceptionName() +
-				  " Details: " + e.GetMessage()) {}
-/*
-	Result(Result& other) :
-		r_success(other.r_success),
-		r_err_type(other.r_err_type),
-		r_err_msg(std::move(other.r_err_msg)),
-		r_object(std::move(other.r_object))
-	{}
-
-	Result(Result&& other) :
-		r_success(other.r_success),
-		r_err_type(other.r_err_type),
-		r_err_msg(std::move(other.r_err_msg)),
-		r_object(std::move(other.r_object))
-	{}
-*/
-	bool IsSuccess() { return r_success; }
-	Aws::IOStream& GetIOStream() { return r_object.GetBody(); }
-	Aws::S3::S3Errors GetErrorType() { return r_err_type; }
-	Aws::String& GetErrorMsg() { return r_err_msg; }
-
-private:
-	bool				r_success;
-	Aws::S3::S3Errors 	r_err_type;
-	Aws::String			r_err_msg;
-	Aws::S3::Model::GetObjectResult	r_object;
-};
-
-class Endpoint {
-public:
-	Endpoint(Credentials& cred, const std::string& url, Config& cfg);
-
-	Result GetObject(const Aws::String& bn, Request* req);
-    Result GetObject(const Aws::String& bn, const Aws::String& objectName);
- 	Result PutObjectAsync(const Aws::String& bn, Request* req);
-	Result PutObject(const Aws::String& bn, Request* req);
-    Result PutObject(const Aws::String& bn, const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream);
-	Result DeleteObject(const Aws::String& bn, Request* req);
-    Result DeleteObject(const Aws::String& bn, const Aws::String& objectName);
-
-	Result HeadBucket(const Aws::String& bn);
-	Result CreateBucket(const Aws::String& bn);
-
-	Result ListObjects(const Aws::String& bn, Objects *objs);
-
-private:
-	Aws::S3::S3Client m_ses;
-};
-
-class Cluster {
-public:
-	Cluster(uint32_t id) :
-		m_id(id),
-		m_bucket(Aws::String(DATA_BUCKET_PREFIX) + Aws::String(std::to_string(id).c_str())) {}
-
-	~Cluster()
-	{
-		for (auto e : m_endpoints)
-			delete e;
-	}
-
-	Endpoint* GetEndpoint(Request* r) { return m_endpoints[r->key_hash % m_endpoints.size()]; }
-
-    Result GetObject(const Aws::String& objectName);
-    Result PutObject(const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream);
-    Result DeleteObject(const Aws::String& objectName);
-
-    Result GetObject(Request* r);
-	Result PutObjectAsync(Request* r);
-    Result PutObject(Request* r);
-    Result DeleteObject(Request* r);
- 
-    Result HeadBucket();
-    Result HeadBucket(const Aws::String& bucketName);
-
-	Result CreateBucket();
-    uint32_t GetID() { return m_id; }
-
-	Result ListObjects(Objects *objs);
-
-	int InsertEndpoint(Client* c, const std::string& ip, uint32_t port);
-private:
-	uint32_t m_id;
-	Aws::String m_bucket;
-   	std::vector<Endpoint*> m_endpoints;
-
-	static constexpr char* DATA_BUCKET_PREFIX = (char*)"dss";
-};
-
-class ClusterMap {
-public:
-	ClusterMap(Client *c, DSSInit& i) :
-		m_client(c), m_init(i) {}
-
-	~ClusterMap()
-	{
-		for (auto c : m_clusters)
-			delete c;
-	}
-
-	Cluster* InsertCluster(uint32_t id)
-	{
-		Cluster* c = new Cluster(id);
-		if (m_clusters.size() < (id + 1))
-			m_clusters.resize(id + 1);
-		m_clusters.at(id) = c;
-
-		return c;
-	}
-
-
-	void GetCluster(Request* req);
-	const char* GetClusterConfFromLocal() { return m_init.GetConfPath(); }
-	int AcquireClusterConf();
-	int VerifyClusterConf();
-
-	const std::vector<Cluster*>& GetClusters() { return m_clusters; }
-/*
-	unsigned GetCLWeight(unsigned i, Aws::Utils::ByteBuffer hash_bb)
-	{
-		static size_t cl_base = EP_SLOT_WIDTH / 8;
-
-		if (hash_bb.GetLength() != 256/8)
-			abort();
-
-		if (i >= CL_SLOT_MAX)
-			throw std::out_of_range("Cluster hash table");
-
-		uint8_t *hash = hash_bb.GetUnderlyingData();
-
-		return (hash[cl_base + (i/2)] >> ((i%2) * CL_SLOT_BITS)) & CL_SLOT_MASK;
-	}
-*/
-	unsigned GetCLWeight(unsigned i, const Aws::String& key)
-	{
-		return m_hash(std::to_string(i) + std::string(key.c_str()));
-	}
-
-	unsigned GetCLWeight(unsigned i, char* key)
-	{
-		return m_hash(std::to_string(i) + std::string(key));
-	}
-
-	unsigned GetEPWeight(unsigned i);
-	
-private:
-	Client* m_client;
-	DSSInit& m_init;
-	std::hash<std::string> m_hash;
-	std::vector<Cluster*> m_clusters;
-#if 0
-	static const uint64_t SLOT_TBL_SIZE = 8;
-	static const uint64_t EP_SLOT_BITS = 5; /**/
-	static const uint64_t EP_SLOT_MAX =  1ULL << EP_SLOT_BITS;
-	static const uint64_t EP_SLOT_MASK = (1ULL << EP_SLOT_BITS) - 1;
-	static const uint64_t EP_SLOT_WIDTH = EP_SLOT_MAX * EP_SLOT_BITS;
-
-	static const uint64_t CL_SLOT_BITS = 4;
-	static const uint64_t CL_SLOT_MAX = 1ULL << CL_SLOT_BITS;
-	static const uint64_t CL_SLOT_MASK = (1ULL << CL_SLOT_BITS) - 1;
-#endif	
-}; 
 
 class Client {
 public:
@@ -424,33 +147,31 @@ public:
 
     Result GetClusterConfig();
 	int InitClusterMap();
-	static std::unique_ptr<Client> CreateClient(const std::string& url, const std::string& user,
-												const std::string& pwd, const SesOptions& opts = SesOptions());
+	static std::unique_ptr<Client> CreateClient(const std::string& url,
+												const std::string& user,
+												const std::string& pwd,
+												const SesOptions& opts = SesOptions());
 	
 	Config ExtractOptions(const SesOptions& opts);
 	Credentials& GetCredential() { return m_cred; }
 	Config& GetConfig() { return m_cfg; }
 
     int GetObject(const Aws::String& objectName, const Aws::String& dest_fn);
+	int GetObjectAsync(const std::string& objectName, const std::string& dst_fn,
+					   Callback cb, void* cb_arg);
     int PutObject(const Aws::String& objectName, const Aws::String& src_fn, bool async = false);
 	int PutObjectAsync(const std::string& objectName, const std::string& src_fn,
-					   Callback cb = [](void* ptr, std::string key, std::string message, int err){}, void *cb_arg = nullptr);
-
+					   Callback cb = [](void* ptr, std::string key, std::string message, int err){},
+					   void *cb_arg = nullptr);
     int DeleteObject(const Aws::String& objectName);
-
-    std::unique_ptr<Objects> GetObjects(std::string prefix, std::string delimiter, uint32_t page_size = DSS_PAGINATION_DEFAULT) {
-    	return std::unique_ptr<Objects>(new Objects(m_cluster_map, prefix, delimiter, page_size));
-    };
+    std::unique_ptr<Objects> GetObjects(std::string prefix, std::string delimiter,
+    									uint32_t page_size = DSS_PAGINATION_DEFAULT);
     std::set<std::string>&& ListObjects(const std::string& prefix, const std::string& delimiter);
     std::set<std::string> ListBuckets();
 
 private:
 	Client(const std::string& url, const std::string& user, const std::string& pwd,
-			const SesOptions& opts) {
-		m_cfg = ExtractOptions(opts);
-		m_cred = Aws::Auth::AWSCredentials(user.c_str(), pwd.c_str());
-		m_discover_ep = new Endpoint(m_cred, url, m_cfg);
-	}
+			const SesOptions& opts);
 
     friend class Objects;
 	Credentials m_cred;
@@ -464,3 +185,5 @@ private:
 };
 
 }; //namespace dss
+
+#endif /* !DSS_H */
