@@ -191,8 +191,10 @@ def run_data_put(thr_id, key_prefix, num_ios=0):
             client_conn.put_object(key, filename)
             logger.debug('Thread-%d - Uploading the file %s DONE', thr_id, filename)
         except:
-            logger.debug('Thread-%d - Uploading the file %s FAILED', thr_id, filename)
-            fail_count += 1
+            logger.error('Thread-%d - Uploading the file %s FAILED', thr_id, filename)
+            # fail_count += 1
+            print(f'Failed to upload the file {filename} by thread {thr_id}. Exiting')
+            return count, (num_ios - count)
     end_time = time.time()
     logger.info('PUT objects - Thr_id %d, Start time - %d, End time - %d', thr_id, start_time, end_time)
     logger.info('PUT objects - Thr_id %d,  total_io_count %d, failed_io %d,  time %d sec', thr_id, count,
@@ -235,7 +237,10 @@ def run_data_get(thr_id, key_prefix, num_ios=0):
         try:
             client_conn.get_object(key, filename)
         except:
-            fail_count += 1
+            logger.error('Thread-%d - Downloading the file %s FAILED', thr_id, filename)
+            print(f'Failed to download the file {filename} by thread {thr_id}. Exiting')
+            # fail_count += 1
+            return count, (num_ios - count)
 
     end_time = time.time()
 
@@ -285,7 +290,10 @@ def run_data_del(thr_id, key_prefix, num_ios=0):
         try:
             client_conn.del_object(key)
         except:
-            fail_count += 1
+            logger.error('Thread-%d - Deleting the key %s FAILED', thr_id, key)
+            print(f'Failed to delete the key {key} by thread {thr_id}. Exiting')
+            # fail_count += 1
+            return count, (num_ios - count)
 
     end_time = time.time()
 
