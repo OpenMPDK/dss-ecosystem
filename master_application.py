@@ -53,323 +53,323 @@ import json
 manager = Manager()
 
 class Master(object):
-	"""
-	Master application initiate
-	-
-	"""
+    """
+    Master application initiate
+    -
+    """
 
-	def __init__(self, operation, config):
-	    self.config = config
-	    self.client_ip_list = config.get("tess_clients_ip",[])
-	    self.workers_count = config["master"]["workers"]
-	    self.max_index_size = config["master"]["max_index_size"]
-	    self.workers = []
-	    self.clients = []
-	    self.task_queue = Queue()
-	    self.task_lock = Lock()
+    def __init__(self, operation, config):
+        self.config = config
+        self.client_ip_list = config.get("tess_clients_ip",[])
+        self.workers_count = config["master"]["workers"]
+        self.max_index_size = config["master"]["max_index_size"]
+        self.workers = []
+        self.clients = []
+        self.task_queue = Queue()
+        self.task_lock = Lock()
 
-	    self.operation=operation
-	    self.client_user_id = config["client"]["user_id"]
-	    self.client_password = config["client"]["password"]
+        self.operation=operation
+        self.client_user_id = config["client"]["user_id"]
+        self.client_password = config["client"]["password"]
 
-	    self.s3_config = config.get("s3_storage", {})
+        self.s3_config = config.get("s3_storage", {})
 
-	    ## Logging
-	    self.logging_path =  "/var/log/dss"
-	    self.logging_level = "INFO"
-	    if "logging" in config:
-	        self.logging_path = config["logging"].get("path", "/var/log/dss")
-	        self.logging_level = config["logging"].get("level", "INFO")
-	    self.logger       = None
-	    self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
-	    self.logger_queue = Queue()
-	    self.logger_lock  = Lock()
+        ## Logging
+        self.logging_path =  "/var/log/dss"
+        self.logging_level = "INFO"
+        if "logging" in config:
+            self.logging_path = config["logging"].get("path", "/var/log/dss")
+            self.logging_level = config["logging"].get("level", "INFO")
+        self.logger       = None
+        self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
+        self.logger_queue = Queue()
+        self.logger_lock  = Lock()
 
-	    self.lock = Lock()
+        self.lock = Lock()
 
-	    # Operation PUT/GET/DEL/LIST
-	    self.index_data_queue = Queue()  # Index data stored by workers
-	    self.index_data_lock = Lock()
-	    self.index_data_generation_complete = Value('i', 0)   ##TODO - Set value when all indexing is done.
-	    self.indexing_started_flag = Value('i', False)
+        # Operation PUT/GET/DEL/LIST
+        self.index_data_queue = Queue()  # Index data stored by workers
+        self.index_data_lock = Lock()
+        self.index_data_generation_complete = Value('i', 0)   ##TODO - Set value when all indexing is done.
+        self.indexing_started_flag = Value('i', False)
 
-	    # Operation LIST
-	    self.prefix = config.get("prefix", None)
-	    self.listing_progress = manager.dict()
-	    self.listing_progress_lock = manager.Lock()
+        # Operation LIST
+        self.prefix = config.get("prefix", None)
+        self.listing_progress = manager.dict()
+        self.listing_progress_lock = manager.Lock()
 
-	    # Status Progress
-	    self.index_data_count = Value('i', 0)  # File Index count shared between worker process.
-	    self.operation_start_time = None
-	    self.operation_end_time = None
+        # Status Progress
+        self.index_data_count = Value('i', 0)  # File Index count shared between worker process.
+        self.operation_start_time = None
+        self.operation_end_time = None
 
-	    # Keep track of progress of hierarchical indexing.
-	    self.progress_of_indexing = manager.dict()
-	    self.progress_of_indexing_lock = manager.Lock()
+        # Keep track of progress of hierarchical indexing.
+        self.progress_of_indexing = manager.dict()
+        self.progress_of_indexing_lock = manager.Lock()
 
-	    # Hierarchical indexing of leaf directory, to be used for listing.
-	    self.indexing_key = manager.dict()
-	    self.indexing_key = manager.Lock()
+        # Hierarchical indexing of leaf directory, to be used for listing.
+        self.indexing_key = manager.dict()
+        self.indexing_key = manager.Lock()
 
-	    # NFS shares
-	    self.nfs_shares = []
-
-
+        # NFS shares
+        self.nfs_shares = []
 
 
-	def __del__(self):
-	    # Stop workers
-	    #self.stop_workers()
-	    # Stop Monitor
-	    # Stop Messaging
-	    # Stop clients
-	    #self.stop_logging()
-	    pass
-	    # Remove local NFS share
 
 
-	def start(self):
-	    """
-	    Start the master application with the following stuff
-	    - Start logger
-	    - Launch workers
-	    - Spawn clients
-	    - Start Monitor
-	    - Start Messaging ( File indexing message channel, progress status )
-	    :return:
-	    """
-	    self.start_logging()
-	    self.start_workers()
-	    self.operation_start_time = datetime.now()
-	    if not self.operation.upper() == "LIST":
-	        self.spawn_clients()
-	        self.start_monitor()
-
-	    if self.operation.upper() == "PUT":
-	        self.start_indexing()
-	    if self.operation.upper() == "DEL" or self.operation.upper() == "GET":
-	        self.start_listing()
-
-	    #print("INFO: DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
-	    self.logger.info("DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
-
-	def stop(self):
-	    """
-	    Stop master and its all clients and their application.
-	    - Send notification to clients to stop
-	    - Stop all the workers
-	    - Stop Monitor
-	    - Stop messaging systems.
-	    :return:
-	    """
-	    self.stop_workers()
-	    self.stop_clients()
-	    self.stop_monitor()
-	    self.nfs_cluster_obj.umount_all()
-	    self.stop_logging()
-
-	def start_workers(self):
-	    """
-	    Launch workers
-	    :return:
-	    """
-	    index = 0
-	    while index < self.workers_count:
-	        w = Worker(id=index,
-	                   task_queue=self.task_queue,
-	                   logger_queue=self.logger_queue,
-	                   logger_lock=self.logger_lock,
-	                   logger_status=self.logger_status,
-	                   index_data_queue=self.index_data_queue,
-	                   progress_of_indexing= self.progress_of_indexing,
-	                   progress_of_indexing_lock=self.progress_of_indexing_lock,
-	                   index_data_count=self.index_data_count,
-	                   listing_progress=self.listing_progress,
-	                   listing_progress_lock=self.listing_progress_lock,
-	                   s3_config=self.s3_config,
-	                   indexing_started_flag=self.indexing_started_flag
-	                   )
-	        w.start()
-	        self.workers.append(w)
-	        index +=1
-
-	def stop_workers(self, id=None):
-	    """
-	    Stop worker/s
-	    :param id: worker id
-	    :return:
-	    """
-	    index = 0
-	    while index < self.workers_count:
-	        w = self.workers[index]
-	        if w.get_status():
-	            w.stop()
-	        index += 1
-	    self.logger.info("Stopped all the workers running with MasterApplication! ")
-	    #print("INFO: Stopped all the workers running with MasterApplication! ")
-
-	def spawn_clients(self):
-	    """
-	    Spawn the clients
-	    :return:
-	    """
-	    index =0
-	    for client_ip in self.client_ip_list:
-	        client = Client(index,
-	                        client_ip,
-	                        self.operation,
-	                        self.logger,
-	                        self.config)
-	        client.start()
-	        self.logger.info("Started ClientApplication-{} at node - {}".format(client.id,client_ip))
-	        self.clients.append(client)
-	        index +=1
+    def __del__(self):
+        # Stop workers
+        #self.stop_workers()
+        # Stop Monitor
+        # Stop Messaging
+        # Stop clients
+        #self.stop_logging()
+        pass
+        # Remove local NFS share
 
 
-	def stop_clients(self):
-	    """
-	    Stop all the client application associated with this master application
-	    :return:
-	    """
-	    for client in self.clients:
-	        client.stop()
+    def start(self):
+        """
+        Start the master application with the following stuff
+        - Start logger
+        - Launch workers
+        - Spawn clients
+        - Start Monitor
+        - Start Messaging ( File indexing message channel, progress status )
+        :return:
+        """
+        self.start_logging()
+        self.start_workers()
+        self.operation_start_time = datetime.now()
+        if not self.operation.upper() == "LIST":
+            self.spawn_clients()
+            self.start_monitor()
 
-	def start_monitor(self):
-	    """
-	    Monitor the progress of the operation( PUT,DEL,LIST)
-	    :return:
-	    """
-	    self.monitor = Monitor(clients=self.clients,
-	                           index_data_queue=self.index_data_queue,
-	                           index_data_lock=self.index_data_lock,
-	                           index_data_generation_complete=self.index_data_generation_complete,
-	                           index_data_count=self.index_data_count,
-	                           logger=self.logger,
-	                           operation=self.operation,
-	                           operation_start_time=self.operation_start_time
-	                           )
-	    self.monitor.start()
-	def stop_monitor(self):
-	    """
-	    Stop all monitors forcefully.
-	    :return:
-	    """
-	    if self.monitor:
-	        self.monitor.stop()
+        if self.operation.upper() == "PUT":
+            self.start_indexing()
+        if self.operation.upper() == "DEL" or self.operation.upper() == "GET":
+            self.start_listing()
 
-	def start_logging(self):
-	    """
-	    Start Multiprocessing logger
-	    :return:
-	    """
-	    self.logger = MultiprocessingLogger(self.logger_queue,
-	                                        self.logger_lock,
-	                                        self.logger_status
-	                                        )
-	    self.logger.config(self.logging_path,
-	                       __file__,
-	                       self.logging_level)
-	    self.logger.start()
-	    self.logger.info("Started Logger with {} mode!".format(self.logging_level))
-	    #print("INFO: Logger started, (status -> {})".format(self.logger.status()))
+        #print("INFO: DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
+        self.logger.info("DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
 
-	def stop_logging(self):
-	    """
-	    Stop multiprocessing logger
-	    :return:
-	    """
-	    self.logger.stop()
+    def stop(self):
+        """
+        Stop master and its all clients and their application.
+        - Send notification to clients to stop
+        - Stop all the workers
+        - Stop Monitor
+        - Stop messaging systems.
+        :return:
+        """
+        self.stop_workers()
+        self.stop_clients()
+        self.stop_monitor()
+        self.nfs_cluster_obj.umount_all()
+        self.stop_logging()
 
+    def start_workers(self):
+        """
+        Launch workers
+        :return:
+        """
+        index = 0
+        while index < self.workers_count:
+            w = Worker(id=index,
+                       task_queue=self.task_queue,
+                       logger_queue=self.logger_queue,
+                       logger_lock=self.logger_lock,
+                       logger_status=self.logger_status,
+                       index_data_queue=self.index_data_queue,
+                       progress_of_indexing= self.progress_of_indexing,
+                       progress_of_indexing_lock=self.progress_of_indexing_lock,
+                       index_data_count=self.index_data_count,
+                       listing_progress=self.listing_progress,
+                       listing_progress_lock=self.listing_progress_lock,
+                       s3_config=self.s3_config,
+                       indexing_started_flag=self.indexing_started_flag
+                       )
+            w.start()
+            self.workers.append(w)
+            index +=1
 
-	def start_indexing(self):
-	    """
-	    Indexing is required for PUT operation
-	    :return:
-	    """
-	    # Fist Mount all NFS share locally
-	    self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), self.logger)
-	    self.nfs_cluster_obj.mount_all()
+    def stop_workers(self, id=None):
+        """
+        Stop worker/s
+        :param id: worker id
+        :return:
+        """
+        index = 0
+        while index < self.workers_count:
+            w = self.workers[index]
+            if w.get_status():
+                w.stop()
+            index += 1
+        self.logger.info("Stopped all the workers running with MasterApplication! ")
+        #print("INFO: Stopped all the workers running with MasterApplication! ")
 
-	    # Create first level task for each NFS share
-	    local_mounts = self.nfs_cluster_obj.get_mounts()
-	    #print(local_mounts)
-	    for ip_address, nfs_shares in local_mounts.items():
-	        #print("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
-	        self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
-	        self.nfs_shares.extend(nfs_shares)
-	        for nfs_share in nfs_shares:
-	            #print("DEBUG: Creating task for {}".format(nfs_share))
-	            task = Task(operation="indexing",
-	                        data=nfs_share,
-	                        nfs_cluster=ip_address,
-	                        nfs_share=nfs_share,
-	                        max_index_size=self.max_index_size)
-	            self.task_queue.put(task)
-
-
-	def start_listing(self):
-
-	    #print("INFO: Started Listing operation!")
-	    self.logger.info("Started Listing operation!")
-	    # Create a Task based on prefix
-	    if self.prefix:
-	        self.logger.debug("Creating task for prefix - {}".format(self.prefix))
-	        self.prefix = get_s3_prefix(self.prefix)
-	        task= Task(operation="list",
-	                   data={"prefix": self.prefix},
-	                   s3config=self.config["s3_storage"],
-	                   max_index_size=self.config["master"].get("max_index_size", 10)
-	                   )
-	        self.task_queue.put(task)
-	    else:
-	        for ip_address, nfs_shares in self.config.get("nfs_config", {}).items():
-	            #print("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
-	            self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
-	            self.nfs_shares.extend(nfs_shares)
-	            for nfs_share in nfs_shares:
-	                self.logger.debug("Creating task for {}".format(nfs_share))
-	                prefix = get_s3_prefix(nfs_share)
-	                task = Task(operation="list",
-	                            data={"prefix":prefix},
-	                            s3config=self.config["s3_storage"],
-	                            max_index_size=self.config["master"].get("max_index_size", 10)
-	                            )
-	                self.task_queue.put(task)
+    def spawn_clients(self):
+        """
+        Spawn the clients
+        :return:
+        """
+        index =0
+        for client_ip in self.client_ip_list:
+            client = Client(index,
+                            client_ip,
+                            self.operation,
+                            self.logger,
+                            self.config)
+            client.start()
+            self.logger.info("Started ClientApplication-{} at node - {}".format(client.id,client_ip))
+            self.clients.append(client)
+            index +=1
 
 
-	def compaction(self):
-	    # Spawn the process on target node and wait for response.
-	    command = "python3 /usr/dss/nkv-datamover/target_compaction.py"
-	    compaction_status = {}
-	    start_time = datetime.now()
-	    for client_ip in self.config["dss_targets"]:
-	        #print("INFO: Started Compaction for target-ip:{}".format(client_ip))
-	        self.logger.info("Started Compaction for target-ip:{}".format(client_ip))
-	        ssh_client_handler, stdin, stdout, stderr = remoteExecution(client_ip, self.client_user_id, self.client_password,command)
-	        compaction_status[client_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout":stdout,"stderr":stderr}
+    def stop_clients(self):
+        """
+        Stop all the client application associated with this master application
+        :return:
+        """
+        for client in self.clients:
+            client.stop()
 
-	    while True:
-	        is_compaction_done = True
-	        progress_bar("Compaction in Progress")
-	        for client_ip in compaction_status:
-	            if "status" in compaction_status[client_ip] and  compaction_status[client_ip]["status"]:
-	                continue
-	            if "ssh_remote_client" in compaction_status[client_ip] and compaction_status[client_ip]["ssh_remote_client"]:
-	                if "stdout" in compaction_status[client_ip] and compaction_status[client_ip]["stdout"]:
-	                    status = compaction_status[client_ip]["stdout"].channel.exit_status_ready()
-	                    if status:
-	                        #print("\nINFO: Compaction is finished for - {}".format(client_ip))
-	                        self.logger.info("Compaction is finished for - {}".format(client_ip))
-	                        compaction_status[client_ip]["status"] = True
-	                        compaction_status[client_ip]["ssh_remote_client"].close()
-	                    else:
-	                        is_compaction_done = False
-	        if is_compaction_done:
-	            break
+    def start_monitor(self):
+        """
+        Monitor the progress of the operation( PUT,DEL,LIST)
+        :return:
+        """
+        self.monitor = Monitor(clients=self.clients,
+                               index_data_queue=self.index_data_queue,
+                               index_data_lock=self.index_data_lock,
+                               index_data_generation_complete=self.index_data_generation_complete,
+                               index_data_count=self.index_data_count,
+                               logger=self.logger,
+                               operation=self.operation,
+                               operation_start_time=self.operation_start_time
+                               )
+        self.monitor.start()
+    def stop_monitor(self):
+        """
+        Stop all monitors forcefully.
+        :return:
+        """
+        if self.monitor:
+            self.monitor.stop()
+
+    def start_logging(self):
+        """
+        Start Multiprocessing logger
+        :return:
+        """
+        self.logger = MultiprocessingLogger(self.logger_queue,
+                                            self.logger_lock,
+                                            self.logger_status
+                                            )
+        self.logger.config(self.logging_path,
+                           __file__,
+                           self.logging_level)
+        self.logger.start()
+        self.logger.info("Started Logger with {} mode!".format(self.logging_level))
+        #print("INFO: Logger started, (status -> {})".format(self.logger.status()))
+
+    def stop_logging(self):
+        """
+        Stop multiprocessing logger
+        :return:
+        """
+        self.logger.stop()
 
 
-	    compaction_time = (datetime.now() - start_time).seconds
-	    self.logger.info("Total Compaction time - {} seconds".format(compaction_time))
+    def start_indexing(self):
+        """
+        Indexing is required for PUT operation
+        :return:
+        """
+        # Fist Mount all NFS share locally
+        self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), self.logger)
+        self.nfs_cluster_obj.mount_all()
+
+        # Create first level task for each NFS share
+        local_mounts = self.nfs_cluster_obj.get_mounts()
+        #print(local_mounts)
+        for ip_address, nfs_shares in local_mounts.items():
+            #print("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
+            self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
+            self.nfs_shares.extend(nfs_shares)
+            for nfs_share in nfs_shares:
+                #print("DEBUG: Creating task for {}".format(nfs_share))
+                task = Task(operation="indexing",
+                            data=nfs_share,
+                            nfs_cluster=ip_address,
+                            nfs_share=nfs_share,
+                            max_index_size=self.max_index_size)
+                self.task_queue.put(task)
+
+
+    def start_listing(self):
+
+        #print("INFO: Started Listing operation!")
+        self.logger.info("Started Listing operation!")
+        # Create a Task based on prefix
+        if self.prefix:
+            self.logger.debug("Creating task for prefix - {}".format(self.prefix))
+            self.prefix = get_s3_prefix(self.prefix)
+            task= Task(operation="list",
+                       data={"prefix": self.prefix},
+                       s3config=self.config["s3_storage"],
+                       max_index_size=self.config["master"].get("max_index_size", 10)
+                       )
+            self.task_queue.put(task)
+        else:
+            for ip_address, nfs_shares in self.config.get("nfs_config", {}).items():
+                #print("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
+                self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
+                self.nfs_shares.extend(nfs_shares)
+                for nfs_share in nfs_shares:
+                    self.logger.debug("Creating task for {}".format(nfs_share))
+                    prefix = get_s3_prefix(nfs_share)
+                    task = Task(operation="list",
+                                data={"prefix":prefix},
+                                s3config=self.config["s3_storage"],
+                                max_index_size=self.config["master"].get("max_index_size", 10)
+                                )
+                    self.task_queue.put(task)
+
+
+    def compaction(self):
+        # Spawn the process on target node and wait for response.
+        command = "python3 /usr/dss/nkv-datamover/target_compaction.py"
+        compaction_status = {}
+        start_time = datetime.now()
+        for client_ip in self.config["dss_targets"]:
+            #print("INFO: Started Compaction for target-ip:{}".format(client_ip))
+            self.logger.info("Started Compaction for target-ip:{}".format(client_ip))
+            ssh_client_handler, stdin, stdout, stderr = remoteExecution(client_ip, self.client_user_id, self.client_password,command)
+            compaction_status[client_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout":stdout,"stderr":stderr}
+
+        while True:
+            is_compaction_done = True
+            progress_bar("Compaction in Progress")
+            for client_ip in compaction_status:
+                if "status" in compaction_status[client_ip] and  compaction_status[client_ip]["status"]:
+                    continue
+                if "ssh_remote_client" in compaction_status[client_ip] and compaction_status[client_ip]["ssh_remote_client"]:
+                    if "stdout" in compaction_status[client_ip] and compaction_status[client_ip]["stdout"]:
+                        status = compaction_status[client_ip]["stdout"].channel.exit_status_ready()
+                        if status:
+                            #print("\nINFO: Compaction is finished for - {}".format(client_ip))
+                            self.logger.info("Compaction is finished for - {}".format(client_ip))
+                            compaction_status[client_ip]["status"] = True
+                            compaction_status[client_ip]["ssh_remote_client"].close()
+                        else:
+                            is_compaction_done = False
+            if is_compaction_done:
+                break
+
+
+        compaction_time = (datetime.now() - start_time).seconds
+        self.logger.info("Total Compaction time - {} seconds".format(compaction_time))
 
 
 
@@ -380,484 +380,484 @@ class Master(object):
 
 class Client(object):
 
-	def __init__(self, id, ip, operation, logger, config):
-	    """
-	    Client object initiation
-	    :param id: A id for each ClientApplication
-	    :param ip: IP address of the node in which ClienApplication will run
-	    :param operation: PUT|GET|DEL|LIST
-	    :param logger: A Logger with shared Queue to be used by multiple process/workers.
-	    :param config: configuration.
-	    """
-	    self.id = id
-	    self.ip = ip
-	    self.operation=operation
-	    # Logger
-	    self.logger = logger
-	    self.debug = config.get("debug", False)
+    def __init__(self, id, ip, operation, logger, config):
+        """
+        Client object initiation
+        :param id: A id for each ClientApplication
+        :param ip: IP address of the node in which ClienApplication will run
+        :param operation: PUT|GET|DEL|LIST
+        :param logger: A Logger with shared Queue to be used by multiple process/workers.
+        :param config: configuration.
+        """
+        self.id = id
+        self.ip = ip
+        self.operation=operation
+        # Logger
+        self.logger = logger
+        self.debug = config.get("debug", False)
 
-	    # Variable from config
-	    self.username = "ansible"
-	    self.password = "ansible"
-	    if "client" in config:
-	        if "user_id" in config["client"]:
-	            self.username = config["client"]["user_id"]
-	        if "password" in config["client"]:
-	            self.password = config["client"]["password"]
-	    self.status = None
-	    self.ssh_client_handler = None
-	    self.master_ip_address = config["master"]["ip_address"]
-	    self.dryrun = config.get("dryrun",False)
-	    self.destination_path = config.get("dest_path","") # Only to be used for GET operation
+        # Variable from config
+        self.username = "ansible"
+        self.password = "ansible"
+        if "client" in config:
+            if "user_id" in config["client"]:
+                self.username = config["client"]["user_id"]
+            if "password" in config["client"]:
+                self.password = config["client"]["password"]
+        self.status = None
+        self.ssh_client_handler = None
+        self.master_ip_address = config["master"]["ip_address"]
+        self.dryrun = config.get("dryrun",False)
+        self.destination_path = config.get("dest_path","") # Only to be used for GET operation
 
-	    self.env_gcc_source = None
-	    self.env_gcc_required =  True
-	    if "environment" in config and "gcc" in config["environment"]:
-	        self.env_gcc_required = config["environment"]["gcc"].get("required", True)
-	        if self.env_gcc_required:
-	            self.env_gcc_source = config["environment"]["gcc"].get("source", "/usr/local/bin/setenv-for-gcc510.sh")
-	            self.logger.debug("Sourcing GCC environment from {} for GCC v-{}".format(self.env_gcc_source,
-	                                config["environment"]["gcc"].get("version","GCC-VERSION-NOT-SPECIFIED")))
-	            #self.logger.info("Using GCC v-{} for dss_client library ".format(config["environment"]["gcc"].get("version","GCC-VERSION-NOT-SPECIFIED")))
+        self.env_gcc_source = None
+        self.env_gcc_required =  True
+        if "environment" in config and "gcc" in config["environment"]:
+            self.env_gcc_required = config["environment"]["gcc"].get("required", True)
+            if self.env_gcc_required:
+                self.env_gcc_source = config["environment"]["gcc"].get("source", "/usr/local/bin/setenv-for-gcc510.sh")
+                self.logger.debug("Sourcing GCC environment from {} for GCC v-{}".format(self.env_gcc_source,
+                                    config["environment"]["gcc"].get("version","GCC-VERSION-NOT-SPECIFIED")))
+                #self.logger.info("Using GCC v-{} for dss_client library ".format(config["environment"]["gcc"].get("version","GCC-VERSION-NOT-SPECIFIED")))
 
-	    # Messaging service configuration
-	    if "message" in config:
-	        self.port_index = config["message"].get("port_index", "6000")  # Need to configure from configuration file.
-	        self.port_status =config["message"].get("port_status", "6001")
-	    else:
-	        self.port_index = "6000"
-	        self.port_status = "6001"
-	    self.socket_index = None
-	    self.socket_status = None
+        # Messaging service configuration
+        if "message" in config:
+            self.port_index = config["message"].get("port_index", "6000")  # Need to configure from configuration file.
+            self.port_status =config["message"].get("port_status", "6001")
+        else:
+            self.port_index = "6000"
+            self.port_status = "6001"
+        self.socket_index = None
+        self.socket_status = None
 
-	    # Remote output
-	    self.remote_execution_command =None
-	    self.remote_stdin =None
-	    self.remote_stdout = None
-	    self.remote_stderr = None
+        # Remote output
+        self.remote_execution_command =None
+        self.remote_stdin =None
+        self.remote_stdout = None
+        self.remote_stderr = None
 
-	    # Execution status
-	    self.status = False
+        # Execution status
+        self.status = False
 
-	def __del__(self):
-	    """
-	    Receive the PID of the remote process, so that forcefully remote process can be terminated.
-	    :return:
-	    """
-	    if not self.status:
-	        self.stop()
+    def __del__(self):
+        """
+        Receive the PID of the remote process, so that forcefully remote process can be terminated.
+        :return:
+        """
+        if not self.status:
+            self.stop()
 
-	def start(self):
-	    """
-	    Remote execution of client application ("client_application.py")
-	    :return:
-	    """
-	    # Setup
-	    #self.setup()
-	    #print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-	    #self.logger.info("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-	    command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
-	                                                            " --client_id {} ".format(self.id) + \
-	                                                            " --operation {} ".format(self.operation) + \
-	                                                            " --ip_address {} ".format(self.ip) + \
-	                                                            " --port_index {} ".format(self.port_index) + \
-	                                                            " --port_status {}  ".format(self.port_status)
+    def start(self):
+        """
+        Remote execution of client application ("client_application.py")
+        :return:
+        """
+        # Setup
+        #self.setup()
+        #print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
+        #self.logger.info("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
+        command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
+                                                                " --client_id {} ".format(self.id) + \
+                                                                " --operation {} ".format(self.operation) + \
+                                                                " --ip_address {} ".format(self.ip) + \
+                                                                " --port_index {} ".format(self.port_index) + \
+                                                                " --port_status {}  ".format(self.port_status)
 
-	    if self.operation.upper() == "GET":
-	        command += " --dest_path {} ".format(self.destination_path)
-	    if self.master_ip_address == self.ip:
-	        command += " --master_node "
-	    if self.dryrun:
-	        command += " --dryrun "
-	    if self.debug:
-	        command += " --debug "
+        if self.operation.upper() == "GET":
+            command += " --dest_path {} ".format(self.destination_path)
+        if self.master_ip_address == self.ip:
+            command += " --master_node "
+        if self.dryrun:
+            command += " --dryrun "
+        if self.debug:
+            command += " --debug "
 
-	    if self.env_gcc_required and self.env_gcc_source:
-	        command = "sh -c \" source {} && {} \"".format(self.env_gcc_source, command)
-	    self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
-	    self.remote_stdin = stdin
-	    self.remote_stdout = stdout
-	    self.remote_stderr = stderr
+        if self.env_gcc_required and self.env_gcc_source:
+            command = "sh -c \" source {} && {} \"".format(self.env_gcc_source, command)
+        self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
+        self.remote_stdin = stdin
+        self.remote_stdout = stdout
+        self.remote_stderr = stderr
 
-	def remote_client_status(self):
-	    if self.ssh_client_handler:
-	        if self.remote_stdout:
-	            self.status = self.remote_stdout.channel.exit_status_ready()
-	            if self.status:
-	                #print("INFO: Remote ClientApplication-{} terminated!".format(self.id))
-	                self.logger.info("Remote ClientApplication-{} terminated!".format(self.id))
-	            return self.status
-	    return False
-
-
-	def remote_client_exit_status(self):
-	    """
-	    It is blocking call.
-	    :return: exit status integer value
-	    """
-	    if self.ssh_client_handler:
-
-	        exit_status = self.remote_stdout.channel.recv_exit_status()
-	        stdout_lines = self.remote_stdout.readlines()
-	        stderr_lines = self.remote_stderr.readlines()
-	        self.logger.debug("Client-{} Remote execution status: {}".format(self.id,exit_status))
-	        if exit_status:
-	            #print("DEBUG: Client-{} \n STDOUT {}".format(self.id,stdout_lines))
-	            self.logger.debug("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
-	        if stderr_lines:
-	            #print("ERROR: Client-{} \n STDERR {}".format(self.id,stderr_lines))
-	            self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
-	        self.ssh_client_handler.close()
-
-	    return exit_status
+    def remote_client_status(self):
+        if self.ssh_client_handler:
+            if self.remote_stdout:
+                self.status = self.remote_stdout.channel.exit_status_ready()
+                if self.status:
+                    #print("INFO: Remote ClientApplication-{} terminated!".format(self.id))
+                    self.logger.info("Remote ClientApplication-{} terminated!".format(self.id))
+                return self.status
+        return False
 
 
-	def stop(self):
-	    """
-	    Send a message to the client node through ZMQ.
-	    # TODO
-	    Need to terminate forcefully.
-	    :return:
-	    """
-	    self.logger.info("Stopping client-{}".format(self.id))
-	    if self.ssh_client_handler:
+    def remote_client_exit_status(self):
+        """
+        It is blocking call.
+        :return: exit status integer value
+        """
+        if self.ssh_client_handler:
 
-	        status = self.remote_stdout.channel.recv_exit_status()
-	        stdout_lines = self.remote_stdout.readlines()
-	        stderr_lines = self.remote_stderr.readlines()
-	        self.logger.info("Client-{} Remote execution status-{}".format(self.id,status))
-	        if status:
-	            self.logger.debug("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
-	        if stderr_lines:
-	            self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
-	        self.ssh_client_handler.close()
-	        self.status = 0
-	    self.ssh_client_handler = None
+            exit_status = self.remote_stdout.channel.recv_exit_status()
+            stdout_lines = self.remote_stdout.readlines()
+            stderr_lines = self.remote_stderr.readlines()
+            self.logger.debug("Client-{} Remote execution status: {}".format(self.id,exit_status))
+            if exit_status:
+                #print("DEBUG: Client-{} \n STDOUT {}".format(self.id,stdout_lines))
+                self.logger.debug("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
+            if stderr_lines:
+                #print("ERROR: Client-{} \n STDERR {}".format(self.id,stderr_lines))
+                self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
+            self.ssh_client_handler.close()
 
-	def setup(self):
-	    remote_dest_path = "/usr/test/datamover.tgz"
-	    username = "root"
-	    password = "msl-ssg"
-	    source_path = "/home/somnath.s/work/datamover.tgz"
-	    uploadFile(self.ip, remote_dest_path, source_path, username, password )
+        return exit_status
+
+
+    def stop(self):
+        """
+        Send a message to the client node through ZMQ.
+        # TODO
+        Need to terminate forcefully.
+        :return:
+        """
+        self.logger.info("Stopping client-{}".format(self.id))
+        if self.ssh_client_handler:
+
+            status = self.remote_stdout.channel.recv_exit_status()
+            stdout_lines = self.remote_stdout.readlines()
+            stderr_lines = self.remote_stderr.readlines()
+            self.logger.info("Client-{} Remote execution status-{}".format(self.id,status))
+            if status:
+                self.logger.debug("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
+            if stderr_lines:
+                self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
+            self.ssh_client_handler.close()
+            self.status = 0
+        self.ssh_client_handler = None
+
+    def setup(self):
+        remote_dest_path = "/usr/test/datamover.tgz"
+        username = "root"
+        password = "msl-ssg"
+        source_path = "/home/somnath.s/work/datamover.tgz"
+        uploadFile(self.ip, remote_dest_path, source_path, username, password )
 
 def process_put_operation(master):
-	"""
-	Manage the Upload process.
+    """
+    Manage the Upload process.
 
-	Processes Stop Sequence:
-	- Index-Monitor
-	- Stop Workers if all index data distributed among client nodes.
-	- Stop Status Poller
-	- Stop Progress Tracer Monitor
-	- Unmount remote NFS mounts.
-	- Stop all clients
-	:param master:
-	:return:
-	"""
-	workers_stopped = 0
-	unmounted_nfs_shares = 0
-	monitors_stopped = 0
+    Processes Stop Sequence:
+    - Index-Monitor
+    - Stop Workers if all index data distributed among client nodes.
+    - Stop Status Poller
+    - Stop Progress Tracer Monitor
+    - Unmount remote NFS mounts.
+    - Stop all clients
+    :param master:
+    :return:
+    """
+    workers_stopped = 0
+    unmounted_nfs_shares = 0
+    monitors_stopped = 0
 
-	client_applications_termination_waiting_message = True # Used when Workers and Monitors are stopped, but ClientApps.
-	while True:
-	    # Check for completion of indexing, Shutdown workers
-	    indexing_done = True
+    client_applications_termination_waiting_message = True # Used when Workers and Monitors are stopped, but ClientApps.
+    while True:
+        # Check for completion of indexing, Shutdown workers
+        indexing_done = True
 
-	    if not master.indexing_started_flag.value:
-	        master.logger.info('Indexing on the shares not yet started')
-	        #print('INFO: Indexing not yet started')
-	        time.sleep(1)
-	        continue
+        if not master.indexing_started_flag.value:
+            master.logger.info('Indexing on the shares not yet started')
+            #print('INFO: Indexing not yet started')
+            time.sleep(1)
+            continue
 
-	    if len(master.progress_of_indexing) and not workers_stopped:
-	        indexing_done = False
+        if len(master.progress_of_indexing) and not workers_stopped:
+            indexing_done = False
 
-	    ## Check if index generation is completed by the worker processes.
-	    if indexing_done and master.index_data_generation_complete.value == 0:
-	        # Shut down Monitor-Index at Master
-	        index_generation_time = (datetime.now() - master.operation_start_time).seconds                       
-	        master.logger.info('Index generation completed, Time: {} sec'.format(index_generation_time))
-	        #print('INFO: Indexing the shares completed')
-	        master.index_data_lock.acquire()
-	        master.index_data_generation_complete.value = 1
-	        master.index_data_lock.release()
+        ## Check if index generation is completed by the worker processes.
+        if indexing_done and master.index_data_generation_complete.value == 0:
+            # Shut down Monitor-Index at Master
+            index_generation_time = (datetime.now() - master.operation_start_time).seconds                       
+            master.logger.info('Index generation completed, Time: {} sec'.format(index_generation_time))
+            #print('INFO: Indexing the shares completed')
+            master.index_data_lock.acquire()
+            master.index_data_generation_complete.value = 1
+            master.index_data_lock.release()
 
-	    # Check all the ClientApplications once they are finished
-	    all_clients_completed = 1
-	    for client in master.clients:
-	        #print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
-	        if not client.status:
-	            if client.remote_client_status() :
-	                client.remote_client_exit_status()
-	            all_clients_completed = 0
+        # Check all the ClientApplications once they are finished
+        all_clients_completed = 1
+        for client in master.clients:
+            #print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
+            if not client.status:
+                if client.remote_client_status() :
+                    client.remote_client_exit_status()
+                all_clients_completed = 0
 
-	    if all_clients_completed:
-	        master.logger.info("All ClientApplications terminated gracefully !") ## Termination3
-	    elif  workers_stopped and monitors_stopped:
-	        if client_applications_termination_waiting_message:
-	            master.logger.info("Waiting for ClientApplication to stop!")
-	            client_applications_termination_waiting_message = False
+        if all_clients_completed:
+            master.logger.info("All ClientApplications terminated gracefully !") ## Termination3
+        elif  workers_stopped and monitors_stopped:
+            if client_applications_termination_waiting_message:
+                master.logger.info("Waiting for ClientApplication to stop!")
+                client_applications_termination_waiting_message = False
 
-	    # Check for Monitors status
-	    master.monitor.status_lock.acquire()
-	    if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
-	            master.monitor.monitor_status_poller.value and \
-	            master.monitor.monitor_progress_status.value:
-	        monitors_stopped = 1
-	        #print("INFO: All Monitors belongs to Master terminated!")
-	        master.logger.info("All monitors belongs to Master terminated!")
-	    master.monitor.status_lock.release()
+        # Check for Monitors status
+        master.monitor.status_lock.acquire()
+        if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
+                master.monitor.monitor_status_poller.value and \
+                master.monitor.monitor_progress_status.value:
+            monitors_stopped = 1
+            #print("INFO: All Monitors belongs to Master terminated!")
+            master.logger.info("All monitors belongs to Master terminated!")
+        master.monitor.status_lock.release()
 
-	    # Un-mount device once all monitors are stopped. Because, if ClientApp is launches at the same node of master, then
-	    # un-mount should not happen.
-	    if monitors_stopped and  not unmounted_nfs_shares:
-	        #print("INFO: Un-mount all NFS shares at Master")
-	        master.logger.info("Un-mount all NFS shares at Master")
-	        master.nfs_cluster_obj.umount_all()  ## Termination2
-	        unmounted_nfs_shares = 1
+        # Un-mount device once all monitors are stopped. Because, if ClientApp is launches at the same node of master, then
+        # un-mount should not happen.
+        if monitors_stopped and  not unmounted_nfs_shares:
+            #print("INFO: Un-mount all NFS shares at Master")
+            master.logger.info("Un-mount all NFS shares at Master")
+            master.nfs_cluster_obj.umount_all()  ## Termination2
+            unmounted_nfs_shares = 1
 
 
-	    # Bring down workers.
-	    if not workers_stopped  and master.monitor.monitor_index_data_sender.value:
-	        master.stop_workers()
-	        workers_stopped = 1
+        # Bring down workers.
+        if not workers_stopped  and master.monitor.monitor_index_data_sender.value:
+            master.stop_workers()
+            workers_stopped = 1
 
-	    ## Once all the response received from Client Applications, shut down 3 monitors
-	    if workers_stopped and monitors_stopped and all_clients_completed:
-	        break
+        ## Once all the response received from Client Applications, shut down 3 monitors
+        if workers_stopped and monitors_stopped and all_clients_completed:
+            break
 
-	    # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
-	    if all_clients_completed:
-	        if not monitors_stopped:
-	            master.stop_monitor()
-	        if not workers_stopped:
-	            master.stop_workers()
-	        break
+        # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
+        if all_clients_completed:
+            if not monitors_stopped:
+                master.stop_monitor()
+            if not workers_stopped:
+                master.stop_workers()
+            break
 
-	    time.sleep(2)
+        time.sleep(2)
 
 
 
 def process_list_operation(master):
-	master.start_listing()
-	while True:
-	    try:
-	        if master.prefix and master.prefix in master.listing_progress and master.listing_progress[master.prefix] == 0:
-	            break
-	        elif len(master.nfs_shares) == len(master.listing_progress):
-	            listing_completed = True
-	            for prefix,prefix_processing_status in master.listing_progress.items():
-	                if prefix_processing_status > 0:
-	                    listing_completed = False
-	            if listing_completed:
-	                break
-	    except Exception as e:
-	        #print("Exception: Listing - {}".format(e))
-	        master.logger.excep("Listing - {}".format(e))
-	    #time.sleep(1)
-	master.stop_workers()
-	master.logger.info("LISTING:{}".format(master.listing_progress))
-	#print("LISTING:{}".format(master.listing_progress))
+    master.start_listing()
+    while True:
+        try:
+            if master.prefix and master.prefix in master.listing_progress and master.listing_progress[master.prefix] == 0:
+                break
+            elif len(master.nfs_shares) == len(master.listing_progress):
+                listing_completed = True
+                for prefix,prefix_processing_status in master.listing_progress.items():
+                    if prefix_processing_status > 0:
+                        listing_completed = False
+                if listing_completed:
+                    break
+        except Exception as e:
+            #print("Exception: Listing - {}".format(e))
+            master.logger.excep("Listing - {}".format(e))
+        #time.sleep(1)
+    master.stop_workers()
+    master.logger.info("LISTING:{}".format(master.listing_progress))
+    #print("LISTING:{}".format(master.listing_progress))
 
 
 def process_del_operation(master):
-	workers_stopped = 0
-	monitors_stopped = 0
+    workers_stopped = 0
+    monitors_stopped = 0
 
-	while True:
-	    # Check for completion of indexing, Shutdown workers
-	    listing_done = False
-	    master.listing_progress_lock.acquire()
+    while True:
+        # Check for completion of indexing, Shutdown workers
+        listing_done = False
+        master.listing_progress_lock.acquire()
 
-	    # Determine listing is done.
-	    if master.prefix:
-	        if len(master.listing_progress) == 1 and master.listing_progress.get(master.prefix, -1) == 0:
-	            listing_done = True
+        # Determine listing is done.
+        if master.prefix:
+            if len(master.listing_progress) == 1 and master.listing_progress.get(master.prefix, -1) == 0:
+                listing_done = True
 
-	    else:
-	        # All the children of top level prefix should be processed.
-	        # len( ["/bird","/cat","/dog"] ) == len ( {"bird/":0, "cat/":0, "dog/":0} )
-	        if (len(master.nfs_shares) == len(master.listing_progress)):
-	            is_all_child_processed = True
-	            for nfs_share, child_listing_count in master.listing_progress.items():
-	                if child_listing_count :
-	                    is_all_child_processed = False
+        else:
+            # All the children of top level prefix should be processed.
+            # len( ["/bird","/cat","/dog"] ) == len ( {"bird/":0, "cat/":0, "dog/":0} )
+            if (len(master.nfs_shares) == len(master.listing_progress)):
+                is_all_child_processed = True
+                for nfs_share, child_listing_count in master.listing_progress.items():
+                    if child_listing_count :
+                        is_all_child_processed = False
 
-	            listing_done = is_all_child_processed
-	    master.listing_progress_lock.release()
-	    #print("NFS Share-{}:{}:{}".format(master.nfs_shares, master.listing_progress, listing_done))
+                listing_done = is_all_child_processed
+        master.listing_progress_lock.release()
+        #print("NFS Share-{}:{}:{}".format(master.nfs_shares, master.listing_progress, listing_done))
 
-	    if not workers_stopped:
-	        if listing_done and master.index_data_generation_complete.value == 0:
-	            master.index_data_generation_complete.value = 1
-	            master.logger.info("Object-Keys generation through listing is completed!")
-	            #print("INFO: Object-Keys generation through listing is completed!")
-	            listing_time = (datetime.now() - master.operation_start_time).seconds
-	            master.logger.info("{} LISTING Completed in {} seconds".format(master.operation, listing_time))
-	            #print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
-	            # Shutdown workers
-	            #master.stop_workers()
-	            #workers_stopped = 1
+        if not workers_stopped:
+            if listing_done and master.index_data_generation_complete.value == 0:
+                master.index_data_generation_complete.value = 1
+                master.logger.info("Object-Keys generation through listing is completed!")
+                #print("INFO: Object-Keys generation through listing is completed!")
+                listing_time = (datetime.now() - master.operation_start_time).seconds
+                master.logger.info("{} LISTING Completed in {} seconds".format(master.operation, listing_time))
+                #print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
+                # Shutdown workers
+                #master.stop_workers()
+                #workers_stopped = 1
 
 
-	    # Check all the ClientApplications once they are finished
-	    all_clients_completed = 1
-	    for client in master.clients:
-	        #print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
-	        if not client.status:
-	            if client.remote_client_status() :
-	                client.remote_client_exit_status()
-	            all_clients_completed = 0
+        # Check all the ClientApplications once they are finished
+        all_clients_completed = 1
+        for client in master.clients:
+            #print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
+            if not client.status:
+                if client.remote_client_status() :
+                    client.remote_client_exit_status()
+                all_clients_completed = 0
 
-	    # Check for Monitors status
-	    master.monitor.status_lock.acquire()
-	    if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
-	            master.monitor.monitor_status_poller.value and \
-	            master.monitor.monitor_progress_status.value:
-	        monitors_stopped = 1
-	    master.monitor.status_lock.release()
+        # Check for Monitors status
+        master.monitor.status_lock.acquire()
+        if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
+                master.monitor.monitor_status_poller.value and \
+                master.monitor.monitor_progress_status.value:
+            monitors_stopped = 1
+        master.monitor.status_lock.release()
 
-	    # Bring down workers.
-	    if not workers_stopped and master.monitor.monitor_index_data_sender.value:
-	        master.stop_workers()
-	        workers_stopped = 1
+        # Bring down workers.
+        if not workers_stopped and master.monitor.monitor_index_data_sender.value:
+            master.stop_workers()
+            workers_stopped = 1
 
-	    ## Once all the response received from Client Applications, shut down 3 monitors
-	    if workers_stopped and monitors_stopped and all_clients_completed:
-	        break
+        ## Once all the response received from Client Applications, shut down 3 monitors
+        if workers_stopped and monitors_stopped and all_clients_completed:
+            break
 
-	    # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
-	    if all_clients_completed:
-	        if not monitors_stopped:
-	            master.stop_monitor()
-	        if not workers_stopped:
-	            master.stop_workers()
-	        break
+        # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
+        if all_clients_completed:
+            if not monitors_stopped:
+                master.stop_monitor()
+            if not workers_stopped:
+                master.stop_workers()
+            break
 
-	    time.sleep(2)
+        time.sleep(2)
 
 def process_get_operation(master):
-	workers_stopped = 0
-	monitors_stopped = 0
+    workers_stopped = 0
+    monitors_stopped = 0
 
-	while True:
-	    # Check for completion of indexing, Shutdown workers
-	    listing_done = False
-	    master.listing_progress_lock.acquire()
+    while True:
+        # Check for completion of indexing, Shutdown workers
+        listing_done = False
+        master.listing_progress_lock.acquire()
 
-	    # Determine listing is done.
-	    if master.prefix:
-	        if len(master.listing_progress) == 1 and master.listing_progress.get(master.prefix, -1) == 0:
-	            listing_done = True
+        # Determine listing is done.
+        if master.prefix:
+            if len(master.listing_progress) == 1 and master.listing_progress.get(master.prefix, -1) == 0:
+                listing_done = True
 
-	    else:
-	        # All the children of top level prefix should be processed.
-	        # len( ["/bird","/cat","/dog"] ) == len ( {"bird/":0, "cat/":0, "dog/":0} )
-	        if (len(master.nfs_shares) == len(master.listing_progress)):
-	            is_all_child_processed = True
-	            for nfs_share, child_listing_count in master.listing_progress.items():
-	                if child_listing_count:
-	                    is_all_child_processed = False
+        else:
+            # All the children of top level prefix should be processed.
+            # len( ["/bird","/cat","/dog"] ) == len ( {"bird/":0, "cat/":0, "dog/":0} )
+            if (len(master.nfs_shares) == len(master.listing_progress)):
+                is_all_child_processed = True
+                for nfs_share, child_listing_count in master.listing_progress.items():
+                    if child_listing_count:
+                        is_all_child_processed = False
 
-	            listing_done = is_all_child_processed
-	    master.listing_progress_lock.release()
-	    # print("NFS Share-{}:{}:{}".format(master.nfs_shares, master.listing_progress, listing_done))
+                listing_done = is_all_child_processed
+        master.listing_progress_lock.release()
+        # print("NFS Share-{}:{}:{}".format(master.nfs_shares, master.listing_progress, listing_done))
 
-	    if not workers_stopped:
-	        if listing_done and master.index_data_generation_complete.value == 0:
-	            master.index_data_generation_complete.value = 1
-	            master.logger.info("Object-Keys generation through listing is completed!")
-	            #print("INFO: Object-Keys generation through listing is completed!")
-	            listing_time = (datetime.now() - master.operation_start_time).seconds
-	            #print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
-	            master.logger.info("{} LISTING Completed in {} seconds".format(master.operation, listing_time))
-	    # Shutdown workers
-	    # master.stop_workers()
-	    # workers_stopped = 1
+        if not workers_stopped:
+            if listing_done and master.index_data_generation_complete.value == 0:
+                master.index_data_generation_complete.value = 1
+                master.logger.info("Object-Keys generation through listing is completed!")
+                #print("INFO: Object-Keys generation through listing is completed!")
+                listing_time = (datetime.now() - master.operation_start_time).seconds
+                #print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
+                master.logger.info("{} LISTING Completed in {} seconds".format(master.operation, listing_time))
+        # Shutdown workers
+        # master.stop_workers()
+        # workers_stopped = 1
 
-	    # Check all the ClientApplications once they are finished
-	    all_clients_completed = 1
-	    for client in master.clients:
-	        # print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
-	        if not client.status:
-	            if client.remote_client_status():
-	                client.remote_client_exit_status()
-	            all_clients_completed = 0
+        # Check all the ClientApplications once they are finished
+        all_clients_completed = 1
+        for client in master.clients:
+            # print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
+            if not client.status:
+                if client.remote_client_status():
+                    client.remote_client_exit_status()
+                all_clients_completed = 0
 
-	    # Check for Monitors status
-	    master.monitor.status_lock.acquire()
-	    if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
-	            master.monitor.monitor_status_poller.value and \
-	            master.monitor.monitor_progress_status.value:
-	        monitors_stopped = 1
-	    master.monitor.status_lock.release()
+        # Check for Monitors status
+        master.monitor.status_lock.acquire()
+        if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
+                master.monitor.monitor_status_poller.value and \
+                master.monitor.monitor_progress_status.value:
+            monitors_stopped = 1
+        master.monitor.status_lock.release()
 
-	    # Bring down workers.
-	    if not workers_stopped and master.monitor.monitor_index_data_sender.value:
-	        master.stop_workers()
-	        workers_stopped = 1
+        # Bring down workers.
+        if not workers_stopped and master.monitor.monitor_index_data_sender.value:
+            master.stop_workers()
+            workers_stopped = 1
 
-	    ## Once all the response received from Client Applications, shut down 3 monitors
-	    if workers_stopped and monitors_stopped and all_clients_completed:
-	        break
+        ## Once all the response received from Client Applications, shut down 3 monitors
+        if workers_stopped and monitors_stopped and all_clients_completed:
+            break
 
-	    # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
-	    if all_clients_completed:
-	        if not monitors_stopped:
-	            master.stop_monitor()
-	        if not workers_stopped:
-	            master.stop_workers()
-	        break
+        # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
+        if all_clients_completed:
+            if not monitors_stopped:
+                master.stop_monitor()
+            if not workers_stopped:
+                master.stop_workers()
+            break
 
-	    time.sleep(1)
+        time.sleep(1)
 
 
 if __name__ == "__main__":
-	cli = CommandLineArgument()
-	print("INFO: Performing {} operation".format(cli.operation))
-	#print(cli.options)
-	# operation, params = commandLineArgumentParser()
+    cli = CommandLineArgument()
+    print("INFO: Performing {} operation".format(cli.operation))
+    #print(cli.options)
+    # operation, params = commandLineArgumentParser()
 
-	# Add signal handler
-	#signal_handler = SignalHandler()
-	#signal_handler.initiate()
+    # Add signal handler
+    #signal_handler = SignalHandler()
+    #signal_handler.initiate()
 
 
-	params = cli.options
-	config_obj = Config(params)
-	config = config_obj.get_config()
-	#print(config)
+    params = cli.options
+    config_obj = Config(params)
+    config = config_obj.get_config()
+    #print(config)
 
-	master = Master(cli.operation, config)
-	if config.get("debug", False):
-	    master.logging_level = "DEBUG"
-	now = datetime.now()
-	master.start()
-	master.logger.info("DataMover Config Options : {}".format(config))
-	master.logger.info("Started DataMover with Logger in {} mode!".format(master.logging_level))
+    master = Master(cli.operation, config)
+    if config.get("debug", False):
+        master.logging_level = "DEBUG"
+    now = datetime.now()
+    master.start()
+    master.logger.info("DataMover Config Options : {}".format(config))
+    master.logger.info("Started DataMover with Logger in {} mode!".format(master.logging_level))
 
-	#signal_handler.registered_functions.append(master.nfs_cluster_obj.umount_all)
+    #signal_handler.registered_functions.append(master.nfs_cluster_obj.umount_all)
 
-	if cli.operation.upper() == "PUT":
-	    process_put_operation(master)
-	    master.nfs_cluster_obj.umount_all()
-	elif cli.operation.upper() == "LIST":
-	    master.logger.warn('Unsupported operation')
-	    # process_list_operation(master)
-	elif cli.operation.upper() == "DEL":
-	    process_del_operation(master)
-	elif cli.operation.upper() == "GET":
-	    process_get_operation(master)
+    if cli.operation.upper() == "PUT":
+        process_put_operation(master)
+        master.nfs_cluster_obj.umount_all()
+    elif cli.operation.upper() == "LIST":
+        master.logger.warn('Unsupported operation')
+        # process_list_operation(master)
+    elif cli.operation.upper() == "DEL":
+        process_del_operation(master)
+    elif cli.operation.upper() == "GET":
+        process_get_operation(master)
 
-	# Start Compaction
-	if "compaction" in params and params["compaction"]:
-	    master.compaction()
+    # Start Compaction
+    if "compaction" in params and params["compaction"]:
+        master.compaction()
 
-	# Terminate logger at the end.
-	master.stop_logging()  ## Termination5
-	print("INFO: Stopping master")
-	### 10.1.51.238 , 10.1.51.54, 10.1.51.61
+    # Terminate logger at the end.
+    master.stop_logging()  ## Termination5
+    print("INFO: Stopping master")
+    ### 10.1.51.238 , 10.1.51.54, 10.1.51.61
 
 
 

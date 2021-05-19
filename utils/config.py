@@ -209,7 +209,7 @@ class CommandLineArgument:
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify operation type such as read=r write=w , wr...')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
-        subparser.add_argument("--dest_path", "-d", type=str, required=True, help='Specify destination file path')
+        subparser.add_argument("--dest_path", "-dp", type=str, required=True, help='Specify destination file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual download')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',

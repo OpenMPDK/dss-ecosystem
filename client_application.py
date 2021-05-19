@@ -311,7 +311,7 @@ class ClientApplication(object):
                                     socket.send_json({"success": 1})  # Send response back to MasterApp
                                     is_index_data_added = True
                                 else:
-                                    self.logger.error("Issue with mounting! ")
+                                    self.logger.error("Issue with mounting! NFS-Share {}".format(message["nfs_share"]))
                                     ## Send the success/failure status to master
                                     socket.send_json({"success": 0,
                                                       "ERROR": "Client-{} , Failed NFS -{} mounting".format(self.id,
