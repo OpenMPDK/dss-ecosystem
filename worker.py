@@ -46,11 +46,7 @@ class Worker(object):
         self.id = kwargs.get("id", None)
         self.task_queue = kwargs.get("task_queue", None)
         self.index_data_queue = kwargs.get("index_data_queue", None)
-        self.logger_queue = kwargs.get("logger_queue", None)  # A multiprocessing logger queue
-        self.logger = MultiprocessingLogger(self.logger_queue,
-                                            kwargs.get("logger_lock", None),
-                                            kwargs.get("logger_status", None)
-                                            )
+        self.logger = kwargs.get("logger", None)  # A multiprocessing logger queue
         self.operation_status_queue = kwargs.get("status_queue", None)  # Used by only client Application
 
         self.s3_config = kwargs.get("s3_config", None)

@@ -387,7 +387,6 @@ def indexing(**kwargs):
 
     :return:
     """
-    # print("Actually at indexing function .... {}".format(kwargs))
     dir = kwargs["data"]
     task_queue = kwargs["task_queue"]
     logger = kwargs["logger"]
@@ -409,13 +408,10 @@ def indexing(**kwargs):
     if not indexing_started_flag.value:
         indexing_started_flag.value = True
         logger.info('Indexing on the shares started')
-        #print('INFO: Indexing on the shares started')
-
     for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger,
                               max_index_size=max_index_size):
         # If files a directory, then create a task
         if "dir" in result and "files" in result:
-            # print("Received Files: {}".format(result))
             msg = {"dir": result["dir"], "files": result["files"], "size": result["size"],
                    "nfs_cluster": nfs_cluster,
                    "nfs_share": nfs_share}

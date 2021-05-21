@@ -104,7 +104,7 @@ class ClientApplication(object):
         self.message_lock = Lock()
 
         # Mount NFS Share locally
-        self.nfs_cluster = NFSCluster({}, self.logger)
+        self.nfs_cluster = None
         self.nfs_share_list = Queue()
 
     def __del__(self):
@@ -132,6 +132,7 @@ class ClientApplication(object):
         # Start messaging service
         self.start_logging()
         self.logger.info("Started Client Application for id:{} on node {}".format(self.id, self.host_name))
+        self.nfs_cluster = NFSCluster({}, self.logger)
         self.start_workers()
         self.start_message()
 
@@ -170,9 +171,7 @@ class ClientApplication(object):
                        task_queue=self.task_queue,
                        status_queue=self.operation_status_queue,
                        index_data_queue=self.operation_data_queue,
-                       logger_queue=self.logger_queue,
-                       logger_lock=self.logger_lock,
-                       logger_status=self.logger_status,
+                       logger=self.logger,
                        s3_config=self.s3_config,
                        aws_log_debug_val=self.aws_log_debug_val)
             # self.logger.write("DEBUG: Starting worker-{}\n".format(index))
@@ -248,7 +247,7 @@ class ClientApplication(object):
     def message_server_index(self):
         """
         Message Handler process incoming file index
-        index message: {"dir":<>, "files":["f1","f2"], "size": <size of the set of files>}
+        index message:{"dir":<>,"files":["f1","f2"],"size":<size of all files>, "nfs_cluster":<IP>, "nfs_share":<path>}
         end message: {"indexing" : 1 }
 
         Once indexing is completed at Master application side, master send a end message to all clients to finish their
@@ -293,7 +292,7 @@ class ClientApplication(object):
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
-                    # self.logger.debug("Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message["files"]))
+                    self.logger.debug("Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message))
                     is_index_data_added = False  #
                     # Add indexing data to the "operation_data_queue".
                     if self.operation.upper() == "PUT":
@@ -442,16 +441,9 @@ class ClientApplication(object):
                 return True
 
             ret, console = self.nfs_cluster.mount(nfs_cluster_ip, nfs_share)
-            if ret == 0:
-                #print("INFO: Mounted NFS share {}:{}".format(nfs_cluster_ip, nfs_share))
-                self.logger.info("Mounted NFS share {}:{}".format(nfs_cluster_ip, nfs_share))
-                self.nfs_share_list.put({"nfs_cluster_ip": nfs_cluster_ip, "nfs_share": nfs_share})
 
-                if nfs_cluster_ip not in self.nfs_cluster.local_mounts:
-                    self.nfs_cluster.local_mounts[nfs_cluster_ip] = [nfs_share]
-                else:
-                    self.nfs_cluster.local_mounts[nfs_cluster_ip].append(nfs_share)
-                self.nfs_cluster.mounted = True
+            if ret == 0 or ret is None:
+                self.nfs_share_list.put({"nfs_cluster_ip": nfs_cluster_ip, "nfs_share": nfs_share})
 
                 return True
             else:
@@ -512,11 +504,12 @@ if __name__ == "__main__":
             # Un-mount local NFS shares
             while not ca.nfs_share_list.empty():
                 nfs_share = ca.nfs_share_list.get()
-                ca.logger.info(
+                ca.logger.debug(
                     "Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
-                ret, console = ca.nfs_cluster.umount(nfs_share["nfs_share"])
-                if ret:
-                    ca.logger.error("Unmount failed! {}".format(console))
+                local_nfs_mount = os.path.abspath("/" + nfs_share["nfs_cluster_ip"] + "/" + nfs_share["nfs_share"])
+                ret, console = ca.nfs_cluster.umount(local_nfs_mount)
+                if ret == 0:
+                    ca.logger.info("Un-mounted NFS share {} => {} successfully".format(nfs_share["nfs_share"] , local_nfs_mount))
 
             # Stop message-handler
             ca.stop_message()  # May not be required, Already those process stopped.
@@ -524,7 +517,7 @@ if __name__ == "__main__":
 
             # Stop workers
             ca.stop_workers()
-            ca.logger.info("INFO: All workers terminated !")
+            ca.logger.info("All workers terminated !")
             break
 
         time.sleep(1)

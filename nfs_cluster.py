@@ -48,16 +48,19 @@ class NFSCluster:
     def __del__(self):
         # Unmount all the mounted local NFS paths.
         if self.mounted:
+            """
             for cluster_ip in self.local_mounts:
-                for local_mount in self.local_mounts[cluster_ip]:
-                    command = "umount {}".format(local_mount)
+                for nfs_share in self.local_mounts[cluster_ip]:
+                    local_nfs_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
+                    command = "umount {}".format(local_nfs_mount)
                     ret, console = exec_cmd(command, True, True)
                     if ret :
-                        #print("ERROR: Failed to un-mount  {} path ".format(local_mount))
-                        self.logger.error("Failed to un-mount  {} path ".format(local_mount))
+                        self.logger.error("Failed to un-mount  {}=>{} path ".format(nfs_share, local_nfs_mount))
                     else:
-                        self.logger.debug("Un-mounted local NFS mount {}".format(local_mount))
+                        self.logger.debug("Un-mounted NFS share {} for local mount {}".format(nfs_share, local_nfs_mount))
             env.close()
+            """
+            self.umount_all()
 
     @exception
     def mount_all(self):
@@ -68,27 +71,16 @@ class NFSCluster:
         if self.config:
             # perform mounting for each cluster
             for cluster_ip in self.config:
-                local_nfs_mount_paths = []
                 mounted_nfs_shares = []
                 for nfs_share in self.config[cluster_ip]:
                     nfs_share = os.path.abspath(nfs_share)
                     ret,console = self.mount(cluster_ip, nfs_share)
                     if ret == 0:
                         mounted_nfs_shares.append(nfs_share)
-                        local_nfs_mount_paths.append(nfs_share)
-                        self.logger.debug(
-                            "NFS mounting {}:{} successful \n".format(cluster_ip, nfs_share))
-                    else:
-                        #print("ERROR:NFS mounting {}:{} failed \n {}".format(cluster_ip,nfs_share, console))
-                        self.logger.error("NFS mounting {}:{} failed \n {}".format(cluster_ip,nfs_share, console))
 
-                #print("INFO: Mounted NFS shares {}:{}".format(cluster_ip, mounted_nfs_shares))
-                self.logger.info("Mounted NFS shares {}:{}".format(cluster_ip, mounted_nfs_shares))
-                if local_nfs_mount_paths:
-                    self.local_mounts[cluster_ip] = local_nfs_mount_paths
+                if mounted_nfs_shares:
+                    self.logger.info("Mounted NFS shares {}:{}".format(cluster_ip, mounted_nfs_shares))
                     self.nfs_cluster.append(cluster_ip)
-
-                self.mounted = True
 
     @exception
     def mount(self,cluster_ip, nfs_share):
@@ -100,20 +92,35 @@ class NFSCluster:
         ret : a integer value. 0 to indicate success.
         console: STDOUT message
         """
-        ret =0
+        ret = None
         console =None
+        # Generate a unique md5sum hash key for NFS shares
+        nfs_share_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
+        nfs_share_already_mounted = False
+
         # Create local directory
-        if not os.path.isdir(nfs_share):
+        if not os.path.isdir(nfs_share_mount):
             # os.mkdir(nfs_share)
-            command = "mkdir -p {}".format(nfs_share)
+            command = "mkdir -p {}".format(nfs_share_mount)
             ret, console = exec_cmd(command, True, True)
-        if os.path.ismount(nfs_share):
-            #print("WARNING: NFS share \"{}\" already mounted!".format(nfs_share))
-            self.logger.warn("NFS share {} already mounted!".format(nfs_share))
+        if os.path.ismount(nfs_share_mount):
+            self.logger.warn("NFS share {} already mounted to {}".format(nfs_share, nfs_share_mount))
+            nfs_share_already_mounted = True
         else:
-            command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share)
-            #self.logger.debug("Mount Command - {}".format(command))
+            command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share_mount)
             ret, console = exec_cmd(command, True, True)
+
+        if ret == 0:
+            self.logger.info("NFS mounting {}:{} => {} successful".format(cluster_ip, nfs_share, nfs_share_mount))
+        elif ret:
+            self.logger.error("NFS mounting {}:{} failed \n {}".format(cluster_ip, nfs_share, console))
+
+        if ret == 0 or nfs_share_already_mounted:
+            if cluster_ip not in self.local_mounts:
+                self.local_mounts[cluster_ip] = [nfs_share]
+            else:
+                self.local_mounts[cluster_ip].append(nfs_share)
+            self.mounted = True
         return ret,console
 
     @exception
@@ -123,27 +130,22 @@ class NFSCluster:
         :return:
         """
         for cluster_ip in self.local_mounts:
-            local_mounts = []
-            self.logger.info("{}:{}".format(cluster_ip, self.local_mounts[cluster_ip]))
-            for local_mount in self.local_mounts[cluster_ip]:
-                ret, console = self.umount(local_mount)
-                if ret:
-                    #print("ERROR: Failed to un-mount  {} path ".format(local_mount))
-                    self.logger.error("Failed to un-mount  {} path ".format(local_mount))
-                else:
-                    #print("DEBUG: Un-mounted local NFS mount {}".format(local_mount))
-                    #self.logger.debug("DEBUG: Un-mounted local NFS mount {}".format(local_mount))
-                    local_mounts.append(local_mount)
-
-            #print("INFO: Un-mounted local NFS mount => NFS Cluster-{}:{}".format(cluster_ip, local_mounts))
-            self.logger.info("Un-mounted local NFS mount => NFS Cluster-{}:{}".format(cluster_ip, local_mounts))
-
+            nfs_mounts = []
+            for nfs_share in self.local_mounts[cluster_ip]:
+                local_nfs_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
+                ret, console = self.umount(local_nfs_mount)
+                if ret == 0:
+                    nfs_mounts.append(nfs_share)
+            if nfs_mounts:
+                self.logger.info("Un-mounted local NFS mount => NFS Cluster-{}:{}".format(cluster_ip, nfs_mounts))
+            else:
+                self.logger.info("Un-mount failed for local NFS mount => NFS Cluster-{}:{}".format(cluster_ip, nfs_mounts))
         self.mounted = False
 
     @exception
     def umount(self, local_mount):
 
-        ret =0
+        ret = None
         console =None
         if os.path.ismount(local_mount):
             command = "umount {}".format(local_mount)
@@ -153,11 +155,12 @@ class NFSCluster:
                 try:
                     command = "rm -rf {}".format(local_mount)
                     ret, console = exec_cmd(command, True, True)
-                    #os.rmdir(local_mount)
                     if ret:
                         self.logger.error("Failed to remove {} ".format(local_mount))
                 except OSError as e:
                     self.logger.error("Unable to remove directory {}, {} ".format(local_mount, e))
+            else:
+                self.logger.error("Failed to un-mount  {}=>{} path ".format(nfs_share, local_mount))
         else:
             self.logger.warn("{} path is not a mounted path".format(local_mount))
         return ret,console

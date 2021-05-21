@@ -177,9 +177,7 @@ class Master(object):
         while index < self.workers_count:
             w = Worker(id=index,
                        task_queue=self.task_queue,
-                       logger_queue=self.logger_queue,
-                       logger_lock=self.logger_lock,
-                       logger_status=self.logger_status,
+                       logger=self.logger,
                        index_data_queue=self.index_data_queue,
                        progress_of_indexing= self.progress_of_indexing,
                        progress_of_indexing_lock=self.progress_of_indexing_lock,
@@ -294,13 +292,13 @@ class Master(object):
         local_mounts = self.nfs_cluster_obj.get_mounts()
         #print(local_mounts)
         for ip_address, nfs_shares in local_mounts.items():
-            #print("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
             self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
             self.nfs_shares.extend(nfs_shares)
             for nfs_share in nfs_shares:
                 #print("DEBUG: Creating task for {}".format(nfs_share))
+                nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share)
                 task = Task(operation="indexing",
-                            data=nfs_share,
+                            data=nfs_share_mount,
                             nfs_cluster=ip_address,
                             nfs_share=nfs_share,
                             max_index_size=self.max_index_size)
@@ -323,7 +321,6 @@ class Master(object):
             self.task_queue.put(task)
         else:
             for ip_address, nfs_shares in self.config.get("nfs_config", {}).items():
-                #print("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
                 self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
                 self.nfs_shares.extend(nfs_shares)
                 for nfs_share in nfs_shares:
@@ -612,9 +609,8 @@ def process_put_operation(master):
         # Un-mount device once all monitors are stopped. Because, if ClientApp is launches at the same node of master, then
         # un-mount should not happen.
         if monitors_stopped and  not unmounted_nfs_shares:
-            #print("INFO: Un-mount all NFS shares at Master")
             master.logger.info("Un-mount all NFS shares at Master")
-            master.nfs_cluster_obj.umount_all()  ## Termination2
+            #master.nfs_cluster_obj.umount_all()  ## Termination2
             unmounted_nfs_shares = 1
 
 
