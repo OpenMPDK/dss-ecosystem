@@ -44,6 +44,11 @@ from multiprocessing import Process, Queue, Value, Lock
 Contains list of utility functions...
 """
 
+OPERATION_STATUS = [
+    "READY",
+    "RUNNING",
+    "FINISHED"
+]
 
 def exception(func):
     """
@@ -241,7 +246,7 @@ def validate_s3_prefix(logger, prefix):
     Validate a given prefix. A S3 prefix should start without "/" and end with "/".
     <prefix string>/
     :param logger: multiprocessing logger object
-    :param prefix: a string 
+    :param prefix: a string
     :return: Success/Failure
     """
     if prefix.startswith("/") or not prefix.endswith("/"):

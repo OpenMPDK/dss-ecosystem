@@ -679,6 +679,7 @@ def process_del_operation(master):
                 #master.logger.info("Object-Keys generation through listing is completed!")
                 listing_time = (datetime.now() - master.operation_start_time).seconds
                 master.logger.info("LISTING Completed for {} operation in {} seconds".format(master.operation, listing_time))
+                master.logger.info("Total Object-Keys listed - {}".format(master.index_data_count.value))
                 # Shutdown workers
                 #master.stop_workers()
                 #workers_stopped = 1
@@ -736,11 +737,9 @@ def process_get_operation(master):
         if not workers_stopped:
             if listing_done and master.index_data_generation_complete.value == 0:
                 master.index_data_generation_complete.value = 1
-                master.logger.info("Object-Keys generation through listing is completed!")
-                #print("INFO: Object-Keys generation through listing is completed!")
                 listing_time = (datetime.now() - master.operation_start_time).seconds
-                #print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
                 master.logger.info("LISTING Completed for {} operation in {} seconds".format(master.operation, listing_time))
+                master.logger.info("Total Object-Keys listed - {}".format(master.index_data_count.value))
         # Shutdown workers
         # master.stop_workers()
         # workers_stopped = 1

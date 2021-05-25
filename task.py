@@ -32,7 +32,7 @@
 """
 
 import os,sys
-from utils.utility import exception
+from utils.utility import exception, exec_cmd
 from multiprocessing import Value,Manager
 from minio_client import MinioClient
 from s3_client import S3
@@ -204,7 +204,6 @@ def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size, s3
             yield {"prefix": obj_key}
         else:
             if len(object_keys) == max_index_size:
-                #print("++++++=============>ObjectKey-:{}".format(object_keys))
                 yield {"object_keys": object_keys}
                 object_keys = [obj_key]
             else:
@@ -223,19 +222,17 @@ def get(s3_client,**kwargs):
     minio_bucket = s3config.get("bucket", "bucket")
 
     success = 0
-    prefix_index_data_file = "/var/log/prefix_index_data.json"
-    with open(prefix_index_data_file, "r") as prefix_index_data_handler:
-        prefix_index_data = json.load(prefix_index_data_handler)
-
     object_keys = params["data"]
     if s3_client:
         # Create directory if not exist
         dest_dir = dest_path + "/" + object_keys["dir"]
         if not os.path.exists(dest_dir):
-          os.makedirs(dest_dir)
+          command = "mkdir -p {}".format(dest_dir)
+          ret, console = exec_cmd(command, True, True)
+          if ret:
+            logger.error("Directory {} creation FAILED for prefix-{}\n{}".format(dest_path, object_keys["dir"], console))
 
         for object_key in object_keys["files"]:
-            # logger.debug("TASK: Going to removed object key {}".format(object_key))
             if params.get("dryrun", False):  # Dry run
                 success += 1
             else: # Actual operation
@@ -245,10 +242,8 @@ def get(s3_client,**kwargs):
     else:
         logger.error("Unable to connect to S3 ObjectStorage for download")
 
-    # logger.debug("downloaded  object keys-{}".format(removed_objects ))
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
-    #logger.debug("Task GET Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
     status_queue.put(status_message)
 
 @exception
@@ -261,7 +256,6 @@ def delete(s3_client,**kwargs):
     minio_bucket = s3config.get("bucket", "bucket")
 
     success = 0
-    #mc = MinioClient(minio_url, minio_access_key, minio_secret_key)
     removed_objects = []
     object_keys = params["data"]
     if s3_client:

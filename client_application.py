@@ -33,7 +33,7 @@
 """
 import os
 from utils.config import Config, ClientApplicationArgumentParser
-from utils.utility import exception
+from utils.utility import exception, OPERATION_STATUS
 from logger import MultiprocessingLogger
 from multiprocessing import Process, Queue, Value, Lock, Manager
 from worker import Worker
@@ -95,7 +95,6 @@ class ClientApplication(object):
         self.aws_log_debug_val = config.get('awslib_log_debug', 0)
 
         # Message handling
-        # self.ip_address = socket.gethostbyname(self.host_name)
         self.ip_address = self.config["ip_address"]
         self.port_index = config["port_index"]
         self.port_status = config["port_status"]
@@ -292,7 +291,7 @@ class ClientApplication(object):
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
-                    self.logger.debug("Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message))
+                    self.logger.debug("Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message["dir"]))
                     is_index_data_added = False  #
                     # Add indexing data to the "operation_data_queue".
                     if self.operation.upper() == "PUT":

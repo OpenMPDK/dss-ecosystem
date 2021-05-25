@@ -48,18 +48,6 @@ class NFSCluster:
     def __del__(self):
         # Unmount all the mounted local NFS paths.
         if self.mounted:
-            """
-            for cluster_ip in self.local_mounts:
-                for nfs_share in self.local_mounts[cluster_ip]:
-                    local_nfs_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
-                    command = "umount {}".format(local_nfs_mount)
-                    ret, console = exec_cmd(command, True, True)
-                    if ret :
-                        self.logger.error("Failed to un-mount  {}=>{} path ".format(nfs_share, local_nfs_mount))
-                    else:
-                        self.logger.debug("Un-mounted NFS share {} for local mount {}".format(nfs_share, local_nfs_mount))
-            env.close()
-            """
             self.umount_all()
 
     @exception

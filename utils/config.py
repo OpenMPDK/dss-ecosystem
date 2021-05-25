@@ -199,6 +199,8 @@ class CommandLineArgument:
                                help='Dry run - Just check operation is working , but does not actual upload')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
+        subparser.add_argument("--profile", "-pro", required=False, action='store_true',
+                               help='Profiling of PUT operation (Not Implemented)')
 
     def get(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -214,6 +216,8 @@ class CommandLineArgument:
                                help='Dry run - Just check operation is working , but does not actual download')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
+        subparser.add_argument("--profile", "-pro", required=False, action='store_true',
+                               help='Profiling of PUT operation (Not Implemented)')
 
     def list(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -228,6 +232,8 @@ class CommandLineArgument:
                                help='Dry run - Just check operation is working , but does not actual listing')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
+        subparser.add_argument("--profile", "-pro", required=False, action='store_true',
+                               help='Profiling of PUT operation (Not Implemented)')
     def delete(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
                                 help='Specify number of Jobs to be used for parallel processing. ')
@@ -243,5 +249,7 @@ class CommandLineArgument:
                                help='Dry run - Just check operation is working , but does not actual delete')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
+        subparser.add_argument("--profile", "-pro", required=False, action='store_true',
+                               help='Profiling of PUT operation (Not Implemented)')
     def get_operation(self):
         return sys.argv[1:2][0]
