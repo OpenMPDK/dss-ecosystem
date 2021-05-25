@@ -65,6 +65,7 @@ class Worker(object):
         # Listing variables
         self.listing_progress = kwargs.get("listing_progress", None)
         self.listing_progress_lock = kwargs.get("listing_progress_lock", None)
+        self.listing_started = kwargs.get("listing_started", None)
 
     def __del__(self):
         self.stop()
@@ -188,7 +189,8 @@ class Worker(object):
                            listing_progress=self.listing_progress,
                            listing_progress_lock=self.listing_progress_lock,
                            s3_client=s3_client,
-                           indexing_started_flag=self.indexing_started_flag
+                           indexing_started_flag=self.indexing_started_flag,
+                           listing_started=self.listing_started
                            )
 
             # time.sleep(1)  # 1 second delay

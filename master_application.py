@@ -73,6 +73,7 @@ class Master(object):
         self.client_password = config["client"]["password"]
 
         self.s3_config = config.get("s3_storage", {})
+        self.nfs_config =  self.config.get("nfs_config", {})
 
         ## Logging
         self.logging_path =  "/var/log/dss"
@@ -97,6 +98,7 @@ class Master(object):
         self.prefix = config.get("prefix", None)
         self.listing_progress = manager.dict()
         self.listing_progress_lock = manager.Lock()
+        self.listing_started = Value('i', 0)
 
         # Status Progress
         self.index_data_count = Value('i', 0)  # File Index count shared between worker process.
@@ -185,7 +187,8 @@ class Master(object):
                        listing_progress=self.listing_progress,
                        listing_progress_lock=self.listing_progress_lock,
                        s3_config=self.s3_config,
-                       indexing_started_flag=self.indexing_started_flag
+                       indexing_started_flag=self.indexing_started_flag,
+                       listing_started=self.listing_started
                        )
             w.start()
             self.workers.append(w)
@@ -306,32 +309,32 @@ class Master(object):
 
 
     def start_listing(self):
-
-        #print("INFO: Started Listing operation!")
         self.logger.info("Started Listing operation!")
+        bad_prefix_no_listing = True
         # Create a Task based on prefix
         if self.prefix:
-            self.logger.debug("Creating task for prefix - {}".format(self.prefix))
-            self.prefix = get_s3_prefix(self.prefix)
-            task= Task(operation="list",
-                       data={"prefix": self.prefix},
+            self.logger.debug("Creating LIST task for prefix - {}".format(self.prefix))
+            for prefix in get_s3_prefix(self.logger, self.config.get("nfs_config", {}), self.prefix):
+                bad_prefix_no_listing = False
+                task= Task(operation="list",
+                       data={"prefix": prefix},
                        s3config=self.config["s3_storage"],
                        max_index_size=self.config["master"].get("max_index_size", 10)
                        )
-            self.task_queue.put(task)
+                self.task_queue.put(task)
         else:
-            for ip_address, nfs_shares in self.config.get("nfs_config", {}).items():
-                self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
-                self.nfs_shares.extend(nfs_shares)
-                for nfs_share in nfs_shares:
-                    self.logger.debug("Creating task for {}".format(nfs_share))
-                    prefix = get_s3_prefix(nfs_share)
-                    task = Task(operation="list",
-                                data={"prefix":prefix},
-                                s3config=self.config["s3_storage"],
-                                max_index_size=self.config["master"].get("max_index_size", 10)
-                                )
-                    self.task_queue.put(task)
+            for prefix in get_s3_prefix(self.logger, self.nfs_config):
+                bad_prefix_no_listing = False
+                task = Task(operation="list",
+                            data={"prefix": prefix},
+                            s3config=self.config["s3_storage"],
+                            max_index_size=self.config["master"].get("max_index_size", 10)
+                            )
+                self.task_queue.put(task)
+
+        if bad_prefix_no_listing:
+            self.logger.error("LISTING failure!")
+            self.listing_started.value = 1
 
 
     def compaction(self):
@@ -665,33 +668,17 @@ def process_del_operation(master):
         # Check for completion of indexing, Shutdown workers
         listing_done = False
         master.listing_progress_lock.acquire()
-
         # Determine listing is done.
-        if master.prefix:
-            if len(master.listing_progress) == 1 and master.listing_progress.get(master.prefix, -1) == 0:
-                listing_done = True
-
-        else:
-            # All the children of top level prefix should be processed.
-            # len( ["/bird","/cat","/dog"] ) == len ( {"bird/":0, "cat/":0, "dog/":0} )
-            if (len(master.nfs_shares) == len(master.listing_progress)):
-                is_all_child_processed = True
-                for nfs_share, child_listing_count in master.listing_progress.items():
-                    if child_listing_count :
-                        is_all_child_processed = False
-
-                listing_done = is_all_child_processed
+        if master.listing_started.value == 1 and len(master.listing_progress) == 0 :
+            listing_done = True
         master.listing_progress_lock.release()
-        #print("NFS Share-{}:{}:{}".format(master.nfs_shares, master.listing_progress, listing_done))
 
         if not workers_stopped:
             if listing_done and master.index_data_generation_complete.value == 0:
                 master.index_data_generation_complete.value = 1
-                master.logger.info("Object-Keys generation through listing is completed!")
-                #print("INFO: Object-Keys generation through listing is completed!")
+                #master.logger.info("Object-Keys generation through listing is completed!")
                 listing_time = (datetime.now() - master.operation_start_time).seconds
-                master.logger.info("{} LISTING Completed in {} seconds".format(master.operation, listing_time))
-                #print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
+                master.logger.info("LISTING Completed for {} operation in {} seconds".format(master.operation, listing_time))
                 # Shutdown workers
                 #master.stop_workers()
                 #workers_stopped = 1
@@ -741,24 +728,10 @@ def process_get_operation(master):
         # Check for completion of indexing, Shutdown workers
         listing_done = False
         master.listing_progress_lock.acquire()
-
         # Determine listing is done.
-        if master.prefix:
-            if len(master.listing_progress) == 1 and master.listing_progress.get(master.prefix, -1) == 0:
-                listing_done = True
-
-        else:
-            # All the children of top level prefix should be processed.
-            # len( ["/bird","/cat","/dog"] ) == len ( {"bird/":0, "cat/":0, "dog/":0} )
-            if (len(master.nfs_shares) == len(master.listing_progress)):
-                is_all_child_processed = True
-                for nfs_share, child_listing_count in master.listing_progress.items():
-                    if child_listing_count:
-                        is_all_child_processed = False
-
-                listing_done = is_all_child_processed
+        if master.listing_started.value == 1 and len(master.listing_progress) == 0:
+            listing_done = True
         master.listing_progress_lock.release()
-        # print("NFS Share-{}:{}:{}".format(master.nfs_shares, master.listing_progress, listing_done))
 
         if not workers_stopped:
             if listing_done and master.index_data_generation_complete.value == 0:
@@ -767,7 +740,7 @@ def process_get_operation(master):
                 #print("INFO: Object-Keys generation through listing is completed!")
                 listing_time = (datetime.now() - master.operation_start_time).seconds
                 #print("INFO: {} LISTING Completed in {} seconds".format(master.operation, listing_time))
-                master.logger.info("{} LISTING Completed in {} seconds".format(master.operation, listing_time))
+                master.logger.info("LISTING Completed for {} operation in {} seconds".format(master.operation, listing_time))
         # Shutdown workers
         # master.stop_workers()
         # workers_stopped = 1

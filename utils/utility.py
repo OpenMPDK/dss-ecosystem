@@ -213,19 +213,41 @@ def uploadFile(dst_host, dst_path, src_path, username, password="msl-ssg"):
     # remoteExecution(dst_host, username, password, "sudo chmod 777 {}".format(os.path.dirname(dst_path)), True)
 
 
-def get_s3_prefix(prefix):
+def get_s3_prefix(logger, nfs_cluster, prefix=None):
     """
     Validate prefix for minio S3 and return the same.
+    :param cluster_ip
     :param prefix: s3 prefix
     :return: s3 compatible prefix
     """
-    prefix = prefix.strip()
-    if prefix.startswith("/"):
-        prefix = (prefix.strip())[1:]  # Remove first "/" from prefix key
-    if not prefix.endswith("/"):
-        prefix += "/"  # Add / to make a good prefix.
+    if prefix:
+        if validate_s3_prefix(logger, prefix):
+            prefix_fields = prefix.split("/")
+            nfs_server_ip = prefix_fields[0]
+            if nfs_server_ip not in nfs_cluster:
+                nfs_first_dir  = prefix_fields[0]
+                for nfs_server_ip, nfs_shares in nfs_cluster.items():
+                    for nfs_share in nfs_shares:
+                        if nfs_first_dir is nfs_share.split("/")[0]:
+                            yield nfs_server_ip + "/" + nfs_first_dir + "/"
+            else:
+                yield prefix
+    else:
+        for nfs_server_ip in nfs_cluster:
+            yield nfs_server_ip + "/"
 
-    return prefix
+def validate_s3_prefix(logger, prefix):
+    """
+    Validate a given prefix. A S3 prefix should start without "/" and end with "/".
+    <prefix string>/
+    :param logger: multiprocessing logger object
+    :param prefix: a string 
+    :return: Success/Failure
+    """
+    if prefix.startswith("/") or not prefix.endswith("/"):
+        logger.error("WRONG specification of prefix. Should be in the format of <nfs_server_ip>/<prefix>/ ")
+        return False
+    return True
 
 
 def progress_bar(prefix=""):

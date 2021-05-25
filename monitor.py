@@ -177,7 +177,7 @@ class Monitor:
                             self.prefix_index_data[object_prefix_key] = manager.dict()
                             self.prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
 
-                    #print("===>>INFO: Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
+                    #self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
                     if self.send_index_data(client, data):
                         #self.index_data_count.value += len(data.get("files", []))
                         previous_client_operation_status = 1
@@ -427,7 +427,7 @@ class Monitor:
             bandwidth = success_operation_size_in_byte / ( 1024 * 1024 * total_operation_time)
         operation_size_in_gb = success_operation_size_in_byte / ( 1024 * 1024 * 1024)
 
-        self.logger.info("Operation {} completed in {} seconds for {:.2f} GB ".format(self.operation,  total_operation_time, operation_size_in_gb))
-        self.logger.info("Operation {} BandWidth = {:.2f} MB/sec ".format(self.operation, bandwidth))
+        self.logger.info("Operation {} completed in {} seconds for {:.2f} GiB ".format(self.operation,  total_operation_time, operation_size_in_gb))
+        self.logger.info("Operation {} BandWidth = {:.2f} MiB/sec ".format(self.operation, bandwidth))
         self.monitor_progress_status.value = 1
         self.logger.info("Monitor-Progress-Status terminated! ")

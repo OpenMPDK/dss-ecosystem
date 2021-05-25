@@ -123,6 +123,7 @@ def list(s3_client, **kwargs):
     logger = kwargs["logger"]
     listing_progress = kwargs["listing_progress"] # The shared memory is used to hold progress status.
     listing_progress_lock = kwargs["listing_progress_lock"]
+    listing_started = kwargs["listing_started"]
     index_data_count = kwargs["index_data_count"]
 
     max_index_size = params["max_index_size"]
@@ -139,52 +140,47 @@ def list(s3_client, **kwargs):
     s3config = params["s3config"]
     minio_bucket = s3config.get("bucket", "bucket")
     s3_client_library = s3config.get("client_lib","minio_client")
+    logger.debug("LIST- Performing listing with prefix - {}".format(prefix))
 
-    #if prefix not in listing_progress:
-    #    listing_progress[prefix] = 0
+    listing_progress_lock.acquire()
+    listing_progress[prefix] = 1
+    listing_progress_lock.release()
+
+    if listing_started.value  != 1:
+        listing_started.value = 1
 
     if prefix in prefix_index_data:
-        #print("*****Prefix:{}".format(prefix))
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
         if object_keys_iterator:
-            lowest_level_directory= True
             for result in list_object_keys(object_keys_iterator, prefix_index_data,max_index_size, s3_client_library):
                 if "object_keys" in result:
                     index_data_message ={"dir": prefix, "files": result["object_keys"]}
                     index_data_count.value += len(result["object_keys"])
-                    #print("=====>>> TASK-INFO: Index Data Message - {}".format(index_data_message))
+                    logger.debug("TASK-LIST: Message - {}".format(index_data_message))
                     index_data_queue.put(index_data_message)
                 else:
                     task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
                     task_queue.put(task)
-                    # Keep track of progress of listing
-                    lowest_level_directory = False
-                    if prefix in listing_progress:
-                        listing_progress[prefix] +=1
-                    else:
-                        listing_progress[prefix] = 1
-            if lowest_level_directory:
-                listing_progress[prefix] = 0
-                check_listing_progress(listing_progress,listing_progress_lock,prefix, logger)
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
     else:
         object_keys = s3_client.listObjects(minio_bucket, prefix)
         if object_keys:
             for obj_key in object_keys:
-                if prefix in listing_progress:
-                    listing_progress[prefix] += 1
-                else:
-                    listing_progress[prefix] = 1
                 if s3_client_library.lower() == "minio":
                     object_key_prefix =  obj_key.object_name
                 elif s3_client_library.lower() == "dss_client":
                     object_key_prefix =  obj_key
+                logger.debug("LIST- obj_key_prefix - {}".format(object_key_prefix))
                 task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                 task_queue.put(task)
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
-            #print("ERROR: No object keys belongs to the prefix-{}".format(prefix))
+
+    listing_progress[prefix] = 0
+    listing_progress_lock.acquire()
+    del listing_progress[prefix]
+    listing_progress_lock.release()
 
 
 
@@ -215,32 +211,6 @@ def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size, s3
                 object_keys.append(obj_key)
     if object_keys:
         yield {"object_keys": object_keys}
-
-
-def check_listing_progress(listing_progress,listing_progress_lock, prefix, logger):
-    if prefix in listing_progress:
-        try:
-            listing_progress_lock.acquire()
-            if listing_progress[prefix] > 0:
-                listing_progress[prefix] -= 1
-            listing_progress_lock.release()
-            if listing_progress[prefix] == 0 and len(prefix.split("/")) > 2:
-                # Check parent node with parent_hash_key
-                parent_prefix = "/".join(prefix.split("/")[:-2]) + "/"
-                # Remove non-top directory
-                #print("TTTTTTTTTTTTTTTT:{}=>{}".format(prefix, listing_progress[prefix]))
-                listing_progress_lock.acquire()
-                if parent_prefix in listing_progress:
-                    del listing_progress[prefix]
-                listing_progress_lock.release()
-
-                if parent_prefix in listing_progress:
-                    #print("KKKKKKKKKKK:{}=>{}".format(parent_prefix, listing_progress[parent_prefix]))
-                    check_listing_progress(listing_progress,listing_progress_lock, parent_prefix, logger)
-
-        except Exception as e:
-            logger.excep("{}: {} =={}".format(__file__, e, listing_progress))
-            #print("EXCEPTION:{}: {} =={} ".format(__file__, e, listing_progress))
 
 @exception
 def get(s3_client,**kwargs):
@@ -273,7 +243,7 @@ def get(s3_client,**kwargs):
                 if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
                     success += 1
     else:
-        logger.error("Unable to connect to Minio for upload with {}".format(minio_config))
+        logger.error("Unable to connect to S3 ObjectStorage for download")
 
     # logger.debug("downloaded  object keys-{}".format(removed_objects ))
     # Update following section for upload status.
@@ -346,7 +316,8 @@ class Task:
                         index_data_count=queue["index_data_count"],
                         logger=self.logger,
                         listing_progress=queue["listing_progress"],
-                        listing_progress_lock=queue["listing_progress_lock"])
+                        listing_progress_lock=queue["listing_progress_lock"],
+                        listing_started=queue["listing_started"])
       elif self.operation.lower() == "del":
         delete(s3_client, params=self.params,
                           status_queue=queue["status_queue"],
