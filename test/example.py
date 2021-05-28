@@ -3,7 +3,8 @@ import os
 
 access_key = "minioadmin"
 access_secret = "minioadmin"
-discover_endpoint = 'http://127.0.0.1:9001'
+#discover_endpoint = 'http://127.0.0.1:9001'
+discover_endpoint = 'http://localhost6:9001'
 
 def main():
 	# Provide non-default options

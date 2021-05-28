@@ -4,20 +4,8 @@
 		{
 			"id": 0,
     		"endpoints": [
-        		{ "ipv4": "127.0.0.1", "port": 9001 }
+        		{ "ipv4": "localhost6", "port": 9001 }
         	]
-        },
-		{
-			"id": 1,
-			"endpoints": [
-        		{ "ipv4": "127.0.0.1", "port": 9002 }
-        	]
-    	},
-		{
-			"id": 2,
-			"endpoints": [
-        		{ "ipv4": "127.0.0.1", "port": 9003 }
-        	]
-    	}
+        }
 	]
 }

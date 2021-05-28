@@ -610,7 +610,8 @@ int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
         local_file << object_stream.rdbuf();
         local_file.flush();
         local_file.close();
-        return true;
+
+        return 0;
     } else {
         auto err = r.GetErrorType();
         if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
@@ -618,7 +619,7 @@ int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
         else
             throw GenericError(r.GetErrorMsg().c_str());
 
-        return false;
+        return -1;
     }
 }
 
@@ -659,17 +660,9 @@ int Client::GetObjectAsync(const std::string& objectName, const std::string& dst
 						   Callback cb, void* cb_arg)
 {
 	Result r;
-//    struct stat buffer;
+
 	Request* req = new Request(objectName.c_str(), dst_fn.c_str(), cb, cb_arg);
-/*
-	if (stat(dst_fn.c_str(), &buffer) == -1) {
-		char msg_buf[PATH_MAX];
-		snprintf(msg_buf, PATH_MAX,
-				 "GetObject: File '%s' does not exist.", dst_fn.c_str());
-        throw GenericError(msg_buf);
-        return false;
-    }
-*/
+
 	m_cluster_map->GetCluster(req);
 	r = std::move(req->Submit(&Cluster::GetObjectAsync));
     if (r.IsSuccess()) {
