@@ -37,6 +37,7 @@ import subprocess
 import traceback
 import ntplib
 import time
+import hashlib
 import paramiko
 from multiprocessing import Process, Queue, Value, Lock
 
@@ -88,14 +89,6 @@ def exec_cmd(cmd="", output=False, blocking=False):
         # print("INFO: Execution Cmd - {}".format(cmd))
         if blocking:
             if output:
-                '''
-                p = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-                out, err = p.communicate()
-                # out = out.decode('utf-8')
-                console_output = out.strip()
-                # err = err.decode('utf-8')
-                ret = p.returncode
-                '''
                 result = subprocess.check_output(cmd.split(), shell=False, stderr=subprocess.STDOUT,
                                                  universal_newlines=False)
                 console_output = result
@@ -180,44 +173,6 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
     else:
         return client, stdin, stdout, stderr
 
-
-def uploadFile(dst_host, dst_path, src_path, username, password="msl-ssg"):
-    """
-    Remote upload of files
-    :param dst_host: Host IP address
-    :param dst_path: Destination path at Remote Host
-    :param src_path: Data source path at host
-    :param username: root
-    :return:
-    """
-    print("Uploading {} to {}:{}".format(src_path, dst_host, dst_path))
-
-    transport = paramiko.Transport((dst_host, 22))
-    transport.connect(username=username, password=password)
-
-    sftp = paramiko.SFTPClient.from_transport(transport)
-    print("IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII- {}-{}".format(src_path, dst_path))
-
-    remote_directory_create_cmd = "sudo mkdir -p {}".format(os.path.dirname(dst_path))
-    print("Remote directory create command: {}".format(remote_directory_create_cmd))
-    remoteExecution(dst_host, username, password, remote_directory_create_cmd, True)
-
-    # TODO why does this always throw an exception
-    print("KKKKK--{}".format(os.path.dirname(dst_path)))
-    try:
-        sftp.put(src_path, dst_path)
-        remoteExecution(dst_host, username, password, "sudo tar -xvzf  {}".format(dst_path), True)
-        remoteExecution(dst_host, username, password, "sudo rm   {}".format(dst_path), True)
-    except Exception as e:
-        print("EXCEPTION---: {}-{}".format(__file__, e))
-
-    # remoteExecution(dst_host, username,password, "sudo chmod 777 {}".format(dst_path))
-    transport.close()
-    sftp.close()
-
-    # remoteExecution(dst_host, username, password, "sudo chmod 777 {}".format(os.path.dirname(dst_path)), True)
-
-
 def get_s3_prefix(logger, nfs_cluster, prefix=None):
     """
     Validate prefix for minio S3 and return the same.
@@ -269,3 +224,34 @@ def progress_bar(prefix=""):
         elif i % 3 == 0:
             sys.stdout.write("\r{} --".format(prefix))
         time.sleep(0.1)
+
+def get_hash_key(**kwargs):
+    """
+    Generate a 32 byte md5 hash key for a string or object or file content.
+    :param type: Type of arguments are being passed ["string", "object", "file"]
+    :param data: Pass string content, object or file
+    :return: A 32 byte hash_key
+    """
+    type = kwargs.get("type", None)
+    logger = kwargs["logger"]
+    hash_key= None
+    if type:
+      if type == "file":
+        file_path = kwargs["data"]
+        if file_path and os.path.exists(file_path):
+          with open(file_path, "rb") as fh:
+            data = fh.read()
+            hash_key = hashlib.md5(data).hexdigest()
+            #logger.debug("HashKey - {}".format(hash_key))
+        else:
+            logger.error("File {} doesn't exist!".format(file_path))
+      elif type == "object":
+        object = kwargs["data"]
+        hash_key = hashlib.md5(object).hexdigest()
+      elif type == "str":
+        data = kwargs["data"]
+        hash_key = hashlib.md5(data).hexdigest()
+      else:
+        logger.error("Unknown Type {} for hashkey generation.\n Supported types are string/object/file".format(type))
+
+    return hash_key

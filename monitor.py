@@ -196,7 +196,7 @@ class Monitor:
                             previous_client_operation_status = 1
 
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
-                self.logger.info("Indexed data distribution is completed! {}".format(self.index_data_queue.qsize()))
+                self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED,  time - {}".format((datetime.now() - index_distribution_start_time).seconds))
 
@@ -240,7 +240,6 @@ class Monitor:
                 self.logger.info("Dump Persistent Data - {}".format(e))
 
         self.monitor_index_data_sender.value = 1
-        #print("INFO: Monitor-Index-Distribution is terminated gracefully!")
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
 
 

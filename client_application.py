@@ -294,7 +294,7 @@ class ClientApplication(object):
                     self.logger.debug("Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message["dir"]))
                     is_index_data_added = False  #
                     # Add indexing data to the "operation_data_queue".
-                    if self.operation.upper() == "PUT":
+                    if self.operation.upper() == "PUT" or self.operation.upper() == "TEST":
                         ## Message validation, NFS Mounting if not already mounted on client node
                         if "nfs_cluster" in message and "dir" in message:
                             if self.config.get("master_node", None) and self.config["master_node"] == 1:
@@ -381,7 +381,7 @@ class ClientApplication(object):
                     status_message = self.operation_status_queue.get()  ## {"success": <>, "failure":<>}
                 # Send response after adding data to operation data_queue as success
                 if status_message:
-                    self.logger.debug("PUSH - Sending message - {}".format(status_message))
+                    self.logger.info("PUSH - Sending message - {}".format(status_message))
                     socket.send_json(status_message)
                     # Decrement index_buffer as those files have been processed.
                     if status_message["dir"] in index_buffer:
@@ -424,16 +424,14 @@ class ClientApplication(object):
             self.logger.excep("Monitor-StatusHandler - {}".format(e))
 
     @exception
-    def nfs_mount(self, nfs_cluster_ip=None, path=None):
+    def nfs_mount(self, nfs_cluster_ip=None, nfs_share=None):
         """
         Mount remote NFS share based on cluster dns/ip and NFS share
         :param nfs_cluster_ip: nfs cluster dns/ip
         :param path: nfs share , e.g - /dir
         :return:
         """
-        if nfs_cluster_ip and path:
-            # nfs_share = "/" + (path.lstrip()).split("/")[1]
-            nfs_share = path
+        if nfs_cluster_ip and nfs_share:
             # Don't mount if the nfs share all ready mounted.
             if nfs_cluster_ip in self.nfs_cluster.local_mounts and nfs_share in self.nfs_cluster.local_mounts[
                 nfs_cluster_ip]:
@@ -443,10 +441,8 @@ class ClientApplication(object):
 
             if ret == 0 or ret is None:
                 self.nfs_share_list.put({"nfs_cluster_ip": nfs_cluster_ip, "nfs_share": nfs_share})
-
                 return True
             else:
-                #print("ERROR:NFS mounting failed \n {}".format(console))
                 self.logger.error(
                     "{}: NFS Mounting failed for {}:{}\n  {}".format(__file__, nfs_cluster_ip, path, console))
 
@@ -467,21 +463,6 @@ class ClientApplication(object):
         :return:
         """
         self.logger.stop()
-
-"""
-# TODO 
-Replace above client messaging through this class.
-"""
-class ClientMessage(object):
-
-    def __init__(self):
-        pass
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
 
 
 if __name__ == "__main__":
@@ -512,7 +493,6 @@ if __name__ == "__main__":
 
             # Stop message-handler
             ca.stop_message()  # May not be required, Already those process stopped.
-            ca.logger.info("Terminated all message handler !")
 
             # Stop workers
             ca.stop_workers()

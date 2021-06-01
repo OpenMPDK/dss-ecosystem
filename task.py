@@ -32,7 +32,7 @@
 """
 
 import os,sys
-from utils.utility import exception, exec_cmd
+from utils.utility import exception, exec_cmd, get_hash_key
 from multiprocessing import Value,Manager
 from minio_client import MinioClient
 from s3_client import S3
@@ -49,7 +49,7 @@ ds = mgr.dict()
 """
 Need to be updated 
 """
-
+@exception
 def put(s3_client, **kwargs):
     """
     Upload operation
@@ -65,9 +65,12 @@ def put(s3_client, **kwargs):
     s3config   = params["s3config"]
     minio_bucket = s3config.get("bucket","bucket")
 
+    # Data Integrity
+    data_integrity = kwargs.get("data_integrity", False)
+    file_hash_map = kwargs.get("file_hash_map", {})
+    dryrun = params.get("dryrun", False)
+
     success = 0
-    #logger.debug("TASK:PUT DATA  {}".format(index_data))
-    #uploaded_files = []
     failure_files_size = 0
     if s3_client:
         start_time = datetime.now()
@@ -75,16 +78,20 @@ def put(s3_client, **kwargs):
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
             if os.path.exists(file):
                 try:
-                    if params.get("dryrun", False):
+                    if dryrun:
                         # Read file for the purpose of testing
                         with open(file, "rb") as FH:
                             lines = FH.readlines()
-                            #logger.debug("FileName:{}, Lines-{}, Size-{}".format(file, (len(lines)), os.path.getsize(file)))
                         lines = []
                         success +=1
                     else:
                         if s3_client.putObject(minio_bucket, file):
-                            #uploaded_files.append(file_name)
+                            if data_integrity:
+                                file_content_hash_key = get_hash_key(type="file",
+                                                                     data=file,
+                                                                     logger=logger)
+                                file_hash_map[file_name] = file_content_hash_key
+
                             success +=1
                         else:
                             failure_files_size += os.path.getsize(file)
@@ -98,11 +105,13 @@ def put(s3_client, **kwargs):
     else:
         logger.error("Unable to connect to S3 Storage for upload")
 
-    #logger.debug("Minio Uploaded files {}:{}".format(index_data["dir"], uploaded_files ))
-    # Update following section for upload status.
-    status_message = {"success": success, "failure": (len(index_data["files"]) - success) , "dir": index_data["dir"] , "size" : failure_files_size}
-    status_queue.put(status_message)
-    #logger.debug("Minio Upload Status - {} - {}".format(status_message, status_queue.qsize()))
+    if data_integrity:
+        logger.debug("HashMap-(FileName->HashKey): {}".format(file_hash_map))
+    else:
+        # Update following section for upload status.
+        status_message = {"success": success, "failure": (len(index_data["files"]) - success) , "dir": index_data["dir"] , "size" : failure_files_size}
+        status_queue.put(status_message)
+
 
 @exception
 def list(s3_client, **kwargs):
@@ -149,6 +158,7 @@ def list(s3_client, **kwargs):
     if listing_started.value  != 1:
         listing_started.value = 1
 
+    logger.info("LIST-PREFIX-{}".format(prefix))
     if prefix in prefix_index_data:
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
         if object_keys_iterator:
@@ -220,7 +230,11 @@ def get(s3_client,**kwargs):
 
     s3config = params["s3config"]
     minio_bucket = s3config.get("bucket", "bucket")
+    dryrun = params.get("dryrun", False)
 
+    # Data Integrity
+    data_integrity = kwargs.get("data_integrity", False)
+    file_hash_map = kwargs.get("file_hash_map", {})
     success = 0
     object_keys = params["data"]
     if s3_client:
@@ -233,12 +247,23 @@ def get(s3_client,**kwargs):
             logger.error("Directory {} creation FAILED for prefix-{}\n{}".format(dest_path, object_keys["dir"], console))
 
         for object_key in object_keys["files"]:
-            if params.get("dryrun", False):  # Dry run
+            if dryrun:  # Dry run
                 success += 1
             else: # Actual operation
-                dest_file_path = dest_dir + object_key.split("/")[-1]
+                dest_file_path = dest_path + "/" + object_key
+                logger.info("DEBUG: Obj_Key:{}, Dest_Path:{}".format(object_key,dest_file_path))
                 if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
-                    success += 1
+                    if data_integrity:
+                        hash_key = get_hash_key(type='file', data=dest_file_path, logger=logger)
+                        file_name = object_key.split("/")[-1]
+                        if file_hash_map[file_name] == hash_key:
+                            success +=1
+                        else:
+                            logger.error("Failed DataIntegrity for Object Key - {}".format(object_key))
+                    else:
+                        success += 1
+                else:
+                    logger.error("Filed to download object - {}".format(object_key))
     else:
         logger.error("Unable to connect to S3 ObjectStorage for download")
 
@@ -280,6 +305,59 @@ def delete(s3_client,**kwargs):
     status_queue.put(status_message)
 
 
+@exception
+def data_integrity(s3_client,**kwargs):
+    """
+    - For each prefix for leaf node perform upload operation
+      - Before upload for each file , get the md5sum of that and store it in a buffer as <file> => <md5sum>
+    - Download all files for the same prefix and perform md5sum for each file
+      - Compare the same with previously stored hash key.
+      - Send the status to master.
+    :param s3_client:
+    :param kwargs:
+    :return:
+    """
+    logger = kwargs["logger"]
+    # Upload first
+    data_integrity = True
+    file_hash_map = {}
+    params = kwargs.get("params", {})
+    data = params["data"]
+    status_queue = kwargs["status_queue"]
+    logger.info("Checking DataIntegrity for the prefix - {}".format(data["dir"]))
+    logger.info("** DataIntegrity: Performing PUT operation - Prefix-{} **".format(data["dir"]))
+    put(s3_client, params=params,
+                   status_queue=status_queue,
+                   data_integrity=data_integrity,
+                   file_hash_map=file_hash_map,
+                   logger=logger)
+    ## Download
+    # - Fine tune the parameters for GET
+    # Update data with object keys as expected by GET function
+    uploaded_data = {"dir" : data["dir"], "files":[]}
+    for file_name in data["files"]:
+        object_key = os.path.abspath(data["dir"] + "/" + file_name)
+        object_key = object_key[1:]
+        uploaded_data["files"].append(object_key)
+    params["data"] = uploaded_data
+    logger.info("** DataIntegrity: Performing GET operation - Prefix-{} **".format(data["dir"]))
+    get(s3_client, params=params,
+                   status_queue=status_queue,
+                   data_integrity=data_integrity,
+                   file_hash_map=file_hash_map,
+                   logger=logger)
+
+    # Remove the local files
+    download_path = params["dest_path"] + data["dir"]
+    logger.info("DataIntegrity: Removing all the files under the download path - {}".format(download_path))
+    if os.path.exists(download_path):
+      command = "rm -rf {}".format(download_path)
+      ret,console = exec_cmd(command, True, True)
+      if ret == 0:
+        logger.info("Removed all the downloaded files under prefix - {}".format(data["dir"]))
+      else:
+        logger.error("Failed to removed downloaded files for the prefix-{}".format(data["dir"]))
+
 
 
 class Task:
@@ -296,9 +374,8 @@ class Task:
     self.index_data_queue = queue["index_data_queue"]
 
     s3_client = queue["s3_client"]
-
+    # self.logger.debug("Task: Operation-{}, Data-{}".format(self.operation, self.params["data"]))
     try:
-      self.params["logger"] = self.logger
       if self.operation.lower() == "put":
         put(s3_client, params=self.params,
                        status_queue=queue["status_queue"],
@@ -321,6 +398,10 @@ class Task:
         get(s3_client, params=self.params,
                        status_queue=queue["status_queue"],
                        logger=self.logger)
+      elif self.operation.lower() == "test":
+        data_integrity(s3_client, params=self.params,
+                status_queue=queue["status_queue"],
+                logger=self.logger)
       elif self.operation.lower() == "indexing":
         indexing(data=self.params["data"],
                  nfs_cluster=self.params["nfs_cluster"],
@@ -337,7 +418,6 @@ class Task:
 
     except Exception as e:
         self.logger.excep("{}:Task: {}!".format(__file__,e))
-        #print("Exception:{}:{}:{}".format(__file__,e, self.params["data"] ))
 
   def stop(self):
     pass

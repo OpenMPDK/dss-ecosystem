@@ -126,6 +126,8 @@ class DssClientLib:
                 self.logger.excep("NoSuchResourceError - getObject - {} , {}".format(object_key, e))
             except dss.GenericError as e:
                 self.logger.excep("GenericError - getObject - {}".format(e))
+            except Exception as e:
+                self.logger.excep("ObjectKey-{} , Message-{}".format(object_key, e))
         return False
 
     def listObjects(self, bucket=None,  prefix="", delimiter="/"):
@@ -136,58 +138,22 @@ class DssClientLib:
         :param delimiter: Default is "/" to receive first level object keys.
         :return: List of object keys.
         """
-        #obj_keys_count = 1000
         object_keys = []
 
         try:
-            for obj_key in self.dss_client.getObjects(prefix, delimiter):
-                object_keys.append(obj_key)
+            iterator = self.dss_client.getObjects(prefix, delimiter)
+            while True:
+                try:
+                    for obj_key in iterator:
+                        object_keys.append(obj_key)
+                except dss.NoIterator:
+                    break
+                except Exception as e:
+                    self.logger.info("ListObjects - {}".format(e))
+
         except dss.NoSuchResouceError as e:
             self.logger.excep("NoSuchResourceError - {}".format(e))
         except dss.GenericError as e:
             self.logger.excep("listObjects - {}".format(e))
 
         return object_keys
-
-
-
-if __name__ == "__main__":
-    paths = ["/cat"]
-
-    config="/home/somnath.s/work/nkv-datamover/conf.json"
-    start_time = datetime.now()
-    dss_client = DssClientLib("204.0.0.137:9000", "minio", "minio123")
-    #dss_client = dss.createClient("http://202.0.0.103:9000", "minio", "minio123")
-    print("INFO: DSS Client Connection Time: {}".format((datetime.now() - start_time).seconds))
-
-    if dss_client:
-
-        """
-        for path in paths:
-          for f in os.listdir(path):
-            file_path = os.path.abspath(path + "/" + f)
-            if not  dss_client.putObject(None, file_path):
-                print("Failed to upload file - {}".format(file_path))
-        """
-        object_keys = dss_client.listObjects(None, "cat/")
-        print("ListObjects: {}".format(object_keys))
-
-        # getObject()
-        for key in object_keys:
-            if not dss_client.getObject(None, key, "/home/somnath.s/work/Testing/GET/"):
-                print("ERROR: Failed to copy file for key - {}".format(key))
-
-
-
-
-
-        print("Delete Objects!!!")
-        for key in object_keys:
-            print("INFO: Key-{}".format(key))
-            if not dss_client.deleteObject(None, key):
-                print("INFO: Failed to delete Object for key - {}".format(key))
-
-
-
-        # Delete
-

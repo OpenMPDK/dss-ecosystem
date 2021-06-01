@@ -32,7 +32,7 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import os,sys
-from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, uploadFile, progress_bar
+from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, progress_bar
 from utils.config import Config, commandLineArgumentParser, CommandLineArgument
 from utils.signal_handler import SignalHandler
 
@@ -147,12 +147,11 @@ class Master(object):
             self.spawn_clients()
             self.start_monitor()
 
-        if self.operation.upper() == "PUT":
+        if self.operation.upper() == "PUT" or self.operation.upper() == "TEST":
             self.start_indexing()
         if self.operation.upper() == "DEL" or self.operation.upper() == "GET":
             self.start_listing()
 
-        #print("INFO: DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
         self.logger.info("DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
 
     def stop(self):
@@ -207,7 +206,6 @@ class Master(object):
                 w.stop()
             index += 1
         self.logger.info("Stopped all the workers running with MasterApplication! ")
-        #print("INFO: Stopped all the workers running with MasterApplication! ")
 
     def spawn_clients(self):
         """
@@ -463,7 +461,7 @@ class Client(object):
                                                                 " --port_index {} ".format(self.port_index) + \
                                                                 " --port_status {}  ".format(self.port_status)
 
-        if self.operation.upper() == "GET":
+        if self.operation.upper() == "GET" or self.operation.upper() == "TEST":
             command += " --dest_path {} ".format(self.destination_path)
         if self.master_ip_address == self.ip:
             command += " --master_node "
@@ -534,13 +532,6 @@ class Client(object):
             self.status = 0
         self.ssh_client_handler = None
 
-    def setup(self):
-        remote_dest_path = "/usr/test/datamover.tgz"
-        username = "root"
-        password = "msl-ssg"
-        source_path = "/home/somnath.s/work/datamover.tgz"
-        uploadFile(self.ip, remote_dest_path, source_path, username, password )
-
 def process_put_operation(master):
     """
     Manage the Upload process.
@@ -566,7 +557,6 @@ def process_put_operation(master):
 
         if not master.indexing_started_flag.value:
             master.logger.info('Indexing on the shares not yet started')
-            #print('INFO: Indexing not yet started')
             time.sleep(1)
             continue
 
@@ -817,6 +807,12 @@ if __name__ == "__main__":
         process_del_operation(master)
     elif cli.operation.upper() == "GET":
         process_get_operation(master)
+    elif cli.operation.upper() == "TEST":
+        if config["unit"]:
+            pass
+        elif config["data_integrity"]:
+            process_put_operation(master)
+            master.nfs_cluster_obj.umount_all()
 
     # Start Compaction
     if "compaction" in params and params["compaction"]:

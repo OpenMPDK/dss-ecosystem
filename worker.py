@@ -167,8 +167,6 @@ class Worker(object):
 
             if self.task_queue and self.task_queue.qsize():
                 try:
-                    # print("DEBUG: TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(), self.id))
-                    # self.logger.debug("TaskQ Size-{}, worker-{}".format(self.task_queue.qsize(),self.id))
                     task = self.task_queue.get()
                 except Exception as e:
                     self.logger.excep("WORKER-{}:{}".format(self.id, e))

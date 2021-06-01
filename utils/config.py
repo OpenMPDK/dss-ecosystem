@@ -159,6 +159,7 @@ class CommandLineArgument:
         list_parser = subparsers.add_parser("LIST", help="List the buckets/objects from S3 storage!")
         get_parser = subparsers.add_parser("GET", help="Download the files from S3 storage bucket!")
         del_parser = subparsers.add_parser("DEL", help="Remove the objects from the S3 storage bucket!")
+        test_parser = subparsers.add_parser("TEST", help="Perform DataMover testing.")
 
         if not  sys.argv[1:2]:
             parser.print_help()
@@ -178,6 +179,8 @@ class CommandLineArgument:
             self.list(list_parser)
         elif self.operation.upper() == "DEL":
             self.delete(del_parser)
+        elif self.operation.upper() == "TEST":
+            self.test(test_parser)
         else:
             self.parser.print_help()
             sys.exit()
@@ -192,7 +195,7 @@ class CommandLineArgument:
         subparser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
                                 help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                help='Specify operation type such as read=r write=w , wr...')
+                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--compaction", "-com", required=False, action='store_true', help='Enable target compaction')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
@@ -209,7 +212,7 @@ class CommandLineArgument:
         subparser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
                                 help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                help='Specify operation type such as read=r write=w , wr...')
+                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--dest_path", "-dp", type=str, required=True, help='Specify destination file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
@@ -217,7 +220,7 @@ class CommandLineArgument:
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
-                               help='Profiling of PUT operation (Not Implemented)')
+                               help='Profiling of GET operation (Not Implemented)')
 
     def list(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -226,14 +229,14 @@ class CommandLineArgument:
         subparser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
                                  help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                 help='Specify operation type such as read=r write=w , wr...')
+                                 help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual listing')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
-                               help='Profiling of PUT operation (Not Implemented)')
+                               help='Profiling of LIST operation (Not Implemented)')
     def delete(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
                                 help='Specify number of Jobs to be used for parallel processing. ')
@@ -241,7 +244,7 @@ class CommandLineArgument:
         subparser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
                                 help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                help='Specify operation type such as read=r write=w , wr...')
+                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--compaction", "-com", required=False, action='store_true',
                                help='Enable target compaction')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
@@ -250,6 +253,16 @@ class CommandLineArgument:
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
-                               help='Profiling of PUT operation (Not Implemented)')
+                               help='Profiling of DEL operation (Not Implemented)')
+
+    def test(self,subparser):
+        subparser.add_argument("--unit", "-u", required=False, action='store_true',
+                               help='Run DataMover unit test cases - mostly all functional test cases.')
+        subparser.add_argument("--data_integrity", "-di", required=False, action='store_true',
+                               help='Run DataMover data integrity test')
+        subparser.add_argument("--debug", "-d", required=False, action='store_true',
+                               help='Run DataMover in debug mode')
+        subparser.add_argument("--dest_path", "-dp", type=str, required=True, help='Specify destination file path')
+
     def get_operation(self):
         return sys.argv[1:2][0]

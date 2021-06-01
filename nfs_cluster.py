@@ -148,7 +148,7 @@ class NFSCluster:
                 except OSError as e:
                     self.logger.error("Unable to remove directory {}, {} ".format(local_mount, e))
             else:
-                self.logger.error("Failed to un-mount  {}=>{} path ".format(nfs_share, local_mount))
+                self.logger.error("Failed to un-mount {} path ".format(local_mount))
         else:
             self.logger.warn("{} path is not a mounted path".format(local_mount))
         return ret,console
