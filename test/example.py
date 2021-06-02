@@ -47,7 +47,7 @@ def main():
 	for i in range(20):
 		key = key_base + str(i)
 		try:
-			client.getObject(key, '/tmp/' + key)
+			client.getObject(key, '/doesntexist/' + key)
 		except Exception as e:
 			print(e)
 			return None

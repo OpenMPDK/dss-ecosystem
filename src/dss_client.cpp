@@ -613,7 +613,7 @@ int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
         } catch (std::exception&) {
         	std::string fname(dest_fn.c_str());
         	auto e = std::system_error(errno, std::system_category(),
-        							   "Filename " + fname);
+        							   "Path " + fname);
 			throw FileIOError(e.what());
         	return -1;
         }
