@@ -601,15 +601,22 @@ int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
 	Result r = req_guard->Submit(&Cluster::GetObject);
 
     if (r.IsSuccess()) {
-        std::fstream local_file;
-        local_file.open(dest_fn.c_str(), std::ios::out | std::ios::binary);
-        
-        auto& object_stream = r.GetIOStream();
+        std::fstream fs;
+        fs.exceptions(std::fstream::failbit | std::fstream::badbit);
 
-		//TODO: revist performance
-        local_file << object_stream.rdbuf();
-        local_file.flush();
-        local_file.close();
+        try {
+        	fs.open(dest_fn.c_str(), std::ios::out | std::ios::binary);
+			//TODO: revist performance
+        	fs << r.GetIOStream().rdbuf();
+        	fs.flush();
+        	fs.close();
+        } catch (std::exception&) {
+        	std::string fname(dest_fn.c_str());
+        	auto e = std::system_error(errno, std::system_category(),
+        							   "Filename " + fname);
+			throw FileIOError(e.what());
+        	return -1;
+        }
 
         return 0;
     } else {

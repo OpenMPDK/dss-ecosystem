@@ -75,6 +75,16 @@ private:
 	std::string m_msg;
 };
 
+class FileIOError : std::exception {
+public:
+    FileIOError() : m_msg() {}
+    FileIOError(std::string msg) : m_msg(std::move(msg)) {}
+    const char* what() const noexcept { return m_msg.c_str(); }
+private:
+	std::string m_msg;
+};
+
+
 class GenericError : std::exception {
 public:
     GenericError(std::string msg) : m_msg(std::move(msg)) {}

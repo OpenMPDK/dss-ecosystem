@@ -134,6 +134,7 @@ PYBIND11_MODULE(dss, m) {
  	static py::exception<DiscoverError> DiscoverExc(m, "DiscoverError");
     static py::exception<NetworkError> NetworkExc(m, "NetworkError");
     static py::exception<GenericError> GenericExc(m, "GenericError");
+    static py::exception<FileIOError> FileIOExc(m, "FileIOError");
     static py::exception<NoIterator> LastIterExc(m, "NoIterator");
 
     py::register_exception_translator([](std::exception_ptr p) {
@@ -147,6 +148,8 @@ PYBIND11_MODULE(dss, m) {
             NetworkExc(e.what());
         } catch (const GenericError &e) {
             GenericExc(e.what());
+        } catch (const FileIOError &e) {
+            FileIOExc(e.what());
         } catch (const NoIterator &e) {
             LastIterExc(e.what());
         }

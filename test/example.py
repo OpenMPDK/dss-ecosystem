@@ -46,7 +46,12 @@ def main():
 	# Retrieve object then delete
 	for i in range(20):
 		key = key_base + str(i)
-		client.getObject(key, '/tmp/' + key)
+		try:
+			client.getObject(key, '/tmp/' + key)
+		except Exception as e:
+			print(e)
+			return None
+
 		client.deleteObject(key)
 
 if __name__ == "__main__":
