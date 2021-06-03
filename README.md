@@ -17,20 +17,20 @@ pip3 install requirements.txt
 As a non-root user, please run the below commands with '''sudo''' and make sure the non-root user
 is part of sudoers file.
 ```
-python3 master_application.py PUT -c 10.1.51.2
-python3 master_application.py PUT -c 10.1.51.2  --compaction
-python3 master_application.py LIST -c 10.1.51.2
-python3 master_application.py DEL -c 10.1.51.2
-python3 master_application.py DEL -c 10.1.51.2 --prefix bird/
-python3 master_application.py GET -c 10.1.51.2 --dest_path <Destination Path>
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT -c 10.1.51.2 '
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT -c 10.1.51.2  --compaction'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST -c 10.1.51.2'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2 --prefix bird/'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET -c 10.1.51.2 --dest_path <Destination Path>'
 
 Dry Run:
 - Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance
-python3 master_application.py PUT -c 10.1.51.2 --dryrun 
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT -c 10.1.51.2 --dryrun' 
 - It performa every steps involved in DELETE operation except actual DELETE from S3 storage.
-python3 master_application.py DEL -c 10.1.51.2 --dryrun
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2 --dryrun'
 - It performs every steps involved in GET operation except actual S3 GET operation
-python3 master_application.py GET -c 10.1.51.2 --dest_path <"Destination File Path"> --dryrun 
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET -c 10.1.51.2 --dest_path <"Destination File Path"> --dryrun' 
 NFS Cluster: 10.1.51.2
 
 Debug:
@@ -132,7 +132,7 @@ Supported operations are PUT/DEL/GET
   The DSS target compaction can be initiated after actual upload is done. Use the "--compaction" switch
   along with regular upload command.
   ```
-  python3 master_application.py PUT -c 10.1.51.2  --compaction
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT -c 10.1.51.2  --compaction'
   ``` 
 #### Configuration: 
   Include IP address of the DSS targets from the DataMover configuration file.
@@ -149,21 +149,21 @@ Supported operations are PUT/DEL/GET
   If a prefix is specified from command line, then object_keys under that prefix should be removed.
   The object prefix should be ended with forward slash (/) such as bird/ , bird/bird1/
   ```
-    python3 master_application.py DEL -c 10.1.51.2 --prefix bird/
-    python3 master_application.py DEL -c 10.1.51.2 
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2 --prefix bird/'
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2' 
   ```
 ## Operation GET
   The GET operation is dependent on LIST operation. The object keys from the LISTing operation gets 
   among the client-nodes in round-robin fashion. The actual GET operation is performed by ClientApplication.
   The destination path should be provided from command line as sub-command along with GET. 
   ```
-    python3 master_application.py GET -c 10.1.51.2 --dest_path <destiniation path>
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET -c 10.1.51.2 --dest_path <destiniation path>'
   ```
   If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
 ## Operation TEST
   The DataMover test can be initiated with TEST operation. The data integrity test can be initiated as below.
   ```
-    python3 master_application.py TEST --data_integrity --dest_path <destiniation path>
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path>'
   ```
   The DataIntegrity test, first start indexing and start uploading data for each prefix through a worker from a client
   node. During that process, it keep track of file and corresponding md5sum hash in a buffer. Subsequently, a GET 
@@ -172,7 +172,7 @@ Supported operations are PUT/DEL/GET
   
   The unit test to be initiated with "--unit" switch along with "TEST" operation. ( #TODO)
   ```
-  python3 master_application.py TEST --unit --dest_path <destiniation path>
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --unit --dest_path <destiniation path>'
   ```
   
  # NFS Cluster Setup
