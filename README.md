@@ -32,6 +32,16 @@ python3 master_application.py DEL -c 10.1.51.2 --dryrun
 - It performs every steps involved in GET operation except actual S3 GET operation
 python3 master_application.py GET -c 10.1.51.2 --dest_path <"Destination File Path"> --dryrun 
 NFS Cluster: 10.1.51.2
+
+Debug:
+- Use "--debug/-d" switch to run DataMover in debug mode.
+
+Testing:
+  DataIntegrity:
+  - This functionality and testing checks data integrity. First DM upload data for each prefix, subsequently
+   run GET and perform md5sum. During the upload process it collect md5sum hash key from each file and store them in 
+   temporary buffer and during GET call it uses that to check data integrity.
+   python3 master_application.py TEST --data_integrity --dest_path <Destination Path> --debug 
 ```
 # TESS Master Node and Client Nodes
 ## Master Node

@@ -107,7 +107,7 @@ class DssClientLib:
             except dss.NoSuchResouceError as e:
                 self.logger.excep("deleteObject - {}, {}".format(object_key,e))
             except dss.GenericError as e:
-                self.logger.excep("deleteObject - {}".format(e))
+                self.logger.excep("deleteObject - {}, {}".format(object_key, e))
         return False
 
 
@@ -124,11 +124,11 @@ class DssClientLib:
                 if self.dss_client.getObject(object_key, dest_file_path) == 0:
                     return True
             except dss.NoSuchResouceError as e:
-                self.logger.excep("NoSuchResourceError - getObject - {} , {}".format(object_key, e))
+                self.logger.excep("getObject - {} , {}".format(object_key, e))
             except dss.GenericError as e:
-                self.logger.excep("GenericError - getObject - {}".format(e))
+                self.logger.excep("getObject - {} , {}".format(object_key, e))
             except Exception as e:
-                self.logger.excep("ObjectKey-{} , Message-{}".format(object_key, e))
+                self.logger.excep("ObjectKey-{} , {}".format(object_key, e))
         return False
 
     def listObjects(self, bucket=None,  prefix="", delimiter="/"):
@@ -150,11 +150,11 @@ class DssClientLib:
                 except dss.NoIterator:
                     break
                 except Exception as e:
-                    self.logger.info("ListObjects - {}".format(e))
+                    self.logger.info("ListObjects {} - {}".format(prefix, e))
 
         except dss.NoSuchResouceError as e:
             self.logger.excep("NoSuchResourceError - {}".format(e))
         except dss.GenericError as e:
-            self.logger.excep("listObjects - {}".format(e))
+            self.logger.excep("listObjects {}- {}".format(prefix, e))
 
         return object_keys
