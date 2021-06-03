@@ -81,6 +81,10 @@ class ClientApplication(object):
         self.workers = []
         self.workers_count = self.client_config.get("workers", 10)
 
+        # User credentials
+        self.user_id = self.client_config.get("user_id", "ansible")
+        self.password = self.client_config.get("password", "ansible")
+
         # Multiprocessing Logging
         self.logging_path = config["logging"].get("path", "/var/log/dss")
         self.logging_level = config["logging"].get("level", "INFO")
@@ -131,7 +135,7 @@ class ClientApplication(object):
         # Start messaging service
         self.start_logging()
         self.logger.info("Started Client Application for id:{} on node {}".format(self.id, self.host_name))
-        self.nfs_cluster = NFSCluster({}, self.logger)
+        self.nfs_cluster = NFSCluster({}, "root", self.password, self.logger)
         self.start_workers()
         self.start_message()
 
@@ -276,35 +280,28 @@ class ClientApplication(object):
             if stop_messaging == 0:
                 break
 
-            # Index Msg: {"dir":<>, "files":["f1","f2"]}
-            # self.logger.debug("Client-{}, Waiting to receive INDEX the message".format(self.id))
-            message = {}
-            ####
             try:
                 received_response = socket.poll(timeout=1000)  # Wait 1 secs
                 if received_response:
                     message = socket.recv_json()
-                    # self.logger.debug("Received index message - {}".format(message))
                     # Check the end message arrived, exit loop
                     if "indexing_done" in message and message["indexing_done"]:
                         self.logger.info("Receiving Index-data completed. Closing Monitor-Index-Receiver! ")
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
-                    self.logger.debug("Received Indexed Message for Operation:{} , MSG:{}".format(self.operation, message["dir"]))
+                    self.logger.debug("Received Indexed MSG, Operation:{} , Prefix:{}".format(self.operation, message["dir"]))
                     is_index_data_added = False  #
-                    # Add indexing data to the "operation_data_queue".
+
                     if self.operation.upper() == "PUT" or self.operation.upper() == "TEST":
                         ## Message validation, NFS Mounting if not already mounted on client node
                         if "nfs_cluster" in message and "dir" in message:
                             if self.config.get("master_node", None) and self.config["master_node"] == 1:
-                                #self.operation_data_queue.put(message)  ## Add index to operation_data_queue
                                 self.add_task(message)
                                 socket.send_json({"success": 1})  # Send response back to MasterApp
                                 is_index_data_added = True
                             else:
                                 if self.nfs_mount(message["nfs_cluster"], message["nfs_share"]):
-                                    #self.operation_data_queue.put(message) ## Add index to operation_data_queue
                                     self.add_task(message)
                                     socket.send_json({"success": 1})  # Send response back to MasterApp
                                     is_index_data_added = True
@@ -352,6 +349,8 @@ class ClientApplication(object):
                     data=task_data,
                     s3config=self.s3_config,
                     dryrun=self.dryrun,
+                    user_id=self.user_id,
+                    password=self.password,
                     dest_path=self.config.get("dest_path", ""))
         self.task_queue.put(task)  # Enqueue task to TaskQ
 

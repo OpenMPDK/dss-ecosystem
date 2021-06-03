@@ -37,12 +37,14 @@ from multiprocessing import Manager
 
 class NFSCluster:
     manager = Manager()
-    def __init__(self, config={}, logger=None):
+    def __init__(self, config={}, user_id="ansible", password="password", logger=None):
         self.config = config
         self.local_mounts = {}
         self.nfs_cluster = []
         self.mounted = False
         self.logger = logger
+        self.user_id = user_id
+        self.password = password
 
 
     def __del__(self):
@@ -90,13 +92,13 @@ class NFSCluster:
         if not os.path.isdir(nfs_share_mount):
             # os.mkdir(nfs_share)
             command = "mkdir -p {}".format(nfs_share_mount)
-            ret, console = exec_cmd(command, True, True)
+            ret, console = exec_cmd(command, True, True, self.user_id)
         if os.path.ismount(nfs_share_mount):
             self.logger.warn("NFS share {} already mounted to {}".format(nfs_share, nfs_share_mount))
             nfs_share_already_mounted = True
         else:
             command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share_mount)
-            ret, console = exec_cmd(command, True, True)
+            ret, console = exec_cmd(command, True, True, self.user_id)
 
         if ret == 0:
             self.logger.info("NFS mounting {}:{} => {} successful".format(cluster_ip, nfs_share, nfs_share_mount))
@@ -137,12 +139,12 @@ class NFSCluster:
         console =None
         if os.path.ismount(local_mount):
             command = "umount {}".format(local_mount)
-            ret, console = exec_cmd(command, True, True)
+            ret, console = exec_cmd(command, True, True, self.user_id)
             # Remove directory
             if ret == 0:
                 try:
                     command = "rm -rf {}".format(local_mount)
-                    ret, console = exec_cmd(command, True, True)
+                    ret, console = exec_cmd(command, True, True, self.user_id)
                     if ret:
                         self.logger.error("Failed to remove {} ".format(local_mount))
                 except OSError as e:

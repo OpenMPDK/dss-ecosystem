@@ -9,8 +9,8 @@
   "client": {
     "workers": 25,
     "max_index_size": 1000,
-    "user_id": "root",
-    "password": "msl-ssg"
+    "user_id": "ansible",
+    "password": "ansible"
   },
   "message": {
     "port_index": 6000,

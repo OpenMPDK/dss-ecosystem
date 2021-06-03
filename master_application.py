@@ -286,7 +286,7 @@ class Master(object):
         :return:
         """
         # Fist Mount all NFS share locally
-        self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), self.logger)
+        self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), "root", "" , self.logger)
         self.nfs_cluster_obj.mount_all()
 
         # Create first level task for each NFS share

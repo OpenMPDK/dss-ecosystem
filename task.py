@@ -149,7 +149,7 @@ def list(s3_client, **kwargs):
     s3config = params["s3config"]
     minio_bucket = s3config.get("bucket", "bucket")
     s3_client_library = s3config.get("client_lib","minio_client")
-    logger.debug("LIST- Performing listing with prefix - {}".format(prefix))
+    logger.debug("Performing LISTing with prefix - {}".format(prefix))
 
     listing_progress_lock.acquire()
     listing_progress[prefix] = 1
@@ -158,15 +158,15 @@ def list(s3_client, **kwargs):
     if listing_started.value  != 1:
         listing_started.value = 1
 
-    logger.info("LIST-PREFIX-{}".format(prefix))
     if prefix in prefix_index_data:
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
         if object_keys_iterator:
             for result in list_object_keys(object_keys_iterator, prefix_index_data,max_index_size, s3_client_library):
                 if "object_keys" in result:
                     index_data_message ={"dir": prefix, "files": result["object_keys"]}
-                    index_data_count.value += len(result["object_keys"])
-                    logger.debug("TASK-LIST: Message - {}".format(index_data_message))
+                    object_keys_count = len(result["object_keys"])
+                    index_data_count.value += object_keys_count
+                    logger.debug("LIST: Prefix-\"{}\" ObjectKeys: {}".format(prefix, object_keys_count)) ## DELETE
                     index_data_queue.put(index_data_message)
                 else:
                     task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
@@ -181,7 +181,6 @@ def list(s3_client, **kwargs):
                     object_key_prefix =  obj_key.object_name
                 elif s3_client_library.lower() == "dss_client":
                     object_key_prefix =  obj_key
-                logger.debug("LIST- obj_key_prefix - {}".format(object_key_prefix))
                 task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                 task_queue.put(task)
         else:
@@ -227,6 +226,7 @@ def get(s3_client,**kwargs):
     status_queue = kwargs["status_queue"]
     logger = kwargs["logger"]
     dest_path = params.get("dest_path","")
+    user_id = params["user_id"]
 
     s3config = params["s3config"]
     minio_bucket = s3config.get("bucket", "bucket")
@@ -242,7 +242,7 @@ def get(s3_client,**kwargs):
         dest_dir = dest_path + "/" + object_keys["dir"]
         if not os.path.exists(dest_dir):
           command = "mkdir -p {}".format(dest_dir)
-          ret, console = exec_cmd(command, True, True)
+          ret, console = exec_cmd(command, True, True, user_id)
           if ret:
             logger.error("Directory {} creation FAILED for prefix-{}\n{}".format(dest_path, object_keys["dir"], console))
 
@@ -251,7 +251,7 @@ def get(s3_client,**kwargs):
                 success += 1
             else: # Actual operation
                 dest_file_path = dest_path + "/" + object_key
-                logger.info("DEBUG: Obj_Key:{}, Dest_Path:{}".format(object_key,dest_file_path))
+                # logger.debug("Obj_Key:{}, Dest_Path:{}".format(object_key,dest_file_path))
                 if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
                     if data_integrity:
                         hash_key = get_hash_key(type='file', data=dest_file_path, logger=logger)
@@ -263,7 +263,7 @@ def get(s3_client,**kwargs):
                     else:
                         success += 1
                 else:
-                    logger.error("Filed to download object - {}".format(object_key))
+                    logger.error("Failed to download object - {}".format(object_key))
     else:
         logger.error("Unable to connect to S3 ObjectStorage for download")
 
@@ -323,6 +323,7 @@ def data_integrity(s3_client,**kwargs):
     file_hash_map = {}
     params = kwargs.get("params", {})
     data = params["data"]
+    user_id = params["user_id"]
     status_queue = kwargs["status_queue"]
     logger.info("Checking DataIntegrity for the prefix - {}".format(data["dir"]))
     logger.info("** DataIntegrity: Performing PUT operation - Prefix-{} **".format(data["dir"]))
@@ -352,7 +353,7 @@ def data_integrity(s3_client,**kwargs):
     logger.info("DataIntegrity: Removing all the files under the download path - {}".format(download_path))
     if os.path.exists(download_path):
       command = "rm -rf {}".format(download_path)
-      ret,console = exec_cmd(command, True, True)
+      ret,console = exec_cmd(command, True, True, user_id)
       if ret == 0:
         logger.info("Removed all the downloaded files under prefix - {}".format(data["dir"]))
       else:

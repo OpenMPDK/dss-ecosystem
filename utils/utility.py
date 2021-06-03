@@ -67,7 +67,7 @@ def exception(func):
     return wrapper
 
 
-def exec_cmd(cmd="", output=False, blocking=False):
+def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="password"):
     """
     Execute the specified command
     :param cmd: <string> a executable command.
@@ -83,7 +83,7 @@ def exec_cmd(cmd="", output=False, blocking=False):
     console_output = ""
     std_out_default = sys.stdout
     if not cmd.startswith('sudo'):
-            cmd = 'sudo -u root ' + cmd
+            cmd = 'sudo -u {} '.format(user_id) + cmd
 
     try:
         # print("INFO: Execution Cmd - {}".format(cmd))

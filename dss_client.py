@@ -121,7 +121,8 @@ class DssClientLib:
         """
         if object_key and dest_file_path:
             try:
-                return  self.dss_client.getObject(object_key, dest_file_path)
+                if self.dss_client.getObject(object_key, dest_file_path) == 0:
+                    return True
             except dss.NoSuchResouceError as e:
                 self.logger.excep("NoSuchResourceError - getObject - {} , {}".format(object_key, e))
             except dss.GenericError as e:
