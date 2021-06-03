@@ -152,7 +152,7 @@ Supported operations are PUT/DEL/GET
     python3 master_application.py DEL -c 10.1.51.2 --prefix bird/
     python3 master_application.py DEL -c 10.1.51.2 
   ```
-  ## Operation GET
+## Operation GET
   The GET operation is dependent on LIST operation. The object keys from the LISTing operation gets 
   among the client-nodes in round-robin fashion. The actual GET operation is performed by ClientApplication.
   The destination path should be provided from command line as sub-command along with GET. 
@@ -160,6 +160,20 @@ Supported operations are PUT/DEL/GET
     python3 master_application.py GET -c 10.1.51.2 --dest_path <destiniation path>
   ```
   If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
+## Operation TEST
+  The DataMover test can be initiated with TEST operation. The data integrity test can be initiated as below.
+  ```
+    python3 master_application.py TEST --data_integrity --dest_path <destiniation path>
+  ```
+  The DataIntegrity test, first start indexing and start uploading data for each prefix through a worker from a client
+  node. During that process, it keep track of file and corresponding md5sum hash in a buffer. Subsequently, a GET 
+  operation is initiated with same prefix which downloads files in the temporary destination path and compares md5sum 
+  with corresponding file key in buffer.
+  
+  The unit test to be initiated with "--unit" switch along with "TEST" operation. ( #TODO)
+  ```
+  python3 master_application.py TEST --unit --dest_path <destiniation path>
+  ```
   
  # NFS Cluster Setup
  ## Server Setup:
