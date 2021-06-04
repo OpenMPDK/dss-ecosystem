@@ -127,13 +127,15 @@ def list(s3_client, **kwargs):
     :return:
     """
     params = kwargs["params"]
+    logger = kwargs["logger"]
     task_queue = kwargs["task_queue"]  # Contains task Object
     index_data_queue = kwargs["index_data_queue"] # Contains index_data
-    logger = kwargs["logger"]
+    index_data_count = kwargs["index_data_count"]
     listing_progress = kwargs["listing_progress"] # The shared memory is used to hold progress status.
     listing_progress_lock = kwargs["listing_progress_lock"]
-    listing_started = kwargs["listing_started"]
-    index_data_count = kwargs["index_data_count"]
+    listing_status = kwargs["listing_status"]
+    listing_only = kwargs["listing_only"]
+    listing_objectkey_queue = kwargs["listing_objectkey_queue"]
 
     max_index_size = params["max_index_size"]
 
@@ -155,8 +157,8 @@ def list(s3_client, **kwargs):
     listing_progress[prefix] = 1
     listing_progress_lock.release()
 
-    if listing_started.value  != 1:
-        listing_started.value = 1
+    if listing_status.value  != 1:
+        listing_status.value = 1
 
     if prefix in prefix_index_data:
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
@@ -167,7 +169,10 @@ def list(s3_client, **kwargs):
                     object_keys_count = len(result["object_keys"])
                     index_data_count.value += object_keys_count
                     logger.debug("LIST: Prefix-\"{}\" ObjectKeys: {}".format(prefix, object_keys_count)) ## DELETE
-                    index_data_queue.put(index_data_message)
+                    if listing_only.value:
+                      listing_objectkey_queue.put(result["object_keys"])
+                    else:
+                      index_data_queue.put(index_data_message)
                 else:
                     task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
                     task_queue.put(task)
@@ -389,7 +394,9 @@ class Task:
                         logger=self.logger,
                         listing_progress=queue["listing_progress"],
                         listing_progress_lock=queue["listing_progress_lock"],
-                        listing_started=queue["listing_started"])
+                        listing_status=queue["listing_status"],
+                        listing_only=queue["listing_only"],
+                        listing_objectkey_queue=queue["listing_objectkey_queue"])
       elif self.operation.lower() == "del":
         delete(s3_client, params=self.params,
                           status_queue=queue["status_queue"],

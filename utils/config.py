@@ -192,8 +192,6 @@ class CommandLineArgument:
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
                                 help='Specify number of Jobs to be used for parallel processing. ')
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-        subparser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
-                                help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
@@ -209,8 +207,6 @@ class CommandLineArgument:
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
                                 help='Specify number of Jobs to be used for parallel processing. ')
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-        subparser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
-                                help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
@@ -226,8 +222,6 @@ class CommandLineArgument:
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
                                  help='Specify number of Jobs to be used for parallel processing. ')
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-        subparser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
-                                 help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                  help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
@@ -235,14 +229,13 @@ class CommandLineArgument:
                                help='Dry run - Just check operation is working , but does not actual listing')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
+        subparser.add_argument("--dest_path", "-dp", type=str, required=False, help='Path to store object keys in a file.')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of LIST operation (Not Implemented)')
     def delete(self,subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
                                 help='Specify number of Jobs to be used for parallel processing. ')
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-        subparser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
-                                help='Specify cluster name  ...')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                 help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--compaction", "-com", required=False, action='store_true',

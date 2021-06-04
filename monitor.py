@@ -35,6 +35,7 @@ import os,sys
 import time
 import  zmq
 from multiprocessing import Process,Queue,Value, Lock, Manager
+from utils.utility import exception, exec_cmd
 from datetime import datetime
 import json
 from logger import  MultiprocessingLogger
@@ -51,6 +52,8 @@ class Monitor:
 
     def  __init__(self, **kwargs):
         self.clients = kwargs.get("clients",[])
+        self.config = kwargs["config"]
+        self.user_id = kwargs["config"]["client"]["user_id"]
         self.index_data_queue = kwargs["index_data_queue"]
         self.index_data_lock = kwargs["index_data_lock"]
         self.index_data_generation_complete = kwargs["index_data_generation_complete"]
@@ -66,25 +69,37 @@ class Monitor:
 
         self.all_index_data_distributed = Value('i', 0)
 
+        # Listing
+        self.listing_status = kwargs.get("listing_status", None)
+        self.listing_aggregation_status = kwargs.get("listing_aggregation_status", None)
+        self.listing_objectkey_queue = kwargs.get("listing_objectkey_queue", None)
         # Monitor termination
         self.monitor_index_data_sender = Value('i', 0)
         self.monitor_status_poller = Value('i', 0)
         self.monitor_progress_status = Value('i', 0)
 
+        # Process
+        self.process_index = None
+        self.process_listing_aggregator = None
+
 
     def start(self):
 
-        # Start index process
-        self.process_index = Process(target=self.message_handler_index)
-        self.process_index.start()
+        if self.operation.upper() == "LIST":
+          self.process_listing_aggregator = Process(target=self.object_keys_aggregator)
+          self.process_listing_aggregator.start()
+        else:
+          # Start index process
+          self.process_index = Process(target=self.message_handler_index)
+          self.process_index.start()
 
-        # Start status_poller  process
-        self.process_status = Process(target=self.message_handler_poller)
-        self.process_status.start()
+          # Start status_poller  process
+          self.process_status = Process(target=self.message_handler_poller)
+          self.process_status.start()
 
-        # Start operation_progress process
-        self.process_operation_progress = Process(target=self.operation_progress)
-        self.process_operation_progress.start()
+          # Start operation_progress process
+          self.process_operation_progress = Process(target=self.operation_progress)
+          self.process_operation_progress.start()
 
 
 
@@ -96,7 +111,14 @@ class Monitor:
         self.status_lock.release()
         time.sleep(2)
 
-        while self.process_index.is_alive():
+        while self.process_listing_aggregator and self.process_listing_aggregator.is_alive():
+            time.sleep(1)
+            try:
+                self.process_listing_aggregator.terminate()
+            except Exception as e:
+                self.logger.excep("Unable to terminate Listing Aggregator {}".format(e))
+
+        while self.process_index and self.process_index.is_alive():
             time.sleep(1)
             try:
                 self.process_index.terminate()
@@ -111,7 +133,6 @@ class Monitor:
                 self.logger.excep("Unable to terminate MessageHandler - StatusPoller ...\n {}".format(e))
 
         self.logger.info("Stopped all monitor processes ... ")
-        #print("INFO: All monitor stopped ...")
 
 
     def display(self):
@@ -177,7 +198,7 @@ class Monitor:
                             self.prefix_index_data[object_prefix_key] = manager.dict()
                             self.prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
 
-                    #self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
+                    # self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
                     if self.send_index_data(client, data):
                         #self.index_data_count.value += len(data.get("files", []))
                         previous_client_operation_status = 1
@@ -430,3 +451,46 @@ class Monitor:
         self.logger.info("Operation {} BandWidth = {:.2f} MiB/sec ".format(self.operation, bandwidth))
         self.monitor_progress_status.value = 1
         self.logger.info("Monitor-Progress-Status terminated! ")
+
+
+    def object_keys_aggregator(self):
+
+        listing_path = self.logger.path
+        if self.config["dest_path"]:
+          listing_path = self.config["dest_path"]
+
+        listing_file = listing_path + "/listing_object_keys"
+        fh = None
+        try:
+          if not os.path.isdir(listing_path):
+            command = "mkdir -p {}".format(listing_path)
+            ret, console = exec_cmd(command, True, True, self.user_id)
+            if ret:
+              self.logger.error("Failed to create listing path {} \n ret-{}, {}".format(listing_path, ret, console))
+              self.listing_aggregation_status.value = 1
+              sys.exit()
+
+          if os.path.exists(listing_file):
+              os.remove(listing_file)
+          fh = open(listing_file, "w")
+          if not fh:
+            self.logger.error("Failed to open file \"{}\" to dump listing object keys".format(listing_file))
+          self.logger.debug("ObjectKeys aggregation started!")
+          while True:
+            if self.listing_status and self.listing_status.value == 2 and self.listing_objectkey_queue.empty():
+              self.listing_aggregation_status.value = 1
+              self.logger.debug("Object Keys aggregation is completed!")
+              break
+            if not self.listing_objectkey_queue.empty():
+              object_keys = self.listing_objectkey_queue.get()
+              for object_key in object_keys:
+                fh.write(object_key + "\n")
+
+          self.logger.info("Listing ObjectKeys are dumped at - {}".format(listing_file))
+        except Exception as e:
+          self.logger.excep("ListingAggregation: {}".format(e))
+        finally:
+          if fh:
+            fh.close()
+
+

@@ -98,7 +98,10 @@ class Master(object):
         self.prefix = config.get("prefix", None)
         self.listing_progress = manager.dict()
         self.listing_progress_lock = manager.Lock()
-        self.listing_started = Value('i', 0)
+        self.listing_status = Value('i', 0) # [0,1,2] => ['NOT STARTED', 'STARTED', 'COMPLETED']
+        self.listing_only = Value('b', False)
+        self.listing_aggregation_status = Value('i', 0)
+        self.listing_objectkey_queue = Queue()
 
         # Status Progress
         self.index_data_count = Value('i', 0)  # File Index count shared between worker process.
@@ -145,12 +148,13 @@ class Master(object):
         self.operation_start_time = datetime.now()
         if not self.operation.upper() == "LIST":
             self.spawn_clients()
-            self.start_monitor()
 
         if self.operation.upper() == "PUT" or self.operation.upper() == "TEST":
             self.start_indexing()
-        if self.operation.upper() == "DEL" or self.operation.upper() == "GET":
+        if self.operation.upper() == "LIST" or self.operation.upper() == "DEL" or self.operation.upper() == "GET":
             self.start_listing()
+
+        self.start_monitor()
 
         self.logger.info("DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
 
@@ -187,7 +191,9 @@ class Master(object):
                        listing_progress_lock=self.listing_progress_lock,
                        s3_config=self.s3_config,
                        indexing_started_flag=self.indexing_started_flag,
-                       listing_started=self.listing_started
+                       listing_status=self.listing_status,
+                       listing_only=self.listing_only,
+                       listing_objectkey_queue=self.listing_objectkey_queue
                        )
             w.start()
             self.workers.append(w)
@@ -239,13 +245,17 @@ class Master(object):
         :return:
         """
         self.monitor = Monitor(clients=self.clients,
+                               config=self.config,
                                index_data_queue=self.index_data_queue,
                                index_data_lock=self.index_data_lock,
                                index_data_generation_complete=self.index_data_generation_complete,
                                index_data_count=self.index_data_count,
                                logger=self.logger,
                                operation=self.operation,
-                               operation_start_time=self.operation_start_time
+                               operation_start_time=self.operation_start_time,
+                               listing_status=self.listing_status,
+                               listing_aggregation_status=self.listing_aggregation_status,
+                               listing_objectkey_queue=self.listing_objectkey_queue
                                )
         self.monitor.start()
     def stop_monitor(self):
@@ -332,7 +342,7 @@ class Master(object):
 
         if bad_prefix_no_listing:
             self.logger.error("LISTING failure!")
-            self.listing_started.value = 1
+            self.listing_status.value = 1
 
 
     def compaction(self):
@@ -629,37 +639,45 @@ def process_put_operation(master):
 
 
 def process_list_operation(master):
-    master.start_listing()
+    """
+    Perform LIST operation
+    - Initiate LISTing
+    - Check for completion of LIST operation
+    - Wait for ObjectKeysAggregator to finish writing to a file
+    - Shutdown workers
+    :param master: Master object
+    :return: None
+    """
+    #with master.listing_only.get_lock():
+    master.listing_only.value = True
     while True:
-        try:
-            if master.prefix and master.prefix in master.listing_progress and master.listing_progress[master.prefix] == 0:
-                break
-            elif len(master.nfs_shares) == len(master.listing_progress):
-                listing_completed = True
-                for prefix,prefix_processing_status in master.listing_progress.items():
-                    if prefix_processing_status > 0:
-                        listing_completed = False
-                if listing_completed:
-                    break
-        except Exception as e:
-            #print("Exception: Listing - {}".format(e))
-            master.logger.excep("Listing - {}".format(e))
-        #time.sleep(1)
-    master.stop_workers()
-    master.logger.info("LISTING:{}".format(master.listing_progress))
-    #print("LISTING:{}".format(master.listing_progress))
+      progress_bar("Listing is in Progress")
+      try:
+        # Check for completion of listing
+        master.listing_progress_lock.acquire()
+        if master.listing_status.value == 1 and len(master.listing_progress) == 0:
+            master.logger.info("Listing is completed!")
+            master.listing_status.value = 2
+        master.listing_progress_lock.release()
 
+        if master.listing_aggregation_status and master.listing_aggregation_status.value == 1:
+
+          master.stop_workers()
+          break
+      except Exception as e:
+        master.logger.excep("Listing - {}".format(e))
+      time.sleep(1)
 
 def process_del_operation(master):
     workers_stopped = 0
     monitors_stopped = 0
 
     while True:
-        # Check for completion of indexing, Shutdown workers
+        # Check for completion of listing, Shutdown workers
         listing_done = False
         master.listing_progress_lock.acquire()
         # Determine listing is done.
-        if master.listing_started.value == 1 and len(master.listing_progress) == 0 :
+        if master.listing_status.value == 1 and len(master.listing_progress) == 0 :
             listing_done = True
         master.listing_progress_lock.release()
 
@@ -720,7 +738,7 @@ def process_get_operation(master):
         listing_done = False
         master.listing_progress_lock.acquire()
         # Determine listing is done.
-        if master.listing_started.value == 1 and len(master.listing_progress) == 0:
+        if master.listing_status.value == 1 and len(master.listing_progress) == 0:
             listing_done = True
         master.listing_progress_lock.release()
 
@@ -801,8 +819,7 @@ if __name__ == "__main__":
         process_put_operation(master)
         master.nfs_cluster_obj.umount_all()
     elif cli.operation.upper() == "LIST":
-        master.logger.warn('Unsupported operation')
-        # process_list_operation(master)
+        process_list_operation(master)
     elif cli.operation.upper() == "DEL":
         process_del_operation(master)
     elif cli.operation.upper() == "GET":
