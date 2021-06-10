@@ -167,7 +167,8 @@ def list(s3_client, **kwargs):
                 if "object_keys" in result:
                     index_data_message ={"dir": prefix, "files": result["object_keys"]}
                     object_keys_count = len(result["object_keys"])
-                    index_data_count.value += object_keys_count
+                    with index_data_count.get_lock():
+                        index_data_count.value += object_keys_count
                     logger.debug("LIST: Prefix-\"{}\" ObjectKeys: {}".format(prefix, object_keys_count)) ## DELETE
                     if listing_only.value:
                       listing_objectkey_queue.put(result["object_keys"])
@@ -469,7 +470,8 @@ def indexing(**kwargs):
                    "nfs_cluster": nfs_cluster,
                    "nfs_share": nfs_share}
             index_data_queue.put(msg)
-            index_data_count.value += len(result["files"])
+            with index_data_count.get_lock():
+                index_data_count.value += len(result["files"])
             logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
                 result["dir"], len(result["files"]), index_data_queue.qsize()))
         elif "dir" in result:
@@ -522,7 +524,8 @@ def indexing_with_file_counters(**kwargs):
             msg = {"dir": result["dir"], "files": result["files"] , "size": result["size"], "nfs_cluster": nfs_cluster, "nfs_share": nfs_share}
             index_data_queue.put(msg)
             logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format( result["dir"], len(result["files"]) , index_data_queue.qsize()))
-            index_data_count.value += len(result["files"])
+            with index_data_count.get_lock():
+                index_data_count.value += len(result["files"])
 
         elif "dir" in result:
             task = Task(operation="indexing", data=result["dir"], nfs_cluster=nfs_cluster, nfs_share=nfs_share, max_index_size=max_index_size )

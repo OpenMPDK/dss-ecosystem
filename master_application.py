@@ -37,6 +37,7 @@ from utils.config import Config, commandLineArgumentParser, CommandLineArgument
 from utils.signal_handler import SignalHandler
 
 from logger import  MultiprocessingLogger
+#from tests.unit_test import UnitTest
 
 from multiprocessing import Process,Queue,Value, Lock, Manager
 from worker import Worker
@@ -144,6 +145,7 @@ class Master(object):
         :return:
         """
         self.start_logging()
+        self.logger.info("Performing {} operation".format(operation))
         self.start_workers()
         self.operation_start_time = datetime.now()
         if not self.operation.upper() == "LIST":
@@ -651,13 +653,15 @@ def process_list_operation(master):
     #with master.listing_only.get_lock():
     master.listing_only.value = True
     while True:
-      progress_bar("Listing is in Progress")
+      progress_bar("Operation LIST is in Progress")
       try:
         # Check for completion of listing
         master.listing_progress_lock.acquire()
         if master.listing_status.value == 1 and len(master.listing_progress) == 0:
-            master.logger.info("Listing is completed!")
-            master.listing_status.value = 2
+          listing_time = (datetime.now() - master.operation_start_time).seconds
+          master.logger.info("LISTing is completed in {} seconds".format(listing_time))
+          master.logger.info("Total Object-Keys listed - {}".format(master.index_data_count.value))
+          master.listing_status.value = 2
         master.listing_progress_lock.release()
 
         if master.listing_aggregation_status and master.listing_aggregation_status.value == 1:
@@ -673,6 +677,7 @@ def process_del_operation(master):
     monitors_stopped = 0
 
     while True:
+        progress_bar("Operation DEL in Progress!")
         # Check for completion of listing, Shutdown workers
         listing_done = False
         master.listing_progress_lock.acquire()
@@ -734,6 +739,7 @@ def process_get_operation(master):
     monitors_stopped = 0
 
     while True:
+        progress_bar("Operation GET in progress!")
         # Check for completion of indexing, Shutdown workers
         listing_done = False
         master.listing_progress_lock.acquire()
@@ -791,21 +797,17 @@ def process_get_operation(master):
 
 if __name__ == "__main__":
     cli = CommandLineArgument()
-    print("INFO: Performing {} operation".format(cli.operation))
-    #print(cli.options)
-    # operation, params = commandLineArgumentParser()
-
+    operation = cli.operation.upper()
     # Add signal handler
     #signal_handler = SignalHandler()
     #signal_handler.initiate()
-
 
     params = cli.options
     config_obj = Config(params)
     config = config_obj.get_config()
     #print(config)
 
-    master = Master(cli.operation, config)
+    master = Master(operation, config)
     if config.get("debug", False):
         master.logging_level = "DEBUG"
     now = datetime.now()
@@ -815,18 +817,20 @@ if __name__ == "__main__":
 
     #signal_handler.registered_functions.append(master.nfs_cluster_obj.umount_all)
 
-    if cli.operation.upper() == "PUT":
+    if operation == "PUT":
         process_put_operation(master)
         master.nfs_cluster_obj.umount_all()
-    elif cli.operation.upper() == "LIST":
+    elif operation == "LIST":
         process_list_operation(master)
-    elif cli.operation.upper() == "DEL":
+    elif operation == "DEL":
         process_del_operation(master)
-    elif cli.operation.upper() == "GET":
+    elif operation == "GET":
         process_get_operation(master)
-    elif cli.operation.upper() == "TEST":
+    elif operation == "TEST":
         if config["unit"]:
             pass
+            #unit_test = UnitTest(master)
+            #unit_test.start()
         elif config["data_integrity"]:
             process_put_operation(master)
             master.nfs_cluster_obj.umount_all()

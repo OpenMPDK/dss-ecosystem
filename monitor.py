@@ -337,7 +337,6 @@ class Monitor:
                 except Exception as e:
                     self.logger.excep("Monitor-Status-Poller {} ".format(e))
 
-
         # Closing all socket connection
         try:
             for client in self.clients:
@@ -345,7 +344,7 @@ class Monitor:
             # Terminate context.
             context.term()
         except Exception as e:
-            self.logger.excep("{}: minitor-poller, {}".format(e))
+            self.logger.excep("Minitor-Poller {}".format(e))
 
         self.status_lock.acquire()
         self.monitor_status_poller.value = 1
