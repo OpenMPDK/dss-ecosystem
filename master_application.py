@@ -35,9 +35,7 @@ import os,sys
 from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, progress_bar
 from utils.config import Config, commandLineArgumentParser, CommandLineArgument
 from utils.signal_handler import SignalHandler
-
 from logger import  MultiprocessingLogger
-#from tests.unit_test import UnitTest
 
 from multiprocessing import Process,Queue,Value, Lock, Manager
 from worker import Worker
@@ -406,6 +404,7 @@ class Client(object):
         self.id = id
         self.ip = ip
         self.operation=operation
+        self.config = config
         # Logger
         self.logger = logger
         self.debug = config.get("debug", False)
@@ -481,6 +480,8 @@ class Client(object):
             command += " --dest_path {} ".format(self.destination_path)
         if self.master_ip_address == self.ip:
             command += " --master_node "
+        if self.config.get("config", False):
+            command += " --config {} ".format(self.config["config"])
         if self.dryrun:
             command += " --dryrun "
         if self.debug:
@@ -831,13 +832,13 @@ if __name__ == "__main__":
     elif operation == "GET":
         process_get_operation(master)
     elif operation == "TEST":
-        if config["unit"]:
-            pass
-            #unit_test = UnitTest(master)
-            #unit_test.start()
-        elif config["data_integrity"]:
+        if config["data_integrity"]:
             process_put_operation(master)
             master.nfs_cluster_obj.umount_all()
+            if master.testcase_passed.value:
+                master.logger.info("###### DataIntegrity Test Status: PASSED ######")
+            else:
+                master.logger.error("###### DataIntegrity Test Status: FAILED ######")
 
     # Start Compaction
     if "compaction" in params and params["compaction"]:

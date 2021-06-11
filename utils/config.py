@@ -249,8 +249,6 @@ class CommandLineArgument:
                                help='Profiling of DEL operation (Not Implemented)')
 
     def test(self,subparser):
-        subparser.add_argument("--unit", "-u", required=False, action='store_true',
-                               help='Run DataMover unit test cases - mostly all functional test cases.')
         subparser.add_argument("--data_integrity", "-di", required=False, action='store_true',
                                help='Run DataMover data integrity test')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
