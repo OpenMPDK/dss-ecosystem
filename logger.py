@@ -105,7 +105,7 @@ class MultiprocessingLogger:
                 self.process.start()
                 self.logger_status.value = 1
         else:
-            self.warn("WARNING: Logger already started!")
+            self.warn("Logger already started!")
 
     def stop(self):
 

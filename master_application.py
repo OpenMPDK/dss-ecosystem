@@ -145,7 +145,7 @@ class Master(object):
         :return:
         """
         self.start_logging()
-        self.logger.info("Performing {} operation".format(operation))
+        self.logger.info("Performing {} operation".format(self.operation))
         self.start_workers()
         self.operation_start_time = datetime.now()
         if not self.operation.upper() == "LIST":

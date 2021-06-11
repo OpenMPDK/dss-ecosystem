@@ -17,20 +17,22 @@ pip3 install requirements.txt
 As a non-root user, please run the below commands with '''sudo''' and make sure the non-root user
 is part of sudoers file.
 ```
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT -c 10.1.51.2 '
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT -c 10.1.51.2  --compaction'
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST -c 10.1.51.2'
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2'
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2 --prefix bird/'
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET -c 10.1.51.2 --dest_path <Destination Path>'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  '
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  --compaction'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL '
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <Destination Path>'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --prefix bird/ --dest_path <Destination Path>'
 
 Dry Run:
 - Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT -c 10.1.51.2 --dryrun' 
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --dryrun' 
 - It performa every steps involved in DELETE operation except actual DELETE from S3 storage.
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2 --dryrun'
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --dryrun'
 - It performs every steps involved in GET operation except actual S3 GET operation
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET -c 10.1.51.2 --dest_path <"Destination File Path"> --dryrun' 
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <"Destination File Path"> --dryrun' 
 NFS Cluster: 10.1.51.2
 
 Debug:
@@ -132,7 +134,7 @@ Supported operations are PUT/DEL/GET
   The DSS target compaction can be initiated after actual upload is done. Use the "--compaction" switch
   along with regular upload command.
   ```
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT -c 10.1.51.2  --compaction'
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction'
   ``` 
 #### Configuration: 
   Include IP address of the DSS targets from the DataMover configuration file.
@@ -142,22 +144,27 @@ Supported operations are PUT/DEL/GET
 ## Operation LIST
   The LIST operation list all keys under a provided prefix. It is performed by MasterApplication
   only. Each prefix is processed by independent workers. Results are en-queued to IndexQueue for
-  DEL/GET operation. Else, gets dumped into a local file (#TODO).
+  DEL/GET operation. Else, gets dumped into a local file.
+  ```
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
+  ```
 ## Operation DEL
   The DEL operation is dependent on LIST operation. The object keys from the LISTing operation gets 
   among the client-nodes in round-robin fashion. The actual DELETE operation is performed by ClientApplication.
   If a prefix is specified from command line, then object_keys under that prefix should be removed.
   The object prefix should be ended with forward slash (/) such as bird/ , bird/bird1/
   ```
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2 --prefix bird/'
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL -c 10.1.51.2' 
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL ' 
   ```
 ## Operation GET
   The GET operation is dependent on LIST operation. The object keys from the LISTing operation gets 
   among the client-nodes in round-robin fashion. The actual GET operation is performed by ClientApplication.
   The destination path should be provided from command line as sub-command along with GET. 
   ```
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET -c 10.1.51.2 --dest_path <destiniation path>'
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <destiniation path>'
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <destiniation path> --prefix bird/'
   ```
   If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
 ## Operation TEST
