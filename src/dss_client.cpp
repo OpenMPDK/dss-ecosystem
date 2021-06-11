@@ -431,6 +431,10 @@ ClusterMap::VerifyClusterConf()
 
 	}
 
+	//TODO: Wait minio to propagate buckets to other endpoints 
+	// ask Som
+	usleep(5 * (1ULL << 20));
+
 	return 0;
 }
 
