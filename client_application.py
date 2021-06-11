@@ -467,11 +467,11 @@ class ClientApplication(object):
 if __name__ == "__main__":
     params = ClientApplicationArgumentParser()
 
-    params["config"] = BASE_DIR + "/config/config.json"
+    if "config" not in params:
+      params["config"] = BASE_DIR + "/config/config.json"
     config_obj = Config(params)
     config = config_obj.get_config()
     client_config = config.get("client", {})
-    #logging_path = config.get("logging_path", "/var/log/dss")
 
     ca = ClientApplication(params.get("id", 1), config)
     ca.start()

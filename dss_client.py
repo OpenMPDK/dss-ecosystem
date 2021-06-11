@@ -77,10 +77,14 @@ class DssClientLib:
                     return True
                 elif ret == -1:
                     self.logger.error("Upload Failed for  key - {}".format(object_key))
+            except dss.FileIOError as e:
+                self.logger.execp("putObject - key:{}, {}".format(object_key, e))
+            except dss.NetworkError as e:
+                self.logger.execp("putObject - key:{}, {}".format(object_key, e))
             except dss.NoSuchResouceError as e:
-                self.logger.excep("NoSuchResourceError putObject - {}".format(e))
+                self.logger.excep("putObject - key:{}, {}".format(object_key, e))
             except dss.GenericError as e:
-                self.logger.excep("putObject {}".format(e))
+                self.logger.excep("putObject - key:{}, {}".format(object_key, e))
         return False
 
     def listObjects_old(self, bucket=None,  prefix="", delimiter="/"):
@@ -104,10 +108,14 @@ class DssClientLib:
                     return True
                 elif self.dss_client.deleteObject(object_key) == -1:
                     self.logger.error("deleteObject filed for key - {}".format(object_key))
+            except dss.FileIOError as e:
+                self.logger.execp("deleteObject - key:{}, {}".format(object_key, e))
+            except dss.NetworkError as e:
+                self.logger.execp("deleteObject - key:{}, {}".format(object_key, e))
             except dss.NoSuchResouceError as e:
-                self.logger.excep("deleteObject - {}, {}".format(object_key,e))
+                self.logger.excep("deleteObject - key:{}, {}".format(object_key, e))
             except dss.GenericError as e:
-                self.logger.excep("deleteObject - {}, {}".format(object_key, e))
+                self.logger.excep("deleteObject - key:{}, {}".format(object_key, e))
         return False
 
 
@@ -123,6 +131,10 @@ class DssClientLib:
             try:
                 if self.dss_client.getObject(object_key, dest_file_path) == 0:
                     return True
+            except dss.FileIOError as e:
+                self.logger.execp("getObject - key:{}, {}".format(object_key, e))
+            except dss.NetworkError as e:
+                self.logger.execp("getObject - key:{}, {}".format(object_key, e))
             except dss.NoSuchResouceError as e:
                 self.logger.excep("getObject - {} , {}".format(object_key, e))
             except dss.GenericError as e:
@@ -151,9 +163,14 @@ class DssClientLib:
                     break
                 except Exception as e:
                     self.logger.info("ListObjects {} - {}".format(prefix, e))
-
+        except dss.FileIOError as e:
+            self.logger.execp("listObjects - key:{}, {}".format(object_key, e))
+        except dss.NoIterator as e:
+            self.logger.excep("listObjects - {}".format(e))
+        except dss.NetworkError as e:
+            self.logger.execp("listObjects - key:{}, {}".format(object_key, e))
         except dss.NoSuchResouceError as e:
-            self.logger.excep("NoSuchResourceError - {}".format(e))
+            self.logger.excep("listObjects - {}".format(e))
         except dss.GenericError as e:
             self.logger.excep("listObjects {}- {}".format(prefix, e))
 

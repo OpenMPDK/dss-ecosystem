@@ -97,6 +97,7 @@ class Worker(object):
                 from dss_client import DssClientLib
                 self.logger.debug('PROCESS ENVIRONMENT DETAILS - {}, PID - {}'.format(os.environ, os.getpid()))
                 s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger)
+                time.sleep(2)
 
             elif s3_client_lib_name == "boto3":
                 config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio",
@@ -158,6 +159,7 @@ class Worker(object):
 
         if not s3_client:
             self.status.value = 0
+            self.logger.error("S3 Client is not initialized. Shutting down worker-{}".format(self.id))
             return
 
         while True:

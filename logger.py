@@ -162,12 +162,8 @@ class MultiprocessingLogger:
                     message = queue.get()
                     if type(message) == tuple:
                         (message_level,message_value) = message
-                        # NON--Debug mode discard debug message
-                        if self.logging_level != 1 and  message_level == 1:
-                            continue
-                        else:
-                            print("{}: {}".format(LOGGING_LEVEL[message_level], message_value))
-                            fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
+                        print("{}: {}".format(LOGGING_LEVEL[message_level], message_value))
+                        fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
                     else:
                         fh.write(str(time.ctime()) + ": "+ message + "\n")
                 self.stop_lock.acquire()
@@ -192,6 +188,7 @@ class MultiprocessingLogger:
 
     @exception
     def debug(self, message):
+      if self.logging_level < len(LOGGING_LEVEL) and LOGGING_LEVEL[self.logging_level] == "DEBUG":
         msg = (1, message)
         self.logger_lock.acquire()
         self.queue.put(msg)

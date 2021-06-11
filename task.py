@@ -91,7 +91,6 @@ def put(s3_client, **kwargs):
                                                                      data=file,
                                                                      logger=logger)
                                 file_hash_map[file_name] = file_content_hash_key
-
                             success +=1
                         else:
                             failure_files_size += os.path.getsize(file)
