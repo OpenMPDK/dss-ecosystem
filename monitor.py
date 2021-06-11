@@ -82,6 +82,8 @@ class Monitor:
         self.process_index = None
         self.process_listing_aggregator = None
 
+        # Unit Testcase
+        self.testcase_passed = kwargs.get("testcase", False)
 
     def start(self):
 
@@ -449,6 +451,9 @@ class Monitor:
         self.logger.info("Operation {} completed in {} seconds for {:.2f} GiB ".format(self.operation,  total_operation_time, operation_size_in_gb))
         self.logger.info("Operation {} BandWidth = {:.2f} MiB/sec ".format(self.operation, bandwidth))
         self.monitor_progress_status.value = 1
+        # Check if TestCase has passed
+        if self.index_data_count.value == operation_success_count:
+            self.testcase_passed.value = True
         self.logger.info("Monitor-Progress-Status terminated! ")
 
 

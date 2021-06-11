@@ -120,6 +120,9 @@ class Master(object):
         # NFS shares
         self.nfs_shares = []
 
+        # Unit TestCase
+        self.testcase_passed = Value('b', False)
+
 
 
 
@@ -257,7 +260,8 @@ class Master(object):
                                operation_start_time=self.operation_start_time,
                                listing_status=self.listing_status,
                                listing_aggregation_status=self.listing_aggregation_status,
-                               listing_objectkey_queue=self.listing_objectkey_queue
+                               listing_objectkey_queue=self.listing_objectkey_queue,
+                               testcase=self.testcase_passed
                                )
         self.monitor.start()
     def stop_monitor(self):
