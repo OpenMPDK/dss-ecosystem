@@ -13,6 +13,9 @@ The tool can be used to generate files with a set prefix.
 For a given prefix, the thread count and the number of IOs
 per thread, the tool generates files of the format \<prefix\>-object-\<thread_ID\>-\<IO_num_per_thread\>
 
+It is the responsibility of the user to prepare data (```-o 8```) and cleanup data (```-o 9```) before performing 
+PUT/GET/DEL calls.
+
 The help usage for this tool is
 ```
 [ansible@msl-dpe-da1 benchmark]# python3 benchmark.py -h

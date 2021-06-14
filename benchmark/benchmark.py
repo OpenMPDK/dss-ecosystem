@@ -6,11 +6,14 @@ import itertools
 import logging
 import logging.config
 import os
+import random
 import sys
 import threading
 import time
 
 from concurrent.futures import ProcessPoolExecutor
+from minio import Minio
+from minio.error import ResponseError, BucketAlreadyOwnedByYou, BucketAlreadyExists
 
 object_data = None
 object_data_md5 = None
@@ -90,6 +93,76 @@ class FastWriteCounter_old(object):
         return self.value
 
 
+class MinioClient(object):
+    def __init__(self, endpoint, access_key, secret_key, logger, region=None):
+        self.client = Minio(endpoint, access_key, secret_key, secure=False)
+        self.logger = logger
+        self.bucket = 'dss0'
+        self.logger.info("INFO: Bucket Name - {}".format(self.bucket))
+        try:
+            self.client.make_bucket(self.bucket)
+            self.logger.info("INFO: New bucket created - {}".format(self.bucket))
+        except BucketAlreadyOwnedByYou:
+            self.logger.info("INFO: Bucket {} already own by you".format(self.bucket))
+        except BucketAlreadyExists:
+            self.logger.info("WARNING: Bucket {} already exist".format(self.bucket))
+        except:
+            self.logger.exception('Exception in creating bucket')
+
+    def list_objects(self, prefix=None):
+        try:
+            objects = self.client.list_objects(bucket_name=self.bucket, prefix=prefix, recursive=True)
+        except:
+            self.logger.exception("Exception in listObjects")
+            raise
+        return objects
+
+    def put_object(self, key=None, value=None):
+        try:
+            self.client.fput_object(bucket_name=self.bucket, object_name=key[1:],
+                                    file_path=value, content_type="text/plain")
+        except:
+            self.logger.exception("Exception in put_object %s", key)
+            raise
+        return True
+
+    def del_object(self, key=None):
+        try:
+            """
+            objects = self.list(bucket,prefix,recursive)
+            #self.client.remove_objects(bucket_name=bucket,objects_iter=objects)
+            for object in objects:
+              print("Removing object - {}".format(object.object_name))
+              self.client.remove_object(bucket_name=bucket,object_name=object.object_name)  # Require object name,
+            """
+            self.client.remove_object(bucket_name=self.bucket, object_name=key)
+        except:
+            self.logger.exception("Exception in del_object %s", key)
+            raise
+        return True
+
+    def get_object(self, key, value):
+        """
+        Download the object based on the specified object key to the specified file path.
+        :param key: Required
+        :param value: Required , destination file path
+        :return:
+        """
+        try:
+            if value != '/dev/null':
+                self.client.fget_object(self.bucket, key, value)
+            else:
+                response = self.client.get_object(self.bucket, key)
+                response.close()
+                response.release_conn()
+        except:
+            self.logger.exception("Exception in get_object %s", key)
+            raise
+
+    def get_objects(self, prefix):
+        return self.list_objects(prefix)
+
+
 class DSSClient(object):
     def __init__(self, endpoint, access_key, secret_key, logger, region=None):
         self.access_key = access_key
@@ -156,7 +229,7 @@ class DSSClient(object):
             raise e
 
 
-def run_data_put_prepare(thr_id, key_prefix, num_ios=0):
+def run_data_put_prepare(thr_id, key_prefix, num_ios=0, duration=0):
     count = 0
     for count in range(num_ios):
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
@@ -166,7 +239,7 @@ def run_data_put_prepare(thr_id, key_prefix, num_ios=0):
     return count+1, 0
 
 
-def run_data_put(thr_id, key_prefix, num_ios=0):
+def run_data_put(thr_id, key_prefix, num_ios=0, duration=0):
     logger = g_logger
     try:
         client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
@@ -182,6 +255,8 @@ def run_data_put(thr_id, key_prefix, num_ios=0):
     fail_count = 0
     while True:
         if num_ios and count >= num_ios:
+            break
+        if duration and time.time() - start_time > duration:
             break
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
         filename = os.path.join(data_dir, key)
@@ -202,7 +277,7 @@ def run_data_put(thr_id, key_prefix, num_ios=0):
     return count, fail_count
 
 
-def run_data_put_cleanup(thr_id, key_prefix, num_ios=0):
+def run_data_put_cleanup(thr_id, key_prefix, num_ios=0, duration=0):
     count = 0
     for count in range(num_ios):
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
@@ -211,7 +286,7 @@ def run_data_put_cleanup(thr_id, key_prefix, num_ios=0):
     return count+1, 0
 
 
-def run_data_get(thr_id, key_prefix, num_ios=0):
+def run_data_get(thr_id, key_prefix, num_ios=0, duration=0):
     logger = g_logger
     try:
         client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
@@ -226,9 +301,15 @@ def run_data_get(thr_id, key_prefix, num_ios=0):
     count = 0
     fail_count = 0
     while True:
-        if num_ios and count >= num_ios:
+        if duration and time.time() - start_time > duration:
             break
-        key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
+        if num_ios:
+            if count >= num_ios:
+                break
+            key_id = random.randint(0, num_ios - 1)
+        else:
+            key_id = count
+        key = '%s-object-%s-%d' % (key_prefix, thr_id, key_id)
         if data_dir != '/dev/null':
             filename = os.path.join(data_dir, key)
         else:
@@ -250,7 +331,7 @@ def run_data_get(thr_id, key_prefix, num_ios=0):
     return count, fail_count
 
 
-def check_data_after_get(thr_id, key_prefix, num_ios=0):
+def check_data_after_get(thr_id, key_prefix, num_ios=0, duration=0):
     logger = g_logger
     fail_count = 0
     for i in range(num_ios):
@@ -268,7 +349,7 @@ def check_data_after_get(thr_id, key_prefix, num_ios=0):
     return num_ios, fail_count
 
 
-def run_data_del(thr_id, key_prefix, num_ios=0):
+def run_data_del(thr_id, key_prefix, num_ios=0, duration=0):
     logger = g_logger
     try:
         client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
@@ -284,6 +365,8 @@ def run_data_del(thr_id, key_prefix, num_ios=0):
     fail_count = 0
     while True:
         if num_ios and count >= num_ios:
+            break
+        if duration and time.time() - start_time > duration:
             break
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
         count = count + 1
@@ -303,7 +386,7 @@ def run_data_del(thr_id, key_prefix, num_ios=0):
     return count, fail_count
 
 
-def run_data_list(thr_id, key_prefix, num_ios=0):
+def run_data_list(thr_id, key_prefix, num_ios=0, duration=0):
     logger = g_logger
     try:
         client_conn = DSSClient(g_end_point, g_access_key, g_secret_key, logger)
@@ -344,10 +427,10 @@ if __name__ == '__main__':
     parser.add_argument('-a', '--access-key', dest='access_key', help='Access Key of the Minio server', required=True)
     parser.add_argument('-s', '--secret-key', dest='secret_key', help='Secret Key of the Minio server', required=True)
     parser.add_argument('-u', '--endpoint-url', dest='endpoint_url', help='Endpoint URL of MINIO server', required=True)
-    # parser.add_argument('-d', '--duration', dest='duration', help='Duration in seconds (default: 10)', default=10)
+    parser.add_argument('-d', '--duration', dest='duration', help='Duration in seconds', default=0)
     parser.add_argument('-l', '--loops', dest='total_loops', help='Number of loops to run (default: 1)', default=1)
-    parser.add_argument('-n', '--num_ios', dest='num_ios', help='Number of IOs to do (default: 1)',
-                        type=int, default=1, required=True)
+    parser.add_argument('-n', '--num_ios', dest='num_ios', help='Number of IOs to do (default: 100)',
+                        type=int, default=100, required=True)
     parser.add_argument('-o', '--op_type', dest='op_type',
                         help='Type of IO (1 - PUT, 2 - GET, 3 - DEL, 4 - LIST, '
                              '5 - GET WITH INTEGRITY CHECK, 8 - PREPARE DATA FOR PUT, '
@@ -418,8 +501,8 @@ if __name__ == '__main__':
             logger.error('Wrong digest info. Exiting')
             sys.exit(-1)
 
-    fn_list = {0: [run_data_put_prepare, run_data_put, run_data_get, run_data_del, run_data_put_cleanup],
-               1: [run_data_put_prepare, run_data_put, run_data_put_cleanup],
+    fn_list = {0: [run_data_put, run_data_get, run_data_del],
+               1: [run_data_put],
                2: [run_data_get],
                3: [run_data_del],
                4: [run_data_list],
@@ -437,7 +520,7 @@ if __name__ == '__main__':
                 start_time = time.time()
                 try:
                     futures = {
-                        executor.submit(fn, task_id, args.key_prefix, args.num_ios)
+                        executor.submit(fn, task_id, args.key_prefix, args.num_ios, int(args.duration))
                         for task_id in itertools.islice(task_ids, max_worker_threads)
                     }
                     while futures:
@@ -451,7 +534,8 @@ if __name__ == '__main__':
                             logger.info('Task result - %s', str(res))
 
                         for task_id in itertools.islice(task_ids, len(done)):
-                            futures.add(executor.submit(fn, task_id, args.key_prefix, args.num_ios))
+                            futures.add(executor.submit(fn, task_id, args.key_prefix, args.num_ios,
+                                                        int(args.duration)))
                 except Exception as ex:
                     logger.exception('Exception in running the process')
                     print(f'Exception occurred while running the process- {ex}. Check the log file')
