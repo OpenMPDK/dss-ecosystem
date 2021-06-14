@@ -559,25 +559,6 @@ Client::ExtractOptions(const SesOptions& o)
 	return cfg;
 }
 
-std::unique_ptr<Client>
-Client::CreateClient(const std::string& ip,
-					 const std::string& user, const std::string& pwd, const SesOptions& options)
-{
-	std::unique_ptr<Client> client(new Client(ip, user, pwd, options));
-	if (client->InitClusterMap() < 0) {
-		pr_err("Failed to init cluster map\n");
-		return nullptr;
-	}
-
-	return client;
-}
-
-Client::~Client()
-{
-	delete m_discover_ep;
-	delete m_cluster_map;
-}
-
 int
 Client::InitClusterMap()
 {
@@ -822,6 +803,29 @@ Client::Client(const std::string& url, const std::string& user, const std::strin
 		m_cfg = ExtractOptions(opts);
 		m_cred = Aws::Auth::AWSCredentials(user.c_str(), pwd.c_str());
 		m_discover_ep = new Endpoint(m_cred, url, m_cfg);
+		m_cluster_map = nullptr;
+}
+
+std::unique_ptr<Client>
+Client::CreateClient(const std::string& ip,
+					 const std::string& user, const std::string& pwd, const SesOptions& options)
+{
+	std::unique_ptr<Client> client(new Client(ip, user, pwd, options));
+	if (client->InitClusterMap() < 0) {
+		pr_err("Failed to init cluster map\n");
+		return nullptr;
+	}
+
+	return client;
+}
+
+Client::~Client()
+{
+	delete m_discover_ep;
+	// There could be the case when client is
+	// destroyed before cluster_map is init'd
+	if (m_cluster_map)
+		delete m_cluster_map;
 }
 
 } // namespace dss
