@@ -381,7 +381,6 @@ class Monitor:
             if status == 1 and self.status_queue.empty():
                 break
 
-
             if not self.status_queue.empty():
                 status = self.status_queue.get()
                 operation_success_count += status.get("success", 0)
@@ -391,11 +390,16 @@ class Monitor:
 
                 # Progress calculation, the value of index_data_count increases as indexing at progresses.
                 # The file_index_count increases as response received from client application.
-                print(status)
+                prefix = status["dir"]
+                if self.operation.upper() == "PUT":
+                    if status["dir"].startswith("/"):
+                      prefix = status["dir"][1:]
+                    if not status["dir"].endswith("/"):
+                      prefix += "/"
                 if status["dir"] in processed_prefix:
-                    processed_prefix[status["dir"]] +=  status.get("success", 0) + status.get("failure", 0)
+                    processed_prefix[prefix] +=  status.get("success", 0) + status.get("failure", 0)
                 else:
-                    processed_prefix[status["dir"]] = status.get("success", 0) + status.get("failure", 0)
+                    processed_prefix[prefix] = status.get("success", 0) + status.get("failure", 0)
 
                 file_index_count = operation_success_count + operation_failure_count
                 self.logger.debug("OperationProgress: Total Files-{}, Success-{}, Failure-{}".format(self.index_data_count.value,
