@@ -53,6 +53,7 @@ class Monitor:
     def  __init__(self, **kwargs):
         self.clients = kwargs.get("clients",[])
         self.config = kwargs["config"]
+        self.prefix = self.config.get("prefix", None)  # Key prefix
         self.user_id = kwargs["config"]["client"]["user_id"]
         self.index_data_queue = kwargs["index_data_queue"]
         self.index_data_lock = kwargs["index_data_lock"]
@@ -221,7 +222,7 @@ class Monitor:
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
                 self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
-                self.logger.info("Index Distribution FINISHED,  time - {}".format((datetime.now() - index_distribution_start_time).seconds))
+                self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
 
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
@@ -351,23 +352,23 @@ class Monitor:
         self.status_lock.acquire()
         self.monitor_status_poller.value = 1
         self.status_lock.release()
-        #print("INFO: Monitor-Status-Poller terminated gracefully! ")
         self.logger.info("Monitor-Status-Poller terminated gracefully! ")
 
 
-
+    @exception
     def operation_progress(self):
         """
         Monitor: Operation Progress
         Process the status result coming from different client nodes and update the progress.
-        #TODO
+
         :return:
         """
         file_index_count = 0
-        operation_success_count = 0
-        operation_failure_count = 0
+        operation_success_count = 0 # S3 operation success count
+        operation_failure_count = 0 # S3 operation failure count
         display_percentage = 10
         failure_file_size_in_byte = 0
+        processed_prefix = {} # A hash which store the prefixes those have been exercised from S3
         while True:
             # Condition to break the loop:
             # If status poller has stopped  and status_queue is empty
@@ -390,28 +391,22 @@ class Monitor:
 
                 # Progress calculation, the value of index_data_count increases as indexing at progresses.
                 # The file_index_count increases as response received from client application.
-                #print("*****DEBUG: Monitor-Progress operation progress status - Total Files-{}, Success-{}, Failure-{}".format(self.index_data_count.value, operation_success_count, operation_failure_count))
-                file_index_count = operation_success_count + operation_failure_count
-                #upload_parcentage = (file_index_count / self.index_data_count.value) * 100
-                #print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
-                #self.logger.info("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_parcentage))
+                print(status)
+                if status["dir"] in processed_prefix:
+                    processed_prefix[status["dir"]] +=  status.get("success", 0) + status.get("failure", 0)
+                else:
+                    processed_prefix[status["dir"]] = status.get("success", 0) + status.get("failure", 0)
 
-                if self.index_data_count.value:
+                file_index_count = operation_success_count + operation_failure_count
+                self.logger.debug("OperationProgress: Total Files-{}, Success-{}, Failure-{}".format(self.index_data_count.value,
+                                                                                  operation_success_count,
+                                                                                  operation_failure_count))
+                if self.all_index_data_distributed.value and self.index_data_count.value:
+
                     upload_percentage = (file_index_count / self.index_data_count.value) * 100
                     if upload_percentage > display_percentage:
                         self.logger.info(" ** Monitor-Progress - Operation Status Progress - {:.2f}% **".format(upload_percentage))
                         display_percentage +=10
-
-            """
-            if self.all_index_data_distributed.value:
-                if self.index_data_count.value:
-                    upload_percentage = (file_index_count / self.index_data_count.value) * 100
-                    if upload_percentage > display_percentage:
-                        print("*****INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
-                        self.logger.info("INFO: Monitor-Progress - Operation Status Progress - {:.2f}%".format(upload_percentage))
-                        display_percentage +=10
-            """
-
 
             ## All index data distributed to clients and received all operation status back from clients.
             if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
@@ -428,9 +423,17 @@ class Monitor:
                 prefix_index_data = json.load(prefix_index_data_handler)
         else:
             prefix_index_data = self.prefix_index_data
+
+        # Calculate total operation(PUT/GET/DEL) size
         original_file_size_in_byte = 0
-        for prefix,value in prefix_index_data.items():
-            original_file_size_in_byte += value["size"]
+        if self.prefix:
+          for prefix, value in prefix_index_data.items():
+            if prefix.startswith(self.prefix):
+              original_file_size_in_byte += value["size"]
+        else:
+          for prefix,value in prefix_index_data.items():
+            if prefix in processed_prefix:
+              original_file_size_in_byte += value["size"]
 
         success_operation_size_in_byte= original_file_size_in_byte
 

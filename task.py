@@ -108,7 +108,9 @@ def put(s3_client, **kwargs):
         logger.debug("HashMap-(FileName->HashKey): {}".format(file_hash_map))
     else:
         # Update following section for upload status.
-        status_message = {"success": success, "failure": (len(index_data["files"]) - success) , "dir": index_data["dir"] , "size" : failure_files_size}
+        status_message = {"success": success, "failure": (len(index_data["files"]) - success) ,
+                          "dir": index_data["dir"] ,
+                          "size" : failure_files_size}
         status_queue.put(status_message)
 
 
@@ -244,36 +246,42 @@ def get(s3_client,**kwargs):
     object_keys = params["data"]
     if s3_client:
         # Create directory if not exist
+        ret = 0
         dest_dir = dest_path + "/" + object_keys["dir"]
-        if not os.path.exists(dest_dir):
-          command = "mkdir -p {}".format(dest_dir)
-          ret, console = exec_cmd(command, True, True, user_id)
-          if ret:
-            logger.error("Directory {} creation FAILED for prefix-{}\n{}".format(dest_path, object_keys["dir"], console))
+        try:
+          if not os.path.exists(dest_dir):
+            command = "mkdir -p {}".format(dest_dir)
+            ret, console = exec_cmd(command, True, True, user_id)
+            if ret:
+              logger.error("Local Prefix directory {} creation FAILED\n\t{}".format(dest_dir, console))
+        except Exception as e:
+          logger.excep("Prefix-{}\n{}".format(object_keys["dir"], e))
 
-        for object_key in object_keys["files"]:
-            if dryrun:  # Dry run
-                success += 1
-            else: # Actual operation
-                dest_file_path = dest_path + "/" + object_key
-                # logger.debug("Obj_Key:{}, Dest_Path:{}".format(object_key,dest_file_path))
-                if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
-                    if data_integrity:
-                        hash_key = get_hash_key(type='file', data=dest_file_path, logger=logger)
-                        file_name = object_key.split("/")[-1]
-                        if file_hash_map[file_name] == hash_key:
-                            success +=1
+        if ret == 0:
+            for object_key in object_keys["files"]:
+                if dryrun:  # Dry run
+                    success += 1
+                else: # Actual operation
+                    dest_file_path = dest_path + "/" + object_key
+                    # logger.debug("Obj_Key:{}, Dest_Path:{}".format(object_key,dest_file_path))
+                    if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
+                        if data_integrity:
+                            hash_key = get_hash_key(type='file', data=dest_file_path, logger=logger)
+                            file_name = object_key.split("/")[-1]
+                            if file_hash_map[file_name] == hash_key:
+                                success +=1
+                            else:
+                                logger.error("Failed DataIntegrity for Object Key - {}".format(object_key))
                         else:
-                            logger.error("Failed DataIntegrity for Object Key - {}".format(object_key))
+                            success += 1
                     else:
-                        success += 1
-                else:
-                    logger.error("Failed to download object - {}".format(object_key))
+                        logger.error("Failed to download object - {}".format(object_key))
     else:
         logger.error("Unable to connect to S3 ObjectStorage for download")
 
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
+    logger.debug("STATUS:{}".format(status_message))  ## Delete
     status_queue.put(status_message)
 
 @exception

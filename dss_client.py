@@ -66,58 +66,100 @@ class DssClientLib:
         return dss_client
 
     def putObject(self, bucket=None,file=""):
-
+        """
+        A wrapper function of actual dss_client S3 upload function
+        :param bucket:
+        :param file:
+        :return:
+        """
         if file :
             object_key = file
             if file.startswith("/"):
                 object_key = file[1:]
-            try:
-                ret = self.dss_client.putObject(object_key, file)
-                if ret == 0:
+            ret = self.put_object(object_key, file)
+            # Re-Try to upload file again
+            if ret == 0:
+                return True
+            elif ret == 1:
+                self.logger.info("Re-Uploading Object for Key-{}".format(object_key))
+                if self.put_object(object_key, file) == 0:
                     return True
-                elif ret == -1:
-                    self.logger.error("Upload Failed for  key - {}".format(object_key))
-            except dss.FileIOError as e:
-                self.logger.execp("putObject - key:{}, {}".format(object_key, e))
-            except dss.NetworkError as e:
-                self.logger.execp("putObject - key:{}, {}".format(object_key, e))
-            except dss.NoSuchResouceError as e:
-                self.logger.excep("putObject - key:{}, {}".format(object_key, e))
-            except dss.GenericError as e:
-                self.logger.excep("putObject - key:{}, {}".format(object_key, e))
+
         return False
 
-    def listObjects_old(self, bucket=None,  prefix="", delimiter="/"):
-        object_keys = []
+    def put_object(self,object_key, file=""):
+        """
+        Upload a object to S3
+        On success return 0,
+        On certain exception, perform a retry
+        :param object_key: A string not starting with forward slash "/"
+        :param file: A file with complete path
+        :return: Success = 0, Failure-Retry = 1, Failure = -1 (No-Retry)
+        """
         try:
-            object_keys = self.dss_client.listObjects(prefix, delimiter)
-            #if object_keys:
-            #    yield object_keys
+            ret = self.dss_client.putObject(object_key, file)
+            if ret == -1:
+                self.logger.error("Upload Failed for  key - {}".format(object_key))
+                ret = 1
+        except dss.FileIOError as e:
+            self.logger.execp("putObject - key:{}, {}".format(object_key, e))
+            ret = 1
+        except dss.NetworkError as e:
+            self.logger.execp("putObject - key:{}, {}".format(object_key, e))
+            ret = -1
         except dss.NoSuchResouceError as e:
-            self.logger.excep("NoSuchResourceError - {}".format(e))
+            self.logger.excep("putObject - key:{}, {}".format(object_key, e))
+            ret = -1
         except dss.GenericError as e:
-            self.logger.excep("listObjects - {}".format(e))
+            self.logger.excep("putObject - key:{}, {}".format(object_key, e))
+            ret = 1
 
-        return object_keys
+        return ret
 
     def deleteObject(self, bucket=None, object_key=""):
-        #self.logger.delete("......{}".format(object_key))
+        """
+        A wrapper function on top of S3 deleteObject function from dss_client_lib
+        :param bucket: None , Not used a place holder.
+        :param object_key: A object key, a string not starting with forward slash "/".
+        :return: Success/Failure => True/False.
+        """
         if object_key:
-            try:
-                if self.dss_client.deleteObject(object_key) == 0:
+            if self.delete_object(object_key) == 0:
+                return True
+            elif self.delete_object(object_key) == 1:
+                self.logger.info("Retrying to delete Object for Key-{}".format(object_key))
+                if self.delete_object(object_key) == 0:
                     return True
-                elif self.dss_client.deleteObject(object_key) == -1:
-                    self.logger.error("deleteObject filed for key - {}".format(object_key))
-            except dss.FileIOError as e:
-                self.logger.execp("deleteObject - key:{}, {}".format(object_key, e))
-            except dss.NetworkError as e:
-                self.logger.execp("deleteObject - key:{}, {}".format(object_key, e))
-            except dss.NoSuchResouceError as e:
-                self.logger.excep("deleteObject - key:{}, {}".format(object_key, e))
-            except dss.GenericError as e:
-                self.logger.excep("deleteObject - key:{}, {}".format(object_key, e))
         return False
 
+    def delete_object(self, object_key):
+        """
+        Delete a object for an ObjectKey from S3 storage.
+        :param object_key:  A object key, a string not starting with forward slash "/".
+                            <dir1>/<dir2>/file1
+        :return:
+                0 => Removed successfully from S3 storage
+                1 => Failed to remove for some reason such as IO failure
+                -1 => Failed to remove due some Network/NoResourceFound error.
+        """
+        ret = -1
+        try:
+            if self.dss_client.deleteObject(object_key) == 0:
+                ret = 0
+            elif self.dss_client.deleteObject(object_key) == -1:
+                self.logger.error("deleteObject filed for key - {}".format(object_key))
+                ret = 1
+        except dss.FileIOError as e:
+            self.logger.execp("deleteObject - key:{}, {}".format(object_key, e))
+            ret = 1
+        except dss.NetworkError as e:
+            self.logger.execp("deleteObject - key:{}, {}".format(object_key, e))
+        except dss.NoSuchResouceError as e:
+            self.logger.excep("deleteObject - key:{}, {}".format(object_key, e))
+        except dss.GenericError as e:
+            self.logger.excep("deleteObject - key:{}, {}".format(object_key, e))
+            ret = 1
+        return ret
 
     def getObject(self, bucket=None, object_key="", dest_file_path=""):
         """
@@ -128,20 +170,41 @@ class DssClientLib:
         :return:
         """
         if object_key and dest_file_path:
-            try:
-                if self.dss_client.getObject(object_key, dest_file_path) == 0:
+            ret = self.get_object(object_key, dest_file_path)
+            if ret == 0:
+                return True
+            if ret == 1:
+                self.logger.error("Retry downloading object for key - {}".format(object_key))
+                if self.get_object(object_key, dest_file_path) == 0:
                     return True
-            except dss.FileIOError as e:
-                self.logger.execp("getObject - key:{}, {}".format(object_key, e))
-            except dss.NetworkError as e:
-                self.logger.execp("getObject - key:{}, {}".format(object_key, e))
-            except dss.NoSuchResouceError as e:
-                self.logger.excep("getObject - {} , {}".format(object_key, e))
-            except dss.GenericError as e:
-                self.logger.excep("getObject - {} , {}".format(object_key, e))
-            except Exception as e:
-                self.logger.excep("ObjectKey-{} , {}".format(object_key, e))
         return False
+
+    def get_object(self, object_key, dest_file_path):
+        """
+        Download the objects from S3 storage and store in a local or share path.
+        :param object_key:  A object key is unique in S3 storage and doesn't start with forward slash "/"
+        :param dest_file_path: A physical file path where object to be copied.
+        :return: Success = 0, Failure-Retry = 1, Failure = -1 (No-Retry)
+        """
+        ret = -1
+        try:
+            if self.dss_client.getObject(object_key, dest_file_path) == 0:
+                ret =  0
+            else:
+                self.logger.error("Download Failed for Object-Key - {}".format(object_key))
+        except dss.FileIOError as e:
+            self.logger.execp("getObject - key:{}, {}".format(object_key, e))
+            ret = 1
+        except dss.NetworkError as e:
+            self.logger.execp("getObject - key:{}, {}".format(object_key, e))
+        except dss.NoSuchResouceError as e:
+            self.logger.excep("getObject - {} , {}".format(object_key, e))
+        except dss.GenericError as e:
+            self.logger.excep("getObject - {} , {}".format(object_key, e))
+            ret = 1
+        except Exception as e:
+            self.logger.excep("getObject - {} , {}".format(object_key, e))
+        return ret
 
     def listObjects(self, bucket=None,  prefix="", delimiter="/"):
         """

@@ -97,8 +97,6 @@ class Worker(object):
                 from dss_client import DssClientLib
                 self.logger.debug('PROCESS ENVIRONMENT DETAILS - {}, PID - {}'.format(os.environ, os.getpid()))
                 s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger)
-                time.sleep(2)
-
             elif s3_client_lib_name == "boto3":
                 config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio",
                           "minio_secret_key": "minio123"}
@@ -154,7 +152,6 @@ class Worker(object):
         Run the actual process
         :return:
         """
-
         s3_client = self.get_s3_client()
 
         if not s3_client:
@@ -167,35 +164,23 @@ class Worker(object):
             if not self.status.value:
                 break
             # Get the task from shared task_queue, shared among the workers.
-            task = None
-
             if self.task_queue and self.task_queue.qsize():
                 try:
                     task = self.task_queue.get()
+                    task.start(task_queue=self.task_queue,
+                               index_data_queue=self.index_data_queue,
+                               status_queue=self.operation_status_queue,
+                               logger=self.logger,
+                               progress_of_indexing=self.progress_of_indexing,
+                               progress_of_indexing_lock=self.progress_of_indexing_lock,
+                               index_data_count=self.index_data_count,
+                               listing_progress=self.listing_progress,
+                               listing_progress_lock=self.listing_progress_lock,
+                               s3_client=s3_client,
+                               indexing_started_flag=self.indexing_started_flag,
+                               listing_status=self.listing_status,
+                               listing_only=self.listing_only,
+                               listing_objectkey_queue=self.listing_objectkey_queue
+                               )
                 except Exception as e:
                     self.logger.excep("WORKER-{}:{}".format(self.id, e))
-            else:
-                pass
-
-            if task:
-                # print("DEBUG: Task-{} is being processed by worker-{}".format(task.id, self.id))
-                # self.logger.debug("Task-{} is being processed by worker-{}".format(task.id, self.id))
-                # Start Task - May be a PUT,LIST,DEL,GET or indexing operation
-                task.start(task_queue=self.task_queue,
-                           index_data_queue=self.index_data_queue,
-                           status_queue=self.operation_status_queue,
-                           logger=self.logger,
-                           progress_of_indexing=self.progress_of_indexing,
-                           progress_of_indexing_lock=self.progress_of_indexing_lock,
-                           index_data_count=self.index_data_count,
-                           listing_progress=self.listing_progress,
-                           listing_progress_lock=self.listing_progress_lock,
-                           s3_client=s3_client,
-                           indexing_started_flag=self.indexing_started_flag,
-                           listing_status=self.listing_status,
-                           listing_only=self.listing_only,
-                           listing_objectkey_queue=self.listing_objectkey_queue
-                           )
-
-            # time.sleep(1)  # 1 second delay
-

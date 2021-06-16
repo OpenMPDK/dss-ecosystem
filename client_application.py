@@ -271,7 +271,7 @@ class ClientApplication(object):
         socket = context.socket(zmq.REP)
         socket.bind(socket_index_address)
         self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
-
+        message_count = 0
         while True:
 
             # Check messaging flag  and break the  , generally multiprocessing Queue and value is thread/process safe.
@@ -290,6 +290,7 @@ class ClientApplication(object):
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
+                    message_count +=1
                     self.logger.debug("Received Indexed MSG, Operation:{} , Prefix:{}".format(self.operation, message["dir"]))
                     is_index_data_added = False  #
 
@@ -330,6 +331,8 @@ class ClientApplication(object):
                             index_buffer[message["dir"]] = len(message["files"])
             except Exception as e:
                 self.logger.excep("Monitor-Index - {}".format(e))
+
+        self.logger.info("Total message received from master - {}".format(message_count))
         # Close socket connection and destroy context
         try:
             socket.close()
@@ -344,7 +347,7 @@ class ClientApplication(object):
         :param message:
         :return:
         """
-        task_data = {"dir": message["dir"], "files": message["files"]}
+        task_data = {"dir": message["dir"], "files": message["files"], "size": message.get("size", 0)}
         task = Task(operation=self.operation,
                     data=task_data,
                     s3config=self.s3_config,
