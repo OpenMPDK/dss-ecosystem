@@ -112,18 +112,19 @@ class ClientApplication(object):
 
     def __del__(self):
         # TODO Stop all running process for abrupt shutdown
-
+        self.logger.warn("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR- DESTRUCTOR")
         # Make sure all NFS shares are unounted and removed
         while not self.nfs_share_list.empty():
             nfs_share = self.nfs_share_list.get()
             self.logger.info(
                 "Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
             self.nfs_cluster.umount(nfs_share["nfs_share"])
-        """
+
+        self.stop_message()
         self.stop_workers()
-        self.nfs_cluster.umount_all()  # Un-mount all mounted shares
+        #self.nfs_cluster.umount_all()  # Un-mount all mounted shares
         self.stop_logging()
-        """
+
 
     def start(self):
         """
@@ -419,6 +420,10 @@ class ClientApplication(object):
                 break
         # Close socket and destroy context.
         try:
+            # Send end message to PULL socket at master
+            end_message= {"exit" : True , "client": self.id}
+            socket.send_json(end_message)
+            time.sleep(1)
             socket.close()
             context.term()
             self.logger.info("Monitor-StatusHandler is terminated gracefully !")
@@ -476,7 +481,7 @@ if __name__ == "__main__":
     config = config_obj.get_config()
     client_config = config.get("client", {})
 
-    ca = ClientApplication(params.get("id", 1), config)
+    ca = ClientApplication(params["client_id"] , config)
     ca.start()
     ca.logger.info("CONFIG:{}".format(config))
     ca.logger.info("Starting client application ...")

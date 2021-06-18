@@ -108,7 +108,7 @@ class Monitor:
 
     def stop(self):
 
-        self.logger.debug("Stopping MessageHandler - ")
+        self.logger.warn("Stopping monitors forcefully!")
         self.status_lock.acquire()
         self.stop_status_poller.value = 1
         self.status_lock.release()
@@ -135,14 +135,7 @@ class Monitor:
             except Exception as e:
                 self.logger.excep("Unable to terminate MessageHandler - StatusPoller ...\n {}".format(e))
 
-        self.logger.info("Stopped all monitor processes ... ")
-
-
-    def display(self):
-        pass
-
-    def result(self):
-        pass
+        self.logger.warn("Terminated all running monitor processes ... ")
 
     def message_handler_index(self):
         """
@@ -306,44 +299,59 @@ class Monitor:
         """
 
         context = zmq.Context()
-
         for client in self.clients:
-            # print("Client IP: {}, PORT Index-{}, PORT Status-{}".format(client.ip, client.port_index, client.port_status))
             client.socket_status = context.socket(zmq.PULL)
-            #print("INFO: Monitor-Poller, Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
             self.logger.info("Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
             client.socket_status.connect("tcp://{}:{}".format(client.ip, client.port_status))
 
+        client_application_exit_count = 0
         while True:
 
             ## Condition to break the loop:
-            # - Received a status from all clients that all the status have been processed.
+            # - Received all the operation status messages from all ClientApplications which matches with index/list object count
             # - Received a signal from master to shutdown
-            self.status_lock.acquire()
-            stop = self.stop_status_poller.value
-            self.status_lock.release()
 
-            if stop == 1:
+            if self.stop_status_poller.value == 1:
                 break
-
-            previous_client_operation_status = 1
-            # Send index data to each client in round-robin fashion
+            all_client_applications_terminated = True
+            # Receive status message from all the ClientApplications.
             for client in self.clients:
-                # Use to check that data has been reached to client. Otherwise resend same data.
-                #print("++++++++++++>>INFO: POLLER - Waiting to receive data from client-{}".format(client.id))
+                if client.socket_status is None:
+                    continue
+                ## ERROR Handling: If the ClientApplication abruptly gets shutdown, exit code should be non-zero,
+                #  We don't except for end message to be reached, hence the socket can be closed.
+                if client.status.value and client.exit_status_code.value != 0:
+                    client.socket_status.close()
+                    client.socket_status = None
+                    client_application_exit_count += 1
+                    continue
                 try:
+                    all_client_applications_terminated = False
                     received_response = client.socket_status.poll(timeout=1000)  # Wait 1 secs
                     if received_response:
                         status = client.socket_status.recv_json()
+                        # Check status message or end message for that Client
                         self.logger.debug("Monitor-Poller Operation Status for client-{}, Status - {}".format(client.id, status))
-                        self.status_queue.put(status)
+                        if "exit" in status and status["exit"]:
+                            client.socket_status.close()
+                            client.socket_status = None
+                            client_application_exit_count += 1
+                        else:
+                            self.status_queue.put(status)
                 except Exception as e:
                     self.logger.excep("Monitor-Status-Poller {} ".format(e))
+
+            # Check if all client_applications terminated?
+            if all_client_applications_terminated:
+                self.logger.debug("Monitor-Status-Poller: All ClientApplications Terminated, EXITs! ")
+                self.stop_status_poller.value = 1
+                break
 
         # Closing all socket connection
         try:
             for client in self.clients:
-                client.socket_status.close()
+                if client.socket_status:
+                    client.socket_status.close()
             # Terminate context.
             context.term()
         except Exception as e:

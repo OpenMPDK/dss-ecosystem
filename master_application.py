@@ -284,7 +284,6 @@ class Master(object):
                            self.logging_level)
         self.logger.start()
         self.logger.info("Started Logger with {} mode!".format(self.logging_level))
-        #print("INFO: Logger started, (status -> {})".format(self.logger.status()))
 
     def stop_logging(self):
         """
@@ -450,14 +449,15 @@ class Client(object):
         self.remote_stderr = None
 
         # Execution status
-        self.status = False
+        self.status = Value('b', False)
+        self.exit_status_code = Value('i', -1) # Integer value
 
     def __del__(self):
         """
         Receive the PID of the remote process, so that forcefully remote process can be terminated.
         :return:
         """
-        if not self.status:
+        if not self.status.value:
             self.stop()
 
     def start(self):
@@ -497,35 +497,32 @@ class Client(object):
     def remote_client_status(self):
         if self.ssh_client_handler:
             if self.remote_stdout:
-                self.status = self.remote_stdout.channel.exit_status_ready()
-                if self.status:
-                    #print("INFO: Remote ClientApplication-{} terminated!".format(self.id))
+                self.status.value = self.remote_stdout.channel.exit_status_ready()
+                #print("Client-{}, Status-{}".format(self.id, self.status ))
+                if self.status.value:
                     self.logger.info("Remote ClientApplication-{} terminated!".format(self.id))
-                return self.status
+                return self.status.value
         return False
 
 
     def remote_client_exit_status(self):
         """
         It is blocking call.
-        :return: exit status integer value
+        Check remote exit status and close the socket connection.
+        :return: exit status integer value, 0=Good, Non Zero value failure
         """
         if self.ssh_client_handler:
 
-            exit_status = self.remote_stdout.channel.recv_exit_status()
+            self.exit_status_code.value = self.remote_stdout.channel.recv_exit_status()
             stdout_lines = self.remote_stdout.readlines()
             stderr_lines = self.remote_stderr.readlines()
-            self.logger.debug("Client-{} Remote execution status: {}".format(self.id,exit_status))
-            if exit_status:
-                #print("DEBUG: Client-{} \n STDOUT {}".format(self.id,stdout_lines))
+            self.logger.debug("Client-{} Remote execution status: {}".format(self.id,self.exit_status_code.value))
+            if self.exit_status_code.value:
                 self.logger.debug("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
-            if stderr_lines:
-                #print("ERROR: Client-{} \n STDERR {}".format(self.id,stderr_lines))
-                self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
+                if stderr_lines:
+                    self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
             self.ssh_client_handler.close()
-
-        return exit_status
-
+            self.ssh_client_handler = None
 
     def stop(self):
         """
@@ -537,16 +534,16 @@ class Client(object):
         self.logger.info("Stopping client-{}".format(self.id))
         if self.ssh_client_handler:
 
-            status = self.remote_stdout.channel.recv_exit_status()
+            self.exit_status_code.value = self.remote_stdout.channel.recv_exit_status()
             stdout_lines = self.remote_stdout.readlines()
             stderr_lines = self.remote_stderr.readlines()
-            self.logger.info("Client-{} Remote execution status-{}".format(self.id,status))
+            self.logger.info("Client-{} Remote execution status-{}".format(self.id,self.exit_status_code.value))
             if status:
                 self.logger.debug("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
             if stderr_lines:
                 self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
             self.ssh_client_handler.close()
-            self.status = 0
+            self.status.value = True
         self.ssh_client_handler = None
 
 def process_put_operation(master):
@@ -566,6 +563,8 @@ def process_put_operation(master):
     workers_stopped = 0
     unmounted_nfs_shares = 0
     monitors_stopped = 0
+    all_clients_completed = 0
+    all_client_terminated_gracefully = True
 
     client_applications_termination_waiting_message = True # Used when Workers and Monitors are stopped, but ClientApps.
     while True:
@@ -585,23 +584,28 @@ def process_put_operation(master):
             # Shut down Monitor-Index at Master
             index_generation_time = (datetime.now() - master.operation_start_time).seconds                       
             master.logger.info('Index generation completed, Time: {} sec'.format(index_generation_time))
-            #print('INFO: Indexing the shares completed')
             master.index_data_lock.acquire()
             master.index_data_generation_complete.value = 1
             master.index_data_lock.release()
 
-        # Check all the ClientApplications once they are finished
-        all_clients_completed = 1
-        for client in master.clients:
-            #print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
-            if not client.status:
-                if client.remote_client_status() :
-                    client.remote_client_exit_status()
-                all_clients_completed = 0
 
-        if all_clients_completed:
-            master.logger.info("All ClientApplications terminated gracefully !") ## Termination3
-        elif  workers_stopped and monitors_stopped:
+        if all_clients_completed == 0:
+            completed = True # Client Completion Status
+
+            for client in master.clients:
+                if not client.status.value:
+                    if client.remote_client_status():
+                        client.remote_client_exit_status()
+                        if client.exit_status_code.value != 0:
+                            all_client_terminated_gracefully = False
+                    else:
+                        completed = False
+            if completed :
+                if all_client_terminated_gracefully:
+                    master.logger.info("All ClientApplications terminated gracefully !")
+                all_clients_completed = 1
+
+        if  workers_stopped and monitors_stopped:
             if client_applications_termination_waiting_message:
                 master.logger.info("Waiting for ClientApplication to stop!")
                 client_applications_termination_waiting_message = False
@@ -612,7 +616,6 @@ def process_put_operation(master):
                 master.monitor.monitor_status_poller.value and \
                 master.monitor.monitor_progress_status.value:
             monitors_stopped = 1
-            #print("INFO: All Monitors belongs to Master terminated!")
             master.logger.info("All monitors belongs to Master terminated!")
         master.monitor.status_lock.release()
 
@@ -633,13 +636,17 @@ def process_put_operation(master):
         if workers_stopped and monitors_stopped and all_clients_completed:
             break
 
-        # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
-        if all_clients_completed:
-            if not monitors_stopped:
-                master.stop_monitor()
-            if not workers_stopped:
-                master.stop_workers()
-            break
+        # ERROR Handling
+        if all_clients_completed and monitors_stopped and not workers_stopped:
+            master.stop_workers()
+            workers_stopped = 1
+        # Shutdown client application if workers and monitor finished.
+        #if workers_stopped and monitors_stopped and not all_clients_completed:
+        #    for client in master.clients:
+        #        if not client.status:
+        #            if not client.remote_client_status():
+        #                client.stop()
+        #    all_clients_completed = 1
 
         time.sleep(2)
 
@@ -707,10 +714,11 @@ def process_del_operation(master):
         all_clients_completed = 1
         for client in master.clients:
             #print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
-            if not client.status:
+            if not client.status.value:
                 if client.remote_client_status() :
                     client.remote_client_exit_status()
-                all_clients_completed = 0
+                else:
+                    all_clients_completed = 0
 
         # Check for Monitors status
         master.monitor.status_lock.acquire()
@@ -730,12 +738,12 @@ def process_del_operation(master):
             break
 
         # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
-        if all_clients_completed:
-            if not monitors_stopped:
-                master.stop_monitor()
-            if not workers_stopped:
-                master.stop_workers()
-            break
+        #if all_clients_completed:
+        #    if not monitors_stopped:
+        #        master.stop_monitor()
+        #    if not workers_stopped:
+        #        master.stop_workers()
+        #    break
 
         time.sleep(2)
 
@@ -767,10 +775,11 @@ def process_get_operation(master):
         all_clients_completed = 1
         for client in master.clients:
             # print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
-            if not client.status:
+            if not client.status.value:
                 if client.remote_client_status():
                     client.remote_client_exit_status()
-                all_clients_completed = 0
+                else:
+                    all_clients_completed = 0
 
         # Check for Monitors status
         master.monitor.status_lock.acquire()
@@ -790,12 +799,12 @@ def process_get_operation(master):
             break
 
         # If ClientApplications running on client nodes gets terminated, then shutdown workers, monitors forcefully to exit program
-        if all_clients_completed:
-            if not monitors_stopped:
-                master.stop_monitor()
-            if not workers_stopped:
-                master.stop_workers()
-            break
+        #if all_clients_completed:
+        #    if not monitors_stopped:
+        #        master.stop_monitor()
+        #    if not workers_stopped:
+        #        master.stop_workers()
+        #    break
 
         time.sleep(1)
 
@@ -847,7 +856,6 @@ if __name__ == "__main__":
     # Terminate logger at the end.
     master.stop_logging()  ## Termination5
     print("INFO: Stopping master")
-    ### 10.1.51.238 , 10.1.51.54, 10.1.51.61
 
 
 
