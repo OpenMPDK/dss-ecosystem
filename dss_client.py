@@ -214,14 +214,12 @@ class DssClientLib:
         :param delimiter: Default is "/" to receive first level object keys.
         :return: List of object keys.
         """
-        object_keys = []
-
         try:
-            iterator = self.dss_client.getObjects(prefix, delimiter)
+            objects = self.dss_client.getObjects(prefix, delimiter)
             while True:
                 try:
-                    for obj_key in iterator:
-                        object_keys.append(obj_key)
+                    for obj_key in objects:
+                        yield obj_key
                 except dss.NoIterator:
                     break
                 except Exception as e:
@@ -236,5 +234,3 @@ class DssClientLib:
             self.logger.excep("listObjects - {}".format(e))
         except dss.GenericError as e:
             self.logger.excep("listObjects {}- {}".format(prefix, e))
-
-        return object_keys
