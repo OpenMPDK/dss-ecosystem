@@ -157,7 +157,7 @@ def list(s3_client, **kwargs):
     if prefix in prefix_index_data:
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
         if object_keys_iterator:
-            for result in list_object_keys(object_keys_iterator, prefix_index_data,max_index_size, s3_client_library):
+            for result in list_object_keys(object_keys_iterator, max_index_size, s3_client_library):
                 if "object_keys" in result:
                     index_data_message ={"dir": prefix, "files": result["object_keys"]}
                     object_keys_count = len(result["object_keys"])
@@ -202,11 +202,12 @@ def list(s3_client, **kwargs):
 
 
 
-def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size, s3_client_lib):
+def list_object_keys(object_keys_iterator, max_index_size, s3_client_lib):
     """
     Iterate over the object keys and generate a message which holds a prefix and object keys underneath of the prefix.
+    A prefix dir is ended with a forward slash , ex <a>/<b>/<c>/
+    A object key doesn't have any ending forward slash, ex <a>/<b>/<c>/object1
     :param object_keys_iterator: Returned object keys iterator,
-    :param prefix_index_data: Data loaded from persistent storage  {"<prefix>": {"files": <file_count>, "size": <size under prefix>}}
     :param max_index_size:
     :return:
     """
@@ -218,7 +219,7 @@ def list_object_keys(object_keys_iterator, prefix_index_data, max_index_size, s3
         elif s3_client_lib.lower() == "dss_client":
           obj_key = obj_key_iter
         # To handle a scenario in which directory has both file and directory
-        if obj_key in prefix_index_data:
+        if obj_key.endswith("/"):
             yield {"prefix": obj_key}
         else:
             if len(object_keys) == max_index_size:
