@@ -91,7 +91,7 @@ class Master(object):
         self.index_data_queue = Queue()  # Index data stored by workers
         self.index_data_lock = Lock()
         self.index_data_generation_complete = Value('i', 0)   ##TODO - Set value when all indexing is done.
-        self.indexing_started_flag = Value('i', False)
+        self.indexing_started_flag = Value('b', False)
 
         # Operation LIST
         self.prefix = config.get("prefix", None)
@@ -304,7 +304,6 @@ class Master(object):
 
         # Create first level task for each NFS share
         local_mounts = self.nfs_cluster_obj.get_mounts()
-        #print(local_mounts)
         for ip_address, nfs_shares in local_mounts.items():
             self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
             self.nfs_shares.extend(nfs_shares)
@@ -354,7 +353,6 @@ class Master(object):
         compaction_status = {}
         start_time = datetime.now()
         for client_ip in self.config["dss_targets"]:
-            #print("INFO: Started Compaction for target-ip:{}".format(client_ip))
             self.logger.info("Started Compaction for target-ip:{}".format(client_ip))
             ssh_client_handler, stdin, stdout, stderr = remoteExecution(client_ip, self.client_user_id, self.client_password,command)
             compaction_status[client_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout":stdout,"stderr":stderr}
@@ -369,7 +367,6 @@ class Master(object):
                     if "stdout" in compaction_status[client_ip] and compaction_status[client_ip]["stdout"]:
                         status = compaction_status[client_ip]["stdout"].channel.exit_status_ready()
                         if status:
-                            #print("\nINFO: Compaction is finished for - {}".format(client_ip))
                             self.logger.info("Compaction is finished for - {}".format(client_ip))
                             compaction_status[client_ip]["status"] = True
                             compaction_status[client_ip]["ssh_remote_client"].close()
@@ -465,10 +462,6 @@ class Client(object):
         Remote execution of client application ("client_application.py")
         :return:
         """
-        # Setup
-        #self.setup()
-        #print("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
-        #self.logger.info("INFO: Starting ClientApplication-{} on node {}".format(self.id,self.ip))
         command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
                                                                 " --client_id {} ".format(self.id) + \
                                                                 " --operation {} ".format(self.operation) + \
@@ -495,10 +488,13 @@ class Client(object):
         self.remote_stderr = stderr
 
     def remote_client_status(self):
+        """
+        It checks remote application and on its completion return True else False
+        :return: Remote Process Completed (True) , Else (False)
+        """
         if self.ssh_client_handler:
             if self.remote_stdout:
                 self.status.value = self.remote_stdout.channel.exit_status_ready()
-                #print("Client-{}, Status-{}".format(self.id, self.status ))
                 if self.status.value:
                     self.logger.info("Remote ClientApplication-{} terminated!".format(self.id))
                 return self.status.value
@@ -508,7 +504,7 @@ class Client(object):
     def remote_client_exit_status(self):
         """
         It is blocking call.
-        Check remote exit status and close the socket connection.
+        Check remote exit status code and close the socket connection.
         :return: exit status integer value, 0=Good, Non Zero value failure
         """
         if self.ssh_client_handler:
@@ -518,7 +514,7 @@ class Client(object):
             stderr_lines = self.remote_stderr.readlines()
             self.logger.debug("Client-{} Remote execution status: {}".format(self.id,self.exit_status_code.value))
             if self.exit_status_code.value:
-                self.logger.debug("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
+                self.logger.warn("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
                 if stderr_lines:
                     self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
             self.ssh_client_handler.close()
@@ -527,18 +523,16 @@ class Client(object):
     def stop(self):
         """
         Send a message to the client node through ZMQ.
-        # TODO
         Need to terminate forcefully.
         :return:
         """
         self.logger.info("Stopping client-{}".format(self.id))
         if self.ssh_client_handler:
-
             self.exit_status_code.value = self.remote_stdout.channel.recv_exit_status()
             stdout_lines = self.remote_stdout.readlines()
             stderr_lines = self.remote_stderr.readlines()
             self.logger.info("Client-{} Remote execution status-{}".format(self.id,self.exit_status_code.value))
-            if status:
+            if self.exit_status_code.value:
                 self.logger.debug("Client-{} \n STDOUT {}".format(self.id,stdout_lines))
             if stderr_lines:
                 self.logger.error("Client-{} \n STDERR {}".format(self.id,stderr_lines))
@@ -677,7 +671,6 @@ def process_list_operation(master):
         master.listing_progress_lock.release()
 
         if master.listing_aggregation_status and master.listing_aggregation_status.value == 1:
-
           master.stop_workers()
           break
       except Exception as e:

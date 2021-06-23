@@ -154,13 +154,6 @@ def list(s3_client, **kwargs):
     s3_client_library = s3config.get("client_lib","minio_client")
     logger.debug("Performing LISTing with prefix - {}".format(prefix))
 
-    listing_progress_lock.acquire()
-    listing_progress[prefix] = 1
-    listing_progress_lock.release()
-
-    if listing_status.value  != 1:
-        listing_status.value = 1
-
     if prefix in prefix_index_data:
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
         if object_keys_iterator:
@@ -176,6 +169,9 @@ def list(s3_client, **kwargs):
                     else:
                       index_data_queue.put(index_data_message)
                 else:
+                    listing_progress_lock.acquire()
+                    listing_progress[result["prefix"]] = 1
+                    listing_progress_lock.release()
                     task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
                     task_queue.put(task)
         else:
@@ -188,14 +184,20 @@ def list(s3_client, **kwargs):
                     object_key_prefix =  obj_key.object_name
                 elif s3_client_library.lower() == "dss_client":
                     object_key_prefix =  obj_key
+                listing_progress_lock.acquire()
+                listing_progress[object_key_prefix] = 1
+                listing_progress_lock.release()
                 task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                 task_queue.put(task)
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
 
-    listing_progress[prefix] = 0
+    if listing_status.value  != 1:
+        listing_status.value = 1
+    #listing_progress[prefix] = 0
     listing_progress_lock.acquire()
-    del listing_progress[prefix]
+    if prefix in listing_progress:
+      del listing_progress[prefix]
     listing_progress_lock.release()
 
 
