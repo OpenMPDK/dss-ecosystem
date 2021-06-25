@@ -659,7 +659,7 @@ def process_list_operation(master):
     #with master.listing_only.get_lock():
     master.listing_only.value = True
     while True:
-      progress_bar("Operation LIST is in Progress")
+      progress_bar("Listed Object Keys - {}".format(master.index_data_count.value) )
       try:
         # Check for completion of listing
         master.listing_progress_lock.acquire()
