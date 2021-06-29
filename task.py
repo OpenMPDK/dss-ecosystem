@@ -165,7 +165,8 @@ def list(s3_client, **kwargs):
                         index_data_count.value += object_keys_count
                     logger.debug("LIST: Prefix-\"{}\" ObjectKeys: {}".format(prefix, object_keys_count)) ## DELETE
                     if listing_only.value:
-                      listing_objectkey_queue.put(result["object_keys"])
+                      result.update({"prefix" : prefix})
+                      listing_objectkey_queue.put(result)
                     else:
                       index_data_queue.put(index_data_message)
                 else:
@@ -222,6 +223,7 @@ def list_object_keys(object_keys_iterator, max_index_size, s3_client_lib):
         if obj_key.endswith("/"):
             yield {"prefix": obj_key}
         else:
+            obj_key = obj_key.split("/")[-1]
             if len(object_keys) == max_index_size:
                 yield {"object_keys": object_keys}
                 object_keys = [obj_key]

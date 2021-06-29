@@ -109,10 +109,9 @@ class ClientApplication(object):
         # Mount NFS Share locally
         self.nfs_cluster = None
         self.nfs_share_list = Queue()
-
+        
     def __del__(self):
         # TODO Stop all running process for abrupt shutdown
-        self.logger.warn("RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR- DESTRUCTOR")
         # Make sure all NFS shares are unounted and removed
         while not self.nfs_share_list.empty():
             nfs_share = self.nfs_share_list.get()
@@ -203,8 +202,6 @@ class ClientApplication(object):
         :return:
         """
         print("INFO: Starting messaging system ...")
-
-        # self.message_server_index()
         self.process_index = Process(target=self.message_server_index)
         self.process_index.start()
 
@@ -267,11 +264,16 @@ class ClientApplication(object):
         - Forcefully, process gets terminated on receiving termination signal. Need to add signal handler.
         :return:
         """
-        context = zmq.Context()
-        socket_index_address = "tcp://{}:{}".format(self.ip_address, self.port_index)
-        socket = context.socket(zmq.REP)
-        socket.bind(socket_index_address)
-        self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
+        try:
+            context = zmq.Context()
+            socket_index_address = "tcp://{}:{}".format(self.ip_address, self.port_index)
+            socket = context.socket(zmq.REP)
+            socket.bind(socket_index_address)
+            self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
+        except Exception as e:
+            self.logger.excep("ZMQ Binding error - {} ".format(e))
+            self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
+            return
         message_count = 0
         while True:
 
@@ -337,10 +339,11 @@ class ClientApplication(object):
         # Close socket connection and destroy context
         try:
             socket.close()
-            context.term()
             self.logger.info("Monitor-Index-Receiver terminated gracefully !")
         except Exception as e:
             self.logger.excep("Monitor-Index-Receiver - {}".fromat(e))
+        finally:
+            context.term()
 
     def add_task(self,message):
         """
@@ -363,11 +366,16 @@ class ClientApplication(object):
         The Monitor StatusHandler receive all the status from workers and send back to master for aggregation.
         :return:
         """
-        context = zmq.Context()
-        socket_address = "tcp://{}:{}".format(self.ip_address, self.port_status)
-        socket = context.socket(zmq.PUSH)
-        self.logger.info("MessageHandler-Status Socket Address-{}".format(socket_address))
-        socket.bind(socket_address)
+        try:
+            context = zmq.Context()
+            socket_address = "tcp://{}:{}".format(self.ip_address, self.port_status)
+            socket = context.socket(zmq.PUSH)
+            self.logger.info("MessageHandler-Status Socket Address-{}".format(socket_address))
+            socket.bind(socket_address)
+        except Exception as e:
+            self.logger.excep("ZMQ Binding error - {}".format(e))
+            self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
+            return
 
         local_index_buffer = {}  # Keeps all prefix which doesn't belong to global shared index_buffer
 
@@ -425,10 +433,11 @@ class ClientApplication(object):
             socket.send_json(end_message)
             time.sleep(1)
             socket.close()
-            context.term()
             self.logger.info("Monitor-StatusHandler is terminated gracefully !")
         except Exception as e:
             self.logger.excep("Monitor-StatusHandler - {}".format(e))
+        finally:
+            context.term()
 
     @exception
     def nfs_mount(self, nfs_cluster_ip=None, nfs_share=None):

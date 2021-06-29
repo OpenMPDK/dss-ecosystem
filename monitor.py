@@ -35,7 +35,7 @@ import os,sys
 import time
 import  zmq
 from multiprocessing import Process,Queue,Value, Lock, Manager
-from utils.utility import exception, exec_cmd
+from utils.utility import exception, exec_cmd, progress_bar
 from datetime import datetime
 import json
 from logger import  MultiprocessingLogger
@@ -150,14 +150,15 @@ class Monitor:
 
         :return: None
         """
-
-        context = zmq.Context()
-
-        for client in self.clients:
-            client.socket_index = context.socket(zmq.REQ)
-            #print("INFO: Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
-            self.logger.info("Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
-            client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
+        try:
+            context = zmq.Context()
+            for client in self.clients:
+                client.socket_index = context.socket(zmq.REQ)
+                self.logger.info("Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
+                client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
+        except Exception as e:
+            self.logger.excep("ZMQ Connection error - {}".format(e))
+            return
 
         # Buffer to store prefix index and file count  {"prefix":<file count>}
         first_index_distribution  = 0
@@ -232,11 +233,11 @@ class Monitor:
             # Close all sockets associated with clients.
             for client in self.clients:
                 client.socket_index.close()
-            # Terminate context
-            context.term()
-
         except Exception as e:
             self.logger.excep("{}: monitor-index Closing Socket {}".format(e))
+        finally:
+            context.term() # Terminate context
+
 
         # Update MasterApplication about termination of Monitor
         #self.monitor_index_data_sender.value = 1
@@ -297,12 +298,15 @@ class Monitor:
         Collect the status from all the clients and add status to status_queue
         :return:
         """
-
-        context = zmq.Context()
-        for client in self.clients:
-            client.socket_status = context.socket(zmq.PULL)
-            self.logger.info("Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
-            client.socket_status.connect("tcp://{}:{}".format(client.ip, client.port_status))
+        try:
+            context = zmq.Context()
+            for client in self.clients:
+                client.socket_status = context.socket(zmq.PULL)
+                self.logger.info("Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
+                client.socket_status.connect("tcp://{}:{}".format(client.ip, client.port_status))
+        except Exception as e:
+            self.logger.excep("ZMQ Connection ERROR - {}".format(e))
+            return
 
         client_application_exit_count = 0
         while True:
@@ -352,10 +356,10 @@ class Monitor:
             for client in self.clients:
                 if client.socket_status:
                     client.socket_status.close()
-            # Terminate context.
-            context.term()
         except Exception as e:
             self.logger.excep("Minitor-Poller {}".format(e))
+        finally:
+            context.term() # Terminate context.
 
         self.status_lock.acquire()
         self.monitor_status_poller.value = 1
@@ -382,11 +386,7 @@ class Monitor:
             # If status poller has stopped  and status_queue is empty
 
             # Forcefully stop the process
-            self.status_lock.acquire()
-            status = self.stop_status_poller.value
-            self.status_lock.release()
-
-            if status == 1 and self.status_queue.empty():
+            if self.stop_status_poller.value == 1 and self.status_queue.empty():
                 break
 
             if not self.status_queue.empty():
@@ -450,10 +450,10 @@ class Monitor:
         success_operation_size_in_byte= original_file_size_in_byte
 
         self.logger.info("***** Operation Statistics *****")
-        if operation_success_count:
+        if operation_success_count and self.index_data_count.value:
             success_percentage = (operation_success_count / self.index_data_count.value) * 100
             self.logger.info("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
-        if operation_failure_count:
+        if operation_failure_count and self.index_data_count.value:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
             self.logger.info("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
@@ -501,9 +501,11 @@ class Monitor:
               self.logger.debug("Object Keys aggregation is completed!")
               break
             if not self.listing_objectkey_queue.empty():
-              object_keys = self.listing_objectkey_queue.get()
+              object_keys_data = self.listing_objectkey_queue.get()
+              prefix = object_keys_data["prefix"]
+              object_keys = object_keys_data["object_keys"]
               for object_key in object_keys:
-                fh.write(object_key + "\n")
+                fh.write(prefix + object_key + "\n")
 
           self.logger.info("Listing ObjectKeys are dumped at - {}".format(listing_file))
         except Exception as e:
