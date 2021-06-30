@@ -61,6 +61,7 @@ class ClientApplication(object):
         self.operation = config["operation"]
         self.dryrun = config["dryrun"]
         self.debug = config.get("debug", False)
+        self.ip_address_family = config.get("ip_address_family", "IPV4")
 
         # Message communication
         self.operation_data_queue = Queue()  # Hold file index data
@@ -268,6 +269,8 @@ class ClientApplication(object):
             context = zmq.Context()
             socket_index_address = "tcp://{}:{}".format(self.ip_address, self.port_index)
             socket = context.socket(zmq.REP)
+            if self.ip_address_family.upper() == "IPV6":
+                socket.setsockopt(zmq.IPV6,1)
             socket.bind(socket_index_address)
             self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
         except Exception as e:
@@ -370,8 +373,10 @@ class ClientApplication(object):
             context = zmq.Context()
             socket_address = "tcp://{}:{}".format(self.ip_address, self.port_status)
             socket = context.socket(zmq.PUSH)
-            self.logger.info("MessageHandler-Status Socket Address-{}".format(socket_address))
+            if self.ip_address_family.upper() == "IPV6":
+                socket.setsockopt(zmq.IPV6,1)
             socket.bind(socket_address)
+            self.logger.info("MessageHandler-Status Socket Address-{}".format(socket_address))
         except Exception as e:
             self.logger.excep("ZMQ Binding error - {}".format(e))
             self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))

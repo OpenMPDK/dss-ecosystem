@@ -471,8 +471,8 @@ def indexing(**kwargs):
         logger.warn('Directory {} is not in pending state - {}'.format(dir, progress_of_indexing[dir]))
 
     progress_of_indexing[dir] = 'Progress'
-    if not indexing_started_flag.value:
-        indexing_started_flag.value = True
+    if indexing_started_flag.value == 0:
+        indexing_started_flag.value = 1
         logger.info('Indexing on the shares started')
     for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger,
                               max_index_size=max_index_size):

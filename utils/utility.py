@@ -39,6 +39,7 @@ import ntplib
 import time
 import hashlib
 import paramiko
+import socket
 from multiprocessing import Process, Queue, Value, Lock
 
 """
@@ -161,7 +162,7 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
     """
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-    client.connect(host, username=username, password=password)
+    client.connect(hostname=host, username=username, password=password)
     stdin, stdout, stderr = client.exec_command(cmd)
 
     if blocking:
@@ -255,3 +256,28 @@ def get_hash_key(**kwargs):
         logger.error("Unknown Type {} for hashkey generation.\n Supported types are string/object/file".format(type))
 
     return hash_key
+
+def get_ip_address(logger, hostname_or_ip_address=None, ip_address_family="IPV4"):
+    """
+    Generate IP address from hostname and internet address family specified.
+    If IP address specified instead of hostname, it returns IP address.
+    :param logger:
+    :param hostname_or_ip_address:
+    :param ip_address_family:
+    :return:
+    """
+    ip_address = None
+    if hostname_or_ip_address:
+      try:
+        if ip_address_family.upper() == "IPV4":
+          ip_address = socket.gethostbyname(hostname_or_ip_address)
+        elif ip_address_family.upper() == "IPV6":
+          ip_address = socket.getaddrinfo(hostname_or_ip_address, None, family=socket.AF_INET6, proto=socket.IPPROTO_TCP)[-1][-1][0]
+        else:
+          logger.error("WRONG IP Address Family ...")
+      except Exception as e:
+        logger.error("Failed getting IP address for hostname/ip_address :{},Family:{} \n- {}".format(
+                                                                    hostname_or_ip_address, ip_address_family, e))
+    else:
+      logger.error("Hostname or IP Address not specified!")
+    return ip_address

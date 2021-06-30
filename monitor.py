@@ -35,7 +35,7 @@ import os,sys
 import time
 import  zmq
 from multiprocessing import Process,Queue,Value, Lock, Manager
-from utils.utility import exception, exec_cmd, progress_bar
+from utils.utility import exception, exec_cmd, progress_bar, get_ip_address
 from datetime import datetime
 import json
 from logger import  MultiprocessingLogger
@@ -62,6 +62,7 @@ class Monitor:
         self.logger = kwargs["logger"]
         self.operation = kwargs["operation"]
         self.operation_start_time = kwargs["operation_start_time"]
+        self.ip_address_family = self.config["ip_address_family"]
 
         self.status_queue = Queue()
         self.status_lock  = Lock()
@@ -154,10 +155,12 @@ class Monitor:
             context = zmq.Context()
             for client in self.clients:
                 client.socket_index = context.socket(zmq.REQ)
-                self.logger.info("Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip, client.port_index))
-                client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
+                if self.ip_address_family.upper() == "IPV6":
+                    client.socket_index.setsockopt(zmq.IPV6, 1)
+                client.socket_index.connect("tcp://{}:{}".format(client.ip_address, client.port_index))
+                self.logger.info("Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip_address, client.port_index))
         except Exception as e:
-            self.logger.excep("ZMQ Connection error - {}".format(e))
+            self.logger.excep("ZMQ Connection error IndexDistributor - {}".format(e))
             return
 
         # Buffer to store prefix index and file count  {"prefix":<file count>}
@@ -195,7 +198,7 @@ class Monitor:
                             self.prefix_index_data[object_prefix_key] = manager.dict()
                             self.prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
 
-                    # self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip, client.port_index, data))
+                    # self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip_address, client.port_index, data))
                     if self.send_index_data(client, data):
                         #self.index_data_count.value += len(data.get("files", []))
                         previous_client_operation_status = 1
@@ -207,8 +210,8 @@ class Monitor:
                         previous_client_operation_status = 0
                         if client.socket_index.closed:
                             client.socket_index = context.socket(zmq.REQ)
-                            client.socket_index.connect("tcp://{}:{}".format(client.ip, client.port_index))
-                            self.logger.info("Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip))
+                            client.socket_index.connect("tcp://{}:{}".format(client.ip_address, client.port_index))
+                            self.logger.info("Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip_address))
                         if self.send_index_data(client, data):
                             #self.index_data_count.value += len(data.get("files", []))
                             previous_client_operation_status = 1
@@ -224,7 +227,7 @@ class Monitor:
                     if not self.send_index_data(client, data):
                         if not self.send_index_data(client, data):
                             self.logger.error("Unable to send indexing completion message to client-{}".format(client.id))
-                    self.logger.info("Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip, client.port_index, data))
+                    self.logger.info("Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip_address, client.port_index, data))
                 # Intimidated all the clients, exit the loop.
                 break
 
@@ -261,7 +264,6 @@ class Monitor:
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
 
 
-
     def send_index_data(self, client, data):
         """
         Send index data for a socket client. On failure, resend once.
@@ -283,7 +285,7 @@ class Monitor:
             self.logger.excep("Monitor-Index -{}".format(e))
             #print("EXCEPTION: Monitor-Index -{}".format(e))
             socket.close()
-            self.logger.info("Closed socket for Client-{}:{}".format(client.id,client.ip))
+            self.logger.info("Closed socket for Client-{}:{}".format(client.id,client.ip_address))
 
         # status = {"success": 1} or {"success": 0}  for failure, try second time
         if status.get("success", False) and status["success"] == 1:
@@ -302,10 +304,12 @@ class Monitor:
             context = zmq.Context()
             for client in self.clients:
                 client.socket_status = context.socket(zmq.PULL)
-                self.logger.info("Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip, client.port_status))
-                client.socket_status.connect("tcp://{}:{}".format(client.ip, client.port_status))
+                if self.ip_address_family.upper() == "IPV6":
+                    client.socket_status.setsockopt(zmq.IPV6, 1)
+                self.logger.info("Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip_address, client.port_status))
+                client.socket_status.connect("tcp://{}:{}".format(client.ip_address, client.port_status))
         except Exception as e:
-            self.logger.excep("ZMQ Connection ERROR - {}".format(e))
+            self.logger.excep("ZMQ Connection ERROR, StatusPoller - {}".format(e))
             return
 
         client_application_exit_count = 0

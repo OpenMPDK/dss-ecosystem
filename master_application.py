@@ -32,7 +32,7 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import os,sys
-from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, progress_bar
+from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, progress_bar, get_ip_address
 from utils.config import Config, commandLineArgumentParser, CommandLineArgument
 from utils.signal_handler import SignalHandler
 from logger import  MultiprocessingLogger
@@ -59,7 +59,7 @@ class Master(object):
 
     def __init__(self, operation, config):
         self.config = config
-        self.client_ip_list = config.get("tess_clients_ip",[])
+        self.client_ip_list = config.get("tess_clients_hosts_or_ip_addresses",[])
         self.workers_count = config["master"]["workers"]
         self.max_index_size = config["master"]["max_index_size"]
         self.workers = []
@@ -91,7 +91,7 @@ class Master(object):
         self.index_data_queue = Queue()  # Index data stored by workers
         self.index_data_lock = Lock()
         self.index_data_generation_complete = Value('i', 0)   ##TODO - Set value when all indexing is done.
-        self.indexing_started_flag = Value('b', False)
+        self.indexing_started_flag = Value('i', 0) # [0,1,2,-1] => ["READY", "STARTED", "COMPLETED", "FAILED"]
 
         # Operation LIST
         self.prefix = config.get("prefix", None)
@@ -117,6 +117,9 @@ class Master(object):
 
         # NFS shares
         self.nfs_shares = []
+        
+        # IP Address Family
+        self.ip_address_family =  config.get("ip_address_family", "IPV4")
 
         # Unit TestCase
         self.testcase_passed = Value('b', False)
@@ -301,6 +304,10 @@ class Master(object):
         # Fist Mount all NFS share locally
         self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), "root", "" , self.logger)
         self.nfs_cluster_obj.mount_all()
+        if self.nfs_cluster_obj.mounted == False:
+            self.logger.fatal("Mounting failed, EXIT indexing!")
+            self.indexing_started_flag.value = -1
+            return
 
         # Create first level task for each NFS share
         local_mounts = self.nfs_cluster_obj.get_mounts()
@@ -388,7 +395,7 @@ class Master(object):
 
 class Client(object):
 
-    def __init__(self, id, ip, operation, logger, config):
+    def __init__(self, id, host_or_ip_address, operation, logger, config):
         """
         Client object initiation
         :param id: A id for each ClientApplication
@@ -398,7 +405,8 @@ class Client(object):
         :param config: configuration.
         """
         self.id = id
-        self.ip = ip
+        self.host_or_ip_address = host_or_ip_address
+        self.ip_address = get_ip_address(logger, host_or_ip_address, config["ip_address_family"]) 
         self.operation=operation
         self.config = config
         # Logger
@@ -415,7 +423,7 @@ class Client(object):
                 self.password = config["client"]["password"]
         self.status = None
         self.ssh_client_handler = None
-        self.master_ip_address = config["master"]["ip_address"]
+        self.master_host_or_ip_address = config["master"]["host_or_ip_address"]
         self.dryrun = config.get("dryrun",False)
         self.destination_path = config.get("dest_path","") # Only to be used for GET operation
 
@@ -465,13 +473,13 @@ class Client(object):
         command = "python3 /usr/dss/nkv-datamover/client_application.py " + \
                                                                 " --client_id {} ".format(self.id) + \
                                                                 " --operation {} ".format(self.operation) + \
-                                                                " --ip_address {} ".format(self.ip) + \
+                                                                " --ip_address {} ".format(self.ip_address) + \
                                                                 " --port_index {} ".format(self.port_index) + \
                                                                 " --port_status {}  ".format(self.port_status)
 
         if self.operation.upper() == "GET" or self.operation.upper() == "TEST":
             command += " --dest_path {} ".format(self.destination_path)
-        if self.master_ip_address == self.ip:
+        if self.master_host_or_ip_address == self.host_or_ip_address:
             command += " --master_node "
         if self.config.get("config", False):
             command += " --config {} ".format(self.config["config"])
@@ -482,7 +490,7 @@ class Client(object):
 
         if self.env_gcc_required and self.env_gcc_source:
             command = "sh -c \" source {} && {} \"".format(self.env_gcc_source, command)
-        self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip, self.username , self.password, command)
+        self.ssh_client_handler, stdin,stdout,stderr = remoteExecution(self.ip_address, self.username , self.password, command)
         self.remote_stdin = stdin
         self.remote_stdout = stdout
         self.remote_stderr = stderr
@@ -565,10 +573,14 @@ def process_put_operation(master):
         # Check for completion of indexing, Shutdown workers
         indexing_done = True
 
-        if not master.indexing_started_flag.value:
+        if master.indexing_started_flag.value == 0:
             master.logger.info('Indexing on the shares not yet started')
             time.sleep(1)
             continue
+        if master.indexing_started_flag.value == -1:
+            master.logger.fatal("EXIT PUT operation!")
+            master.stop()
+            break
 
         if len(master.progress_of_indexing) and not workers_stopped:
             indexing_done = False
@@ -821,6 +833,7 @@ if __name__ == "__main__":
     master.start()
     master.logger.info("DataMover Config Options : {}".format(config))
     master.logger.info("Started DataMover with Logger in {} mode!".format(master.logging_level))
+    master.logger.info("IP Address Family - {}".format(master.ip_address_family))
 
     #signal_handler.registered_functions.append(master.nfs_cluster_obj.umount_all)
 

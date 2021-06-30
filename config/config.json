@@ -1,7 +1,7 @@
 {
- "tess_clients_ip":[ "202.0.0.135","202.0.0.136"],
+ "tess_clients_hosts_or_ip_addresses":[ "202.0.0.135","202.0.0.136"],
   "master": {
-    "ip_address": "202.0.0.135",
+    "host_or_ip_address": "202.0.0.135",
     "workers": 1,
     "max_index_size": 1000,
     "size": "1GB"
@@ -16,7 +16,8 @@
     "port_index": 6000,
     "port_status": 6001
   },
- "nfs_config":{
+  "ip_address_family" : "IPV6",
+  "nfs_config":{
                "202.0.0.103": ["/dir1","/dir2"]
               },
   "s3_storage": {
