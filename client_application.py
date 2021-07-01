@@ -278,12 +278,11 @@ class ClientApplication(object):
             self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
             return
         message_count = 0
+        objects_count = 0
         while True:
 
             # Check messaging flag  and break the  , generally multiprocessing Queue and value is thread/process safe.
-            stop_messaging = self.stop_messaging.value
-            # self.message_lock.release()
-            if stop_messaging == 0:
+            if self.stop_messaging.value == 0:
                 break
 
             try:
@@ -297,8 +296,10 @@ class ClientApplication(object):
                         self.index_data_receive_completed.value = 1
                         break
                     message_count +=1
-                    self.logger.debug("Received Indexed MSG, Operation:{} , Prefix:{}".format(self.operation, message["dir"]))
-                    is_index_data_added = False  #
+                    if self.debug:
+                        self.logger.debug("Received Indexed MSG, Operation:{} , Prefix:{}".format(self.operation, message["dir"]))
+
+                    is_index_data_added = False
 
                     if self.operation.upper() == "PUT" or self.operation.upper() == "TEST":
                         ## Message validation, NFS Mounting if not already mounted on client node
@@ -329,6 +330,8 @@ class ClientApplication(object):
                         socket.send_json({"success": 1})  # Send response back to MasterApp
                         is_index_data_added = True
 
+                    objects_count_under_prefix = len(message["files"])
+                    objects_count += objects_count_under_prefix
                     if is_index_data_added:
                         ## Create a Shared dictionary to check progress of PUT/DEL/GET operation
                         if message["dir"] in index_buffer:
@@ -338,7 +341,7 @@ class ClientApplication(object):
             except Exception as e:
                 self.logger.excep("Monitor-Index - {}".format(e))
 
-        self.logger.info("Total message received from master - {}".format(message_count))
+        self.logger.info("Total message received from master-{}, Objects Count: {}".format(message_count, objects_count))
         # Close socket connection and destroy context
         try:
             socket.close()
@@ -383,6 +386,10 @@ class ClientApplication(object):
             return
 
         local_index_buffer = {}  # Keeps all prefix which doesn't belong to global shared index_buffer
+        processed_objects_success_count = 0
+        processed_objects_failure_count = 0
+
+
 
         while True:
 
@@ -397,8 +404,10 @@ class ClientApplication(object):
                     status_message = self.operation_status_queue.get()  ## {"success": <>, "failure":<>}
                 # Send response after adding data to operation data_queue as success
                 if status_message:
-                    self.logger.info("PUSH - Sending message - {}".format(status_message))
+                    self.logger.debug("PUSH - Sending message - {}".format(status_message))
                     socket.send_json(status_message)
+                    processed_objects_success_count += status_message["success"]
+                    processed_objects_failure_count += status_message["failure"]
                     # Decrement index_buffer as those files have been processed.
                     if status_message["dir"] in index_buffer:
                         index_buffer[status_message["dir"]] -= (status_message["success"] + status_message["failure"])
@@ -431,6 +440,10 @@ class ClientApplication(object):
                 self.logger.info("All operation status sent to Master. Closing Monitor-StatusHandler !")
                 self.operation_status_send_completed.value = 1
                 break
+        # Processing status
+        self.logger.info("Total operation success count = {}".format(processed_objects_success_count))
+        self.logger.info("Total operation failure count = {}".format(processed_objects_failure_count))
+
         # Close socket and destroy context.
         try:
             # Send end message to PULL socket at master

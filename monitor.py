@@ -166,6 +166,8 @@ class Monitor:
         # Buffer to store prefix index and file count  {"prefix":<file count>}
         first_index_distribution  = 0
         index_distribution_start_time = datetime.now()
+        message_count = 0
+        object_count = 0
 
         while True:
 
@@ -188,11 +190,12 @@ class Monitor:
                         data = self.index_data_queue.get()
                 # Send data to ClientApplication running on a  Client-Physical Node
                 if data:
+                    object_count_under_prefix = len(data["files"])
                     # Buffer prefix_index_data for persistent storage only to be used during PUT
                     if self.operation.upper() == "PUT":
                         object_prefix_key = data["dir"][1:] + "/"
                         if object_prefix_key in self.prefix_index_data:
-                            self.prefix_index_data[object_prefix_key]["files"] += len(data["files"])
+                            self.prefix_index_data[object_prefix_key]["files"] += object_count_under_prefix
                             self.prefix_index_data[object_prefix_key]["size"]  += data["size"]
                         else:
                             self.prefix_index_data[object_prefix_key] = manager.dict()
@@ -200,7 +203,6 @@ class Monitor:
 
                     # self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip_address, client.port_index, data))
                     if self.send_index_data(client, data):
-                        #self.index_data_count.value += len(data.get("files", []))
                         previous_client_operation_status = 1
                         # Just for OPERATION stats collection
                         if first_index_distribution == 0:
@@ -213,13 +215,18 @@ class Monitor:
                             client.socket_index.connect("tcp://{}:{}".format(client.ip_address, client.port_index))
                             self.logger.info("Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip_address))
                         if self.send_index_data(client, data):
-                            #self.index_data_count.value += len(data.get("files", []))
                             previous_client_operation_status = 1
+
+                    # Debug message , for success
+                    if previous_client_operation_status == 1:
+                        message_count += 1
+                        object_count += object_count_under_prefix
 
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
                 self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
+                self.logger.info("Total message distributed - {}, Object Count-{}".format(message_count, object_count))
 
                 # Inform all the client applications running on different nodes
                 for client in self.clients:

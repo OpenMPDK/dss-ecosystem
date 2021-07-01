@@ -37,9 +37,10 @@ from utils.utility import  exception
 from multiprocessing import Process, Queue, Value, Lock
 
 """
-#TODO
-- Use Logger as base class to start logging
-- Allow application to start and stop as logger.start(), logger.stop()
+Logging Level:
+INFO: Verbose mode
+DEBUG: Should include DEBUG message
+ALERT: Shows minimum required messages
 """
 
 LOGGING_LEVEL = [
@@ -89,7 +90,7 @@ class MultiprocessingLogger:
         """
         logging_level = 0
         if level in LOGGING_LEVEL:
-            logging_level = LOGGING_LEVEL.index(level, 0, 4)
+            logging_level = LOGGING_LEVEL.index(level, 0, 5)
 
         return logging_level
 
@@ -196,28 +197,32 @@ class MultiprocessingLogger:
 
     @exception
     def warn(self, message):
-        msg = (2, message)
-        self.logger_lock.acquire()
-        self.queue.put(msg)
-        self.logger_lock.release()
+        if self.logging_level <= 2:
+          msg = (2, message)
+          self.logger_lock.acquire()
+          self.queue.put(msg)
+          self.logger_lock.release()
 
     @exception
     def error(self, message):
-        msg = (3, message)
-        self.logger_lock.acquire()
-        self.queue.put(msg)
-        self.logger_lock.release()
+        if self.logging_level <= 3:
+          msg = (3, message)
+          self.logger_lock.acquire()
+          self.queue.put(msg)
+          self.logger_lock.release()
 
     @exception
     def excep(self, message):
-        msg = (4, message)
-        self.logger_lock.acquire()
-        self.queue.put(msg)
-        self.logger_lock.release()
+        if self.logging_level <= 4:
+          msg = (4, message)
+          self.logger_lock.acquire()
+          self.queue.put(msg)
+          self.logger_lock.release()
 
     @exception
     def fatal(self, message):
-        msg = (5, message)
-        self.logger_lock.acquire()
-        self.queue.put(msg)
-        self.logger_lock.release()
+        if self.logging_level <= 5:
+          msg = (5, message)
+          self.logger_lock.acquire()
+          self.queue.put(msg)
+          self.logger_lock.release()
