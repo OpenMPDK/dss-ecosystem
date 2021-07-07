@@ -299,10 +299,11 @@ def delete(s3_client,**kwargs):
     minio_bucket = s3config.get("bucket", "bucket")
 
     success = 0
-    removed_objects = []
     object_keys = params["data"]
+    prefix =  object_keys["dir"]
     if s3_client:
         for object_key in object_keys["files"]:
+            object_key = prefix + object_key
             #logger.debug("TASK: Going to removed object key {}".format(object_key))
             if params.get("dryrun", False):
                 # Dry run
@@ -311,17 +312,13 @@ def delete(s3_client,**kwargs):
                 # Actual operation
                 if s3_client.deleteObject(minio_bucket, object_key):
                     #logger.debug("TASK: Removed object key {}".format(object_key))
-                    removed_objects.append(object_key)
                     success += 1
     else:
         logger.error("Unable to connect to Minio for upload with {}".format(minio_config))
 
-    #logger.debug("DELETED object keys-{}".format(removed_objects ))
     # Update following section for upload status.
-    status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
-    #logger.debug("Task DELETE Status - {} , STATUS Q SIZE:{}".format(status_message, status_queue.qsize()))
+    status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": prefix}
     status_queue.put(status_message)
-
 
 @exception
 def data_integrity(s3_client,**kwargs):

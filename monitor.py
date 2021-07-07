@@ -505,6 +505,7 @@ class Monitor:
           fh = open(listing_file, "w")
           if not fh:
             self.logger.error("Failed to open file \"{}\" to dump listing object keys".format(listing_file))
+            return   
           self.logger.debug("ObjectKeys aggregation started!")
           while True:
             if self.listing_status and self.listing_status.value == 2 and self.listing_objectkey_queue.empty():
