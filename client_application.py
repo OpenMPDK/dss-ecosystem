@@ -472,11 +472,12 @@ class ClientApplication(object):
                 return True
 
             ret, console = self.nfs_cluster.mount(nfs_cluster_ip, nfs_share)
-
-            if ret == 0 or ret is None:
+            if ret == 0:
                 self.nfs_share_list.put({"nfs_cluster_ip": nfs_cluster_ip, "nfs_share": nfs_share})
                 return True
             else:
+                if ret is None:
+                  return True
                 self.logger.error(
                     "{}: NFS Mounting failed for {}:{}\n  {}".format(__file__, nfs_cluster_ip, path, console))
 
