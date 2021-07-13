@@ -6,6 +6,12 @@
     		"endpoints": [
         		{ "ipv4": "localhost6", "port": 9001 }
         	]
+        },
+        {
+			"id": 1,
+    		"endpoints": [
+        		{ "ipv4": "localhost6", "port": 9002 }
+        	]
         }
 	]
 }

@@ -87,6 +87,7 @@ public:
 
 	Result HeadBucket(const Aws::String& bn);
 	Result CreateBucket(const Aws::String& bn);
+	Result DeleteBucket(const Aws::String& bn);
 
 	Result ListObjects(const Aws::String& bn, Objects *objs);
 
@@ -186,6 +187,19 @@ private:
 };
 
 class ClusterMap {
+private:
+	enum class Status : int {
+		EMPTY,
+		ALL_GOOD,
+		PARTIAL	
+	};
+	enum class State : int {
+		TEST,
+		CREATE,
+		RETEST,
+		EXIT
+	};
+
 public:
 	ClusterMap(Client *c, DSSInit& i) :
 		m_client(c), m_init(i) {}
@@ -210,6 +224,9 @@ public:
 	const char* GetClusterConfFromLocal() { return m_init.GetConfPath(); }
 	int AcquireClusterConf();
 	int VerifyClusterConf();
+	Status DetectClusterBuckets(bool);
+	Result TryLockClusters();
+	Result UnlockClusters();
 
 	const std::vector<Cluster*>& GetClusters() { return m_clusters; }
 

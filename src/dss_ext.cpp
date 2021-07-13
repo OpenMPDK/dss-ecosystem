@@ -136,6 +136,7 @@ PYBIND11_MODULE(dss, m) {
     static py::exception<GenericError> GenericExc(m, "GenericError");
     static py::exception<FileIOError> FileIOExc(m, "FileIOError");
     static py::exception<NoIterator> LastIterExc(m, "NoIterator");
+    static py::exception<NewClientError> NewClientExc(m, "NewClientError");
 
     py::register_exception_translator([](std::exception_ptr p) {
         try {
@@ -152,6 +153,8 @@ PYBIND11_MODULE(dss, m) {
             FileIOExc(e.what());
         } catch (const NoIterator &e) {
             LastIterExc(e.what());
+        } catch (const NewClientError &e) {
+            NewClientExc(e.what());
         }
     });
 
