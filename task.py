@@ -462,10 +462,10 @@ def indexing(**kwargs):
 
     progress_of_indexing = kwargs["progress_of_indexing"]
     # progress_of_indexing_lock = kwargs["progress_of_indexing_lock"]
-    if dir not in progress_of_indexing:
-        logger.warn('Directory {} not present in index'.format(dir))
-    elif progress_of_indexing[dir] != 'Pending':
-        logger.warn('Directory {} is not in pending state - {}'.format(dir, progress_of_indexing[dir]))
+    #if dir not in progress_of_indexing:
+    #    logger.warn('Directory {} not present in index'.format(dir))
+    #elif progress_of_indexing[dir] != 'Pending':
+    #    logger.warn('Directory {} is not in pending state - {}'.format(dir, progress_of_indexing[dir]))
 
     progress_of_indexing[dir] = 'Progress'
     if indexing_started_flag.value == 0:

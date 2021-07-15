@@ -574,7 +574,6 @@ def process_put_operation(master):
         indexing_done = True
 
         if master.indexing_started_flag.value == 0:
-            master.logger.info('Indexing on the shares not yet started')
             time.sleep(1)
             continue
         if master.indexing_started_flag.value == -1:
@@ -590,6 +589,7 @@ def process_put_operation(master):
             # Shut down Monitor-Index at Master
             index_generation_time = (datetime.now() - master.operation_start_time).seconds                       
             master.logger.info('Index generation completed, Time: {} sec'.format(index_generation_time))
+            master.logger.info("Indexed Object-Keys Count: {}".format(master.index_data_count.value))
             master.index_data_lock.acquire()
             master.index_data_generation_complete.value = 1
             master.index_data_lock.release()

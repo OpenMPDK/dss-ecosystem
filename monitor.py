@@ -226,7 +226,7 @@ class Monitor:
                 self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
-                self.logger.info("Total message distributed - {}, Object Count-{}".format(message_count, object_count))
+                self.logger.info("Total distributed messages- {}, distributed Objects Count-{}".format(message_count, object_count))
 
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
@@ -274,6 +274,7 @@ class Monitor:
     def send_index_data(self, client, data):
         """
         Send index data for a socket client. On failure, resend once.
+        The error code is returned by the client and captured here in the log.
         :param socket: client socket
         :param data: index data
         :return: success/failure 1/0
@@ -283,20 +284,26 @@ class Monitor:
         try:
             socket.send_json(data) # Send index data
             # Wait (3sec) for ClientApplication's response on operation. Otherwise re-send index data.
-            received_response = socket.poll(timeout=1500)  # Wait 3 secs
-            if received_response:
+            index = 0
+            while index < 3 :
+              received_response = socket.poll(timeout=1000)  # Wait 3 secs
+              if received_response:
                 status = socket.recv_json()
-            else:
-                self.logger.warn("Monitor-Index -- RSP not received from ClientApp - {}".format(status))
+                break
+              index +=1
+              #else:
+              #  self.logger.warn("Monitor-Index -- RSP not received from ClientApp-{}".format(client.id))
         except Exception as e:
             self.logger.excep("Monitor-Index -{}".format(e))
-            #print("EXCEPTION: Monitor-Index -{}".format(e))
             socket.close()
             self.logger.info("Closed socket for Client-{}:{}".format(client.id,client.ip_address))
 
         # status = {"success": 1} or {"success": 0}  for failure, try second time
-        if status.get("success", False) and status["success"] == 1:
+        if status.get("success", False):
+          if status["success"] == 1:
             return 1
+          elif status["success"] == 0:
+            self.logger.error("ERROR:{}".format(status["ERROR"]))
 
         return 0
 
@@ -463,10 +470,10 @@ class Monitor:
         self.logger.info("***** Operation Statistics *****")
         if operation_success_count and self.index_data_count.value:
             success_percentage = (operation_success_count / self.index_data_count.value) * 100
-            self.logger.info("Total Operation: {},  Operation Success:{} - {:.2f}%".format(self.index_data_count.value, operation_success_count, success_percentage))
+            self.logger.info("Total {} Operation: {},  Operation Success:{} - {:.2f}%".format(self.operation, self.index_data_count.value, operation_success_count, success_percentage))
         if operation_failure_count and self.index_data_count.value:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
-            self.logger.info("Total Operation:{}, Operation Failure:{} - {:.2f}%".format(self.index_data_count.value, operation_failure_count,failure_percentage))
+            self.logger.info("Total {} Operation:{}, Operation Failure:{} - {:.2f}%".format(self.operation, self.index_data_count.value, operation_failure_count,failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
 
         bandwidth = 0

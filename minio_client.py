@@ -44,8 +44,11 @@ class MinioClient:
     self.logger = logger
 
   def get_client(self,url,access_key, secret_key):
-    #print("Minio Server: http://{}, Access Key:{} , Secret Key:{}".format(url, access_key, secret_key))
-    mc = Minio(url,access_key, secret_key, secure=False)
+    mc = None
+    try:
+      mc = Minio(url,access_key, secret_key, secure=False)
+    except Exception as e:
+      self.logger.excep("Minio Client - {}".format(e))
     return mc
 
   def make_bucket(self, bucket=None):
