@@ -104,6 +104,8 @@ class Master(object):
 
         # Status Progress
         self.index_data_count = Value('i', 0)  # File Index count shared between worker process.
+        self.index_msg_count = Value('i', 0)  # How many messages have been produced by the producers.
+        self.received_index_msg_count = Value('i', 0)  # How many messages have been consumed by the consumers.
         self.operation_start_time = None
         self.operation_end_time = None
 
@@ -193,6 +195,7 @@ class Master(object):
                        progress_of_indexing= self.progress_of_indexing,
                        progress_of_indexing_lock=self.progress_of_indexing_lock,
                        index_data_count=self.index_data_count,
+                       index_msg_count=self.index_msg_count,
                        listing_progress=self.listing_progress,
                        listing_progress_lock=self.listing_progress_lock,
                        s3_config=self.s3_config,
@@ -256,6 +259,8 @@ class Master(object):
                                index_data_lock=self.index_data_lock,
                                index_data_generation_complete=self.index_data_generation_complete,
                                index_data_count=self.index_data_count,
+                               index_msg_count=self.received_index_msg_count,
+                               received_index_msg_count=self.received_index_msg_count,
                                logger=self.logger,
                                operation=self.operation,
                                operation_start_time=self.operation_start_time,
@@ -572,7 +577,7 @@ def process_put_operation(master):
     while True:
         # Check for completion of indexing, Shutdown workers
         indexing_done = True
-
+        #progress_bar("Object Count: {} ,Producer Msg Count: {}, Consumer Msg Count: {},  MSG-Queue Size - {}".format(master.index_data_count.value, master.index_msg_count.value, master.received_index_msg_count.value, master.index_data_queue.qsize()) )
         if master.indexing_started_flag.value == 0:
             time.sleep(1)
             continue
@@ -590,6 +595,7 @@ def process_put_operation(master):
             index_generation_time = (datetime.now() - master.operation_start_time).seconds                       
             master.logger.info('Index generation completed, Time: {} sec'.format(index_generation_time))
             master.logger.info("Indexed Object-Keys Count: {}".format(master.index_data_count.value))
+            master.logger.info("Indexed Msg Count: {}".format(master.index_msg_count.value))
             master.index_data_lock.acquire()
             master.index_data_generation_complete.value = 1
             master.index_data_lock.release()

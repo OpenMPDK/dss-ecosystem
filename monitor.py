@@ -59,6 +59,8 @@ class Monitor:
         self.index_data_lock = kwargs["index_data_lock"]
         self.index_data_generation_complete = kwargs["index_data_generation_complete"]
         self.index_data_count = kwargs["index_data_count"]
+        self.index_msg_count = kwargs["index_msg_count"]
+        self.received_index_msg_count = kwargs["received_index_msg_count"]
         self.logger = kwargs["logger"]
         self.operation = kwargs["operation"]
         self.operation_start_time = kwargs["operation_start_time"]
@@ -220,9 +222,12 @@ class Monitor:
                     # Debug message , for success
                     if previous_client_operation_status == 1:
                         message_count += 1
+                        with self.received_index_msg_count.get_lock():
+                          self.received_index_msg_count.value +=1
+
                         object_count += object_count_under_prefix
 
-            if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty():
+            if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty() and (self.index_msg_count.value == self.received_index_msg_count.value) :
                 self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
@@ -291,8 +296,6 @@ class Monitor:
                 status = socket.recv_json()
                 break
               index +=1
-              #else:
-              #  self.logger.warn("Monitor-Index -- RSP not received from ClientApp-{}".format(client.id))
         except Exception as e:
             self.logger.excep("Monitor-Index -{}".format(e))
             socket.close()

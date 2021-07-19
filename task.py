@@ -38,6 +38,7 @@ from minio_client import MinioClient
 from s3_client import S3
 import json
 from datetime import datetime
+import time
 
 task_id = Value('i', 1)
 
@@ -430,6 +431,7 @@ class Task:
                  progress_of_indexing=queue["progress_of_indexing"],
                  progress_of_indexing_lock=queue["progress_of_indexing_lock"],
                  index_data_count=queue["index_data_count"],
+                 index_msg_count=queue["index_msg_count"],
                  max_index_size=self.params.get("max_index_size", 10),
                  indexing_started_flag=queue['indexing_started_flag']
                  )
@@ -459,6 +461,7 @@ def indexing(**kwargs):
     max_index_size = kwargs["max_index_size"]
     indexing_started_flag = kwargs["indexing_started_flag"]
     index_data_count = kwargs["index_data_count"]
+    index_msg_count = kwargs["index_msg_count"]
 
     progress_of_indexing = kwargs["progress_of_indexing"]
     # progress_of_indexing_lock = kwargs["progress_of_indexing_lock"]
@@ -478,7 +481,16 @@ def indexing(**kwargs):
             msg = {"dir": result["dir"], "files": result["files"], "size": result["size"],
                    "nfs_cluster": nfs_cluster,
                    "nfs_share": nfs_share}
-            index_data_queue.put(msg)
+            try:
+              #while index_data_queue.qsize() > 50000:
+              #  print("Index-Queue-Size:{}".format(index_data_queue.qsize()))
+              #  time.sleep(0.1)
+              index_data_queue.put(msg)
+              with index_msg_count.get_lock():
+                index_msg_count.value +=1
+
+            except Exception as e:
+              logger.excep("Not able to enqueue index-msg : {}".format(e))
             with index_data_count.get_lock():
                 index_data_count.value += len(result["files"])
             logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(

@@ -56,6 +56,7 @@ class Worker(object):
         self.lock = Lock()
         self.process = None
         self.index_data_count = kwargs.get("index_data_count", 0)
+        self.index_msg_count = kwargs.get("index_msg_count", 0)
 
         # Keep track of progress of indexing : Used by Master Application only.
         self.progress_of_indexing = kwargs.get("progress_of_indexing", {})
@@ -174,6 +175,7 @@ class Worker(object):
                                progress_of_indexing=self.progress_of_indexing,
                                progress_of_indexing_lock=self.progress_of_indexing_lock,
                                index_data_count=self.index_data_count,
+                               index_msg_count=self.index_msg_count,
                                listing_progress=self.listing_progress,
                                listing_progress_lock=self.listing_progress_lock,
                                s3_client=s3_client,
