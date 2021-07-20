@@ -227,7 +227,7 @@ class Monitor:
 
                         object_count += object_count_under_prefix
 
-            if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty() and (self.index_msg_count.value == self.received_index_msg_count.value) :
+            if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty() and (self.index_msg_count.value == message_count) :
                 self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))

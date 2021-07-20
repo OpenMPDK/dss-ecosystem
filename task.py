@@ -133,6 +133,7 @@ def list(s3_client, **kwargs):
     task_queue = kwargs["task_queue"]  # Contains task Object
     index_data_queue = kwargs["index_data_queue"] # Contains index_data
     index_data_count = kwargs["index_data_count"]
+    index_msg_count = kwargs["index_msg_count"]
     listing_progress = kwargs["listing_progress"] # The shared memory is used to hold progress status.
     listing_progress_lock = kwargs["listing_progress_lock"]
     listing_status = kwargs["listing_status"]
@@ -170,6 +171,8 @@ def list(s3_client, **kwargs):
                       listing_objectkey_queue.put(result)
                     else:
                       index_data_queue.put(index_data_message)
+                      with index_msg_count.get_lock():
+                          index_msg_count.value += 1
                 else:
                     listing_progress_lock.acquire()
                     listing_progress[result["prefix"]] = 1
@@ -402,6 +405,7 @@ class Task:
                         task_queue=queue["task_queue"],
                         index_data_queue=queue["index_data_queue"] ,
                         index_data_count=queue["index_data_count"],
+                        index_msg_count=queue["index_msg_count"],
                         logger=self.logger,
                         listing_progress=queue["listing_progress"],
                         listing_progress_lock=queue["listing_progress_lock"],
@@ -482,12 +486,12 @@ def indexing(**kwargs):
                    "nfs_cluster": nfs_cluster,
                    "nfs_share": nfs_share}
             try:
-              #while index_data_queue.qsize() > 50000:
-              #  print("Index-Queue-Size:{}".format(index_data_queue.qsize()))
-              #  time.sleep(0.1)
+              # Don't let index_data_queue grow more than 50K
+              while index_data_queue.qsize() > 50000:
+                  time.sleep(0.1)
               index_data_queue.put(msg)
               with index_msg_count.get_lock():
-                index_msg_count.value +=1
+                  index_msg_count.value +=1
 
             except Exception as e:
               logger.excep("Not able to enqueue index-msg : {}".format(e))

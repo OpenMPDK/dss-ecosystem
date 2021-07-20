@@ -259,7 +259,7 @@ class Master(object):
                                index_data_lock=self.index_data_lock,
                                index_data_generation_complete=self.index_data_generation_complete,
                                index_data_count=self.index_data_count,
-                               index_msg_count=self.received_index_msg_count,
+                               index_msg_count=self.index_msg_count,
                                received_index_msg_count=self.received_index_msg_count,
                                logger=self.logger,
                                operation=self.operation,
