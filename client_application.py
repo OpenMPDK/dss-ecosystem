@@ -97,9 +97,12 @@ class ClientApplication(object):
         self.logger = None
 
         # AWS log
-        self.aws_log_debug_val = config.get('awslib_log_debug', 0)
+        if 'aws' in config:
+            self.aws_log_debug_val = config['aws'].get('awslib_log_debug', 0)
+        else:
+            self.aws_log_debug_val = 0
 
-        # Message handling
+            # Message handling
         self.ip_address = self.config["ip_address"]
         self.port_index = config["port_index"]
         self.port_status = config["port_status"]
