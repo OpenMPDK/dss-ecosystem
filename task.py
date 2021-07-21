@@ -271,7 +271,8 @@ def get(s3_client,**kwargs):
                 if dryrun:  # Dry run
                     success += 1
                 else: # Actual operation
-                    dest_file_path = dest_path + "/" + object_key
+                    dest_file_path = dest_dir + "/" + object_key
+                    object_key = object_keys["dir"] + object_key
                     # logger.debug("Obj_Key:{}, Dest_Path:{}".format(object_key,dest_file_path))
                     if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
                         if data_integrity:
