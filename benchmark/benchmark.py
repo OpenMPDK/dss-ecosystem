@@ -471,8 +471,13 @@ if __name__ == '__main__':
     else:
         max_worker_threads = args.thr_cnt
 
-    if data_dir != '/dev/null' and not os.path.exists(data_dir):
-        os.makedirs(data_dir)
+    if data_dir != '/dev/null':
+        l_dir = data_dir
+        split_val = args.key_prefix.rsplit('/', 1)
+        if len(split_val) > 1:
+            l_dir = os.path.join(l_dir, split_val[0])
+        if not os.path.exists(l_dir):
+            os.makedirs(l_dir)
 
     if args.op_type == 5 and data_dir == '/dev/null':
         print('Invalid usage. Need a valid directory for integrity check')
