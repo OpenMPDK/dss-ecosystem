@@ -251,6 +251,7 @@ class CommandLineArgument:
     def test(self,subparser):
         subparser.add_argument("--data_integrity", "-di", required=False, action='store_true',
                                help='Run DataMover data integrity test')
+        subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
         subparser.add_argument("--dest_path", "-dp", type=str, required=True, help='Specify destination file path')

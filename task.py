@@ -290,8 +290,10 @@ def get(s3_client,**kwargs):
         logger.error("Unable to connect to S3 ObjectStorage for download")
 
     # Update following section for upload status.
-    status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": object_keys["dir"]}
-    logger.debug("STATUS:{}".format(status_message))  ## Delete
+    prefix_dir = object_keys["dir"]
+    if data_integrity:
+        prefix_dir = "/" + prefix_dir[:-1]
+    status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": prefix_dir}
     status_queue.put(status_message)
 
 @exception
@@ -355,12 +357,9 @@ def data_integrity(s3_client,**kwargs):
     ## Download
     # - Fine tune the parameters for GET
     # Update data with object keys as expected by GET function
-    uploaded_data = {"dir" : data["dir"], "files":[]}
-    for file_name in data["files"]:
-        object_key = os.path.abspath(data["dir"] + "/" + file_name)
-        object_key = object_key[1:]
-        uploaded_data["files"].append(object_key)
-    params["data"] = uploaded_data
+    # Create prefix_dir from directory
+    data["dir"] = data["dir"][1:] + "/"
+    params["data"] = data
     logger.info("** DataIntegrity: Performing GET operation - Prefix-{} **".format(data["dir"]))
     get(s3_client, params=params,
                    status_queue=status_queue,
