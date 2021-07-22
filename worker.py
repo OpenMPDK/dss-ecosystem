@@ -93,7 +93,7 @@ class Worker(object):
                 os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
                 # To enable DSS CLIENT LOGS, uncomment the below 2 lines
                 if self.aws_log_debug_val:
-                    os.environ['DSS_AWS_LOG'] = self.aws_log_debug_val
+                    os.environ['DSS_AWS_LOG'] = str(self.aws_log_debug_val)
                     os.environ['DSS_AWS_LOG_FILENAME'] = 'aws_sdk_' + str(os.getpid()) + '_'
                 from dss_client import DssClientLib
                 self.logger.debug('PROCESS ENVIRONMENT DETAILS - {}, PID - {}'.format(os.environ, os.getpid()))
