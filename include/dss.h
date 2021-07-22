@@ -84,6 +84,14 @@ private:
 	std::string m_msg;
 };
 
+class NewClientError : std::exception {
+public:
+    NewClientError() : m_msg() {}
+    NewClientError(std::string msg) : m_msg(std::move(msg)) {}
+    const char* what() const noexcept { return m_msg.c_str(); }
+private:
+    std::string m_msg;
+};
 
 class GenericError : std::exception {
 public:
@@ -152,6 +160,8 @@ public:
 
     Result GetClusterConfig();
 	int InitClusterMap();
+	Result TryLockClusters();
+	Result UnlockClusters();
 	static std::unique_ptr<Client> CreateClient(const std::string& url,
 												const std::string& user,
 												const std::string& pwd,
@@ -185,6 +195,8 @@ private:
     Endpoint* m_discover_ep;
     ClusterMap* m_cluster_map;
 
+	// Bucket names can consist only of lowercase letters, numbers, dots (.), and hyphens
+	static constexpr char* LOCK_BUCKET = (char *)"dss-lock";
     static constexpr char* DISCOVER_BUCKET = (char *)"dss";
     static constexpr char* DISCOVER_CONFIG_KEY = (char *)"conf.json";
 };

@@ -105,6 +105,20 @@ Endpoint::CreateBucket(const Aws::String& bn)
 }
 
 Result
+Endpoint::DeleteBucket(const Aws::String& bn)
+{
+	Aws::S3::Model::DeleteBucketRequest request;
+    request.SetBucket(bn);
+
+    auto out = m_ses.DeleteBucket(request);
+
+	if (out.IsSuccess())
+		return Result(true);
+	else
+		return Result(false, out.GetError());
+}
+
+Result
 Endpoint::GetObject(const Aws::String& bn, Request* req)
 {
     Aws::S3::Model::GetObjectRequest ep_req;
@@ -344,6 +358,16 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os)
     return Result(true);
 }
 
+Result
+ClusterMap::TryLockClusters() {
+	return m_client->TryLockClusters();
+}
+
+Result
+ClusterMap::UnlockClusters() {
+	return m_client->UnlockClusters();
+}
+
 int
 ClusterMap::AcquireClusterConf()
 {
@@ -394,46 +418,101 @@ ClusterMap::AcquireClusterConf()
 	return 0;
 }
 
-int
-ClusterMap::VerifyClusterConf()
+ClusterMap::Status
+ClusterMap::DetectClusterBuckets(bool print)
 {
+	const size_t err_len = 256;
+	char err_buf[err_len];
 	std::vector<bool> empty;
 	empty.resize(m_clusters.size());
 
-	{
-		std::lock_guard<std::mutex> lock(m_init.mutex());
-		for (auto c : m_clusters) {
-			Result r = c->HeadBucket();
-        	if (!r.IsSuccess())
-				empty[c->GetID()] = true;
-		}
-
-		if (!std::equal(empty.begin() + 1, empty.end(), empty.begin())) {
-			uint32_t i = 0;
-			for (auto it : empty) {
-				pr_err("cluster %u : %s\n", i++, (unsigned)it ? "present" : "missing");
-			}
-
-			pr_err("DSS buckets are missing\n");
-			return -1;
-		}
-
-		if (empty[0]) {
-			for (auto c : m_clusters) {
-				Result r = c->CreateBucket();
-				if (!r.IsSuccess()) {
-					pr_err("Failded to create bucket on cluster %u (err=%u)\n",
-							c->GetID(), (unsigned)r.GetErrorType());
-					return -1;
-				}
-			}
-		}
-
+	std::lock_guard<std::mutex> lock(m_init.mutex());
+	for (auto c : m_clusters) {
+		Result r = c->HeadBucket();
+       	if (!r.IsSuccess())
+			empty[c->GetID()] = true;
 	}
 
-	//TODO: Wait minio to propagate buckets to other endpoints 
-	// ask Som
-	usleep(5 * (1ULL << 20));
+	if (!std::equal(empty.begin() + 1, empty.end(), empty.begin())) {
+		uint32_t i = 0;
+		std::string err_str;
+	
+		for (auto it : empty) {
+			if (print) {
+				snprintf(err_buf, err_len, "cluster %u : %s\n",
+						 i++, (unsigned)it ? "missing" : "present");
+				err_str.append(err_buf);
+			}
+		}
+
+		if (print)
+			throw NewClientError(err_str);
+
+		return ClusterMap::Status::PARTIAL;
+	}
+
+	if (empty[0])
+		return ClusterMap::Status::EMPTY;
+	else
+		return ClusterMap::Status::ALL_GOOD;
+}
+
+int
+ClusterMap::VerifyClusterConf()
+{
+	const size_t err_len = 256;
+	char err_buf[err_len];
+	Status s = Status::EMPTY;
+	State st = State::TEST;
+
+	while (1) {
+		switch (st) {
+		case State::TEST:
+			s = DetectClusterBuckets(false);
+			if (s == Status::ALL_GOOD)
+				st = State::EXIT;
+			else if (s == Status::PARTIAL)
+				st = State::RETEST;
+			else
+				st = State::CREATE;
+			break;
+		case State::CREATE:
+			if (!TryLockClusters().IsSuccess()) {
+				pr_err("Lock failed\n");
+				break;
+			} 
+
+			for (auto c : m_clusters) {
+				Result r = c->CreateBucket();
+				if (r.IsSuccess())
+					continue;
+
+               	snprintf(err_buf, err_len, "Failed to create bucket on cluster %u (msg=%s)\n",
+						 c->GetID(), r.GetErrorMsg().c_str());
+				
+				UnlockClusters();
+				throw NewClientError(err_buf);
+				st = State::EXIT;
+				return -1;
+			}
+
+			st = State::RETEST;
+			UnlockClusters();
+			break;
+		case State::RETEST:
+			//TODO: Wait minio to propagate buckets to other endpoints 
+			// ask Som
+			usleep(5 * (1ULL << 20));
+			s = DetectClusterBuckets(true);
+			st = State::EXIT;
+			break;
+		case State::EXIT:
+			if (s == Status::ALL_GOOD)
+				return 0;
+			else 
+				return -1;
+		}
+	}
 
 	return 0;
 }
@@ -538,6 +617,18 @@ Result
 Client::GetClusterConfig()
 {
 	return m_discover_ep->GetObject(DISCOVER_BUCKET, DISCOVER_CONFIG_KEY);
+}
+
+Result
+Client::TryLockClusters()
+{
+	return m_discover_ep->CreateBucket(LOCK_BUCKET);
+}
+
+Result
+Client::UnlockClusters()
+{
+	return m_discover_ep->DeleteBucket(LOCK_BUCKET);
 }
 
 Config
