@@ -98,7 +98,7 @@ class ClientApplication(object):
 
         # AWS log
         if 'aws' in config:
-            self.aws_log_debug_val = config['aws'].get('awslib_log_debug', 0)
+            self.aws_log_debug_val = int(config['aws'].get('awslib_log_debug', 0))
         else:
             self.aws_log_debug_val = 0
 
