@@ -144,7 +144,7 @@ class Master(object):
         """
         Start the master application with the following stuff
         - Start logger
-        - Launch workers
+        - Launch workers - Proceed only when at least one worker is up.
         - Spawn clients
         - Start Monitor
         - Start Messaging ( File indexing message channel, progress status )
@@ -152,7 +152,11 @@ class Master(object):
         """
         self.start_logging()
         self.logger.info("Performing {} operation".format(self.operation))
-        self.start_workers()
+        if not self.start_workers():
+            self.stop_logging()
+            self.logger.info("Exit DataMover!")
+            sys.exit()
+
         self.operation_start_time = datetime.now()
         if not self.operation.upper() == "LIST":
             self.spawn_clients()
@@ -207,6 +211,15 @@ class Master(object):
             w.start()
             self.workers.append(w)
             index +=1
+        # Check atleast one worker is RUNNING
+        workers_started = False
+        for w in self.workers:
+          if w.status.value == 1:
+             workers_started = True
+             break
+        if not workers_started:
+          self.logger.fatal("Workers were not started exit application!")
+        return workers_started
 
     def stop_workers(self, id=None):
         """

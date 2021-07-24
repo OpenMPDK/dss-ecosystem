@@ -42,11 +42,14 @@ class MinioClient:
     self.minio_url = url
     self.client = self.get_client(url,access_key, secret_key)
     self.logger = logger
+    self.status = False
 
   def get_client(self,url,access_key, secret_key):
     mc = None
     try:
       mc = Minio(url,access_key, secret_key, secure=False)
+      if mc:
+          self.status = True
     except Exception as e:
       self.logger.excep("Minio Client - {}".format(e))
     return mc

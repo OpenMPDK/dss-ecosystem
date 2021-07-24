@@ -42,6 +42,7 @@ class DssClientLib:
     def __init__(self, s3_endpoint, access_key, secret_key, logger=None):
         self.s3_endpoint = "http://" + s3_endpoint
         self.logger = logger
+        self.status = False
         self.dss_client = self.create_client(self.s3_endpoint, access_key, secret_key)
 
     def create_client(self, endpoint, access_key, secret_key):
@@ -57,12 +58,15 @@ class DssClientLib:
             dss_client =  dss.createClient(endpoint, access_key,secret_key)
             if not dss_client:
                 self.logger.error("Failed to create s3 client from - {}".format(endpoint))
+            else:
+                self.status = True
+        except dss.BucketAlreadyOwnedByYou as e: # Do nothing
+            self.logger.info("Bucket already created! ..")
+            self.status = True
         except dss.DiscoverError as e:
             self.logger.excep("DiscoverError -  {}".format(e))
         except dss.NetworkError as e:
-            #print("EXCEPTION: NetworkError - {}".format(e))
             self.logger.excep("NetworkError - {} , {}".format(endpoint, e))
-
         return dss_client
 
     def putObject(self, bucket=None,file=""):

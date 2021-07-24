@@ -49,10 +49,11 @@ class Worker(object):
         self.logger = kwargs.get("logger", None)  # A multiprocessing logger queue
         self.operation_status_queue = kwargs.get("status_queue", None)  # Used by only client Application
 
+        self.s3_client = None
         self.s3_config = kwargs.get("s3_config", None)
         self.aws_log_debug_val = kwargs.get("aws_log_debug_val", None)
 
-        self.status = Value('i', 1)
+        self.status = Value('i', 0)  # [0,1] => ["IDLE","RUNNING"]
         self.lock = Lock()
         self.process = None
         self.index_data_count = kwargs.get("index_data_count", 0)
@@ -74,7 +75,7 @@ class Worker(object):
         self.stop()
         # time.sleep(1)
 
-    def get_s3_client(self):
+    def create_s3_client(self):
         """
         Create actual s3_client based on s3 credential
         :return: s3_client connection.
@@ -83,12 +84,11 @@ class Worker(object):
         minio_url = minio_config["url"]
         minio_access_key = minio_config["access_key"]
         minio_secret_key = minio_config["secret_key"]
-        s3_client = None
 
         try:
             s3_client_lib_name = (self.s3_config["client_lib"]).lower()
             if s3_client_lib_name == "minio":
-                s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key, self.logger)
+                self.s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key, self.logger)
             elif s3_client_lib_name == "dss_client":
                 os.environ["AWS_EC2_METADATA_DISABLED"] = 'true'
                 # To enable DSS CLIENT LOGS, uncomment the below 2 lines
@@ -97,11 +97,11 @@ class Worker(object):
                     os.environ['DSS_AWS_LOG_FILENAME'] = 'aws_sdk_' + str(os.getpid()) + '_'
                 from dss_client import DssClientLib
                 self.logger.debug('PROCESS ENVIRONMENT DETAILS - {}, PID - {}'.format(os.environ, os.getpid()))
-                s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger)
+                self.s3_client = DssClientLib(minio_url, minio_access_key, minio_secret_key, self.logger)
             elif s3_client_lib_name == "boto3":
                 config = {"endpoint": "http://202.0.0.103:9000", "minio_access_key": "minio",
                           "minio_secret_key": "minio123"}
-                s3_client = S3(config)
+                self.s3_client = S3(config)
             else:
                 self.logger.error(
                     "S3 Client-{} doesn't exist! Supported S3 clients [\"minio\",\"dss_client\", \"boto3\"] ".format(
@@ -109,7 +109,11 @@ class Worker(object):
         except Exception as e:
             self.logger.excep("BAD s3_client {}".format(e))
 
-        return s3_client
+    def get_s3_client(self):
+        """
+        Return s3_client 
+        """
+        return self.s3_client
 
     def start(self):
         """
@@ -117,11 +121,20 @@ class Worker(object):
         :return: None
         """
         try:
-            self.process = Process(target=self.run)
+            self.create_s3_client()
+            if not self.s3_client.status:
+              self.status.value = 0
+              self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
+              return
+
+            self.process = Process(target=self.run, args=(self.s3_client, ))
             self.process.start()
         except Exception as e:
             self.logger.excep("{}".format(e))
+            return
 
+        while self.status.value == 0:
+          time.sleep(0.1)
         self.logger.info("Worker-{} started ... ".format(self.id))
 
     def stop(self):
@@ -133,7 +146,7 @@ class Worker(object):
             self.status.value = 0
 
         # Make sure process is stopped
-        if self.process.is_alive():
+        if self.process and self.process.is_alive():
             time.sleep(2)
             try:
                 self.process.terminate()
@@ -148,18 +161,12 @@ class Worker(object):
         """
         return self.status.value
 
-    def run(self):
+    def run(self, s3_client):
         """
         Run the actual process
         :return:
         """
-        s3_client = self.get_s3_client()
-
-        if not s3_client:
-            self.status.value = 0
-            self.logger.error("S3 Client is not initialized. Shutting down worker-{}".format(self.id))
-            return
-
+        self.status.value = 1
         while True:
             # Get the status of worker from a shared flag.
             if not self.status.value:
