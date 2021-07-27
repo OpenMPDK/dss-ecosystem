@@ -518,7 +518,7 @@ class Monitor:
             return   
           self.logger.debug("ObjectKeys aggregation started!")
           while True:
-            if self.listing_status and self.listing_status.value == 2 and self.listing_objectkey_queue.empty():
+            if self.listing_status and self.listing_status.value == 2 and self.listing_objectkey_queue.qsize() == 0:
               self.listing_aggregation_status.value = 1
               self.logger.debug("Object Keys aggregation is completed!")
               break

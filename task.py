@@ -154,18 +154,15 @@ def list(s3_client, **kwargs):
     s3config = params["s3config"]
     minio_bucket = s3config.get("bucket", "bucket")
     s3_client_library = s3config.get("client_lib","minio_client")
-    logger.debug("Performing LISTing with prefix - {}".format(prefix))
 
     if prefix in prefix_index_data:
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
         if object_keys_iterator:
+            object_keys_count = 0
             for result in list_object_keys(object_keys_iterator, max_index_size, s3_client_library):
                 if "object_keys" in result:
                     index_data_message ={"dir": prefix, "files": result["object_keys"]}
-                    object_keys_count = len(result["object_keys"])
-                    with index_data_count.get_lock():
-                        index_data_count.value += object_keys_count
-                    logger.debug("LIST: Prefix-\"{}\" ObjectKeys: {}".format(prefix, object_keys_count)) ## DELETE
+                    object_keys_count += len(result["object_keys"])
                     if listing_only.value:
                       result.update({"prefix" : prefix})
                       listing_objectkey_queue.put(result)
@@ -175,10 +172,14 @@ def list(s3_client, **kwargs):
                           index_msg_count.value += 1
                 else:
                     listing_progress_lock.acquire()
-                    listing_progress[result["prefix"]] = 1
+                    if result["prefix"] not in listing_progress:
+                        listing_progress[result["prefix"]] = 1
+                        task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
+                        task_queue.put(task)
                     listing_progress_lock.release()
-                    task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
-                    task_queue.put(task)
+            with index_data_count.get_lock():
+                index_data_count.value += object_keys_count
+            logger.debug("LIST: Prefix-\"{}\" ObjectKeys: {}".format(prefix, object_keys_count)) ## DELETE
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
     else:
@@ -190,10 +191,11 @@ def list(s3_client, **kwargs):
                 elif s3_client_library.lower() == "dss_client":
                     object_key_prefix =  obj_key
                 listing_progress_lock.acquire()
-                listing_progress[object_key_prefix] = 1
+                if object_key_prefix not in listing_progress:
+                    listing_progress[object_key_prefix] = 1
+                    task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
+                    task_queue.put(task)
                 listing_progress_lock.release()
-                task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
-                task_queue.put(task)
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
 
