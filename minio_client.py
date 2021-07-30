@@ -40,9 +40,9 @@ import json
 class MinioClient:
   def __init__(self, url, access_key="minio", secret_key="minio123", logger=None):
     self.minio_url = url
+    self.status = False
     self.client = self.get_client(url,access_key, secret_key)
     self.logger = logger
-    self.status = False
 
   def get_client(self,url,access_key, secret_key):
     mc = None

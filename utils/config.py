@@ -146,6 +146,8 @@ def ClientApplicationArgumentParser():
     parser.add_argument("--dest_path", "-dp", type=str, required=False, help='Specify Destination Directory for GET operation only')
     parser.add_argument("--debug", "-d", required=False, action='store_true',
                         help='Run DataMover in debug mode')
+    parser.add_argument("--skip_upload", "-su", required=False, action='store_true',
+                           help='Skip data upload operation for DataIntegrity')
 
 
     options = vars(parser.parse_args())
@@ -249,8 +251,10 @@ class CommandLineArgument:
                                help='Profiling of DEL operation (Not Implemented)')
 
     def test(self,subparser):
-        subparser.add_argument("--data_integrity", "-di", required=False, action='store_true',
+        subparser.add_argument("--data_integrity", "-di", required=True, action='store_true',
                                help='Run DataMover data integrity test')
+        subparser.add_argument("--skip_upload", "-su", required=False, action='store_true',
+                               help='Skip data upload operation')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')

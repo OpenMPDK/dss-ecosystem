@@ -188,7 +188,7 @@ class Monitor:
                 # Get data from shared index queue, if the previous client processed data successfully
                 if previous_client_operation_status:
                     data = {}
-                    if not self.index_data_queue.empty():
+                    if self.index_data_queue.qsize() > 0:
                         data = self.index_data_queue.get()
                 # Send data to ClientApplication running on a  Client-Physical Node
                 if data:
@@ -227,7 +227,7 @@ class Monitor:
 
                         object_count += object_count_under_prefix
 
-            if self.index_data_generation_complete.value == 1  and self.index_data_queue.empty() and (self.index_msg_count.value == message_count) :
+            if self.index_data_generation_complete.value == 1  and self.index_data_queue.qsize() == 0 and (self.index_msg_count.value == message_count) :
                 self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
@@ -407,10 +407,10 @@ class Monitor:
             # If status poller has stopped  and status_queue is empty
 
             # Forcefully stop the process
-            if self.stop_status_poller.value == 1 and self.status_queue.empty():
+            if self.stop_status_poller.value == 1 and self.status_queue.qsize() == 0:
                 break
 
-            if not self.status_queue.empty():
+            if self.status_queue.qsize() > 0:
                 status = self.status_queue.get()
                 operation_success_count += status.get("success", 0)
                 if status.get("failure", 0):
@@ -522,7 +522,7 @@ class Monitor:
               self.listing_aggregation_status.value = 1
               self.logger.debug("Object Keys aggregation is completed!")
               break
-            if not self.listing_objectkey_queue.empty():
+            if self.listing_objectkey_queue.qsize() > 0:
               object_keys_data = self.listing_objectkey_queue.get()
               prefix = object_keys_data["prefix"]
               object_keys = object_keys_data["object_keys"]

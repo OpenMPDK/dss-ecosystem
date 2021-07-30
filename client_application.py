@@ -117,7 +117,7 @@ class ClientApplication(object):
     def __del__(self):
         # TODO Stop all running process for abrupt shutdown
         # Make sure all NFS shares are unounted and removed
-        while not self.nfs_share_list.empty():
+        while self.nfs_share_list.qsize() > 0:
             nfs_share = self.nfs_share_list.get()
             self.logger.info(
                 "Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
@@ -157,7 +157,7 @@ class ClientApplication(object):
         print("Make sure all workers has stopped the move to stopping logger")
 
         ## TODO - Update self.nfs_cluster.local_mounts instead and call umount_all
-        while not self.nfs_share_list.empty():
+        while self.nfs_share_list.qsize() > 0:
             nfs_share = self.nfs_share_list.get()
             self.logger.info(
                 "Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))
@@ -180,6 +180,7 @@ class ClientApplication(object):
                        index_data_queue=self.operation_data_queue,
                        logger=self.logger,
                        s3_config=self.s3_config,
+                       skip_upload=self.config.get("skip_upload", False),
                        aws_log_debug_val=self.aws_log_debug_val)
             # self.logger.write("DEBUG: Starting worker-{}\n".format(index))
             w.start()
@@ -403,7 +404,7 @@ class ClientApplication(object):
 
             status_message = {}
             try:
-                if not self.operation_status_queue.empty():
+                if self.operation_status_queue.qsize() > 0:
                     status_message = self.operation_status_queue.get()  ## {"success": <>, "failure":<>}
                 # Send response after adding data to operation data_queue as success
                 if status_message:
@@ -520,7 +521,7 @@ if __name__ == "__main__":
     while True:
         if ca.index_data_receive_completed.value and ca.operation_status_send_completed.value:
             # Un-mount local NFS shares
-            while not ca.nfs_share_list.empty():
+            while ca.nfs_share_list.qsize() > 0:
                 nfs_share = ca.nfs_share_list.get()
                 ca.logger.debug(
                     "Un-mounting nfs-share {}:{}".format(nfs_share["nfs_cluster_ip"], nfs_share["nfs_share"]))

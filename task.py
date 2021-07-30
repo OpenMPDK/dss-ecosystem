@@ -68,7 +68,6 @@ def put(s3_client, **kwargs):
 
     # Data Integrity
     data_integrity = kwargs.get("data_integrity", False)
-    file_hash_map = kwargs.get("file_hash_map", {})
     dryrun = params.get("dryrun", False)
 
     success = 0
@@ -87,11 +86,6 @@ def put(s3_client, **kwargs):
                         success +=1
                     else:
                         if s3_client.putObject(minio_bucket, file):
-                            if data_integrity:
-                                file_content_hash_key = get_hash_key(type="file",
-                                                                     data=file,
-                                                                     logger=logger)
-                                file_hash_map[file_name] = file_content_hash_key
                             success +=1
                         else:
                             failure_files_size += os.path.getsize(file)
@@ -105,9 +99,7 @@ def put(s3_client, **kwargs):
     else:
         logger.error("Unable to connect to S3 Storage for upload")
 
-    if data_integrity:
-        logger.debug("HashMap-(FileName->HashKey): {}".format(file_hash_map))
-    else:
+    if not data_integrity:
         # Update following section for upload status.
         status_message = {"success": success, "failure": (len(index_data["files"]) - success) ,
                           "dir": index_data["dir"] ,
@@ -128,6 +120,7 @@ def list(s3_client, **kwargs):
     :param listing_progress_lock:
     :return:
     """
+    worker_id = kwargs["worker_id"]
     params = kwargs["params"]
     logger = kwargs["logger"]
     task_queue = kwargs["task_queue"]  # Contains task Object
@@ -139,6 +132,7 @@ def list(s3_client, **kwargs):
     listing_status = kwargs["listing_status"]
     listing_only = kwargs["listing_only"]
     listing_objectkey_queue = kwargs["listing_objectkey_queue"]
+    
 
     max_index_size = params["max_index_size"]
 
@@ -176,10 +170,12 @@ def list(s3_client, **kwargs):
                         listing_progress[result["prefix"]] = 1
                         task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
                         task_queue.put(task)
+                    else:
+                        logger.error("Worker:{}, Prefix:{}".format(worker_id, result["prefix"]))
                     listing_progress_lock.release()
             with index_data_count.get_lock():
                 index_data_count.value += object_keys_count
-            logger.debug("LIST: Prefix-\"{}\" ObjectKeys: {}".format(prefix, object_keys_count)) ## DELETE
+            logger.debug("Worker Id:{}, LIST: Prefix-\"{}\" ObjectKeys: {}".format(worker_id, prefix, object_keys_count)) ## DELETE
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
     else:
@@ -195,6 +191,8 @@ def list(s3_client, **kwargs):
                     listing_progress[object_key_prefix] = 1
                     task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                     task_queue.put(task)
+                else:
+                    logger.error("****WorkerId: {}, Prefix:{}, ".format(worker_id, result["prefix"]))
                 listing_progress_lock.release()
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
@@ -342,6 +340,7 @@ def data_integrity(s3_client,**kwargs):
     :return:
     """
     logger = kwargs["logger"]
+    skip_upload = kwargs["skip_upload"]
     # Upload first
     data_integrity = True
     file_hash_map = {}
@@ -350,12 +349,22 @@ def data_integrity(s3_client,**kwargs):
     user_id = params["user_id"]
     status_queue = kwargs["status_queue"]
     logger.info("Checking DataIntegrity for the prefix - {}".format(data["dir"]))
-    logger.info("** DataIntegrity: Performing PUT operation - Prefix-{} **".format(data["dir"]))
-    put(s3_client, params=params,
-                   status_queue=status_queue,
-                   data_integrity=data_integrity,
-                   file_hash_map=file_hash_map,
-                   logger=logger)
+    if not skip_upload:
+        logger.info("** DataIntegrity: Performing PUT operation - Prefix-{} **".format(data["dir"]))
+
+    try:
+      for file_name in data["files"]:
+        file = os.path.abspath(data["dir"] + "/" + file_name)
+        if os.path.exists(file):
+            file_content_hash_key = get_hash_key(type="file", data=file, logger=logger)
+            file_hash_map[file_name] = file_content_hash_key
+            if not skip_upload:
+                # Create datastructure reuired for upload
+                upload_data = {"dir": data["dir"], "files": [file_name]}
+                params["data"] = upload_data
+                put(s3_client, params=params, data_integrity=data_integrity, status_queue=status_queue, logger=logger)
+    except Exception as e:
+      logger.excep("DataIntegrity-PUT:{}".format(e))
     ## Download
     # - Fine tune the parameters for GET
     # Update data with object keys as expected by GET function
@@ -370,15 +379,20 @@ def data_integrity(s3_client,**kwargs):
                    logger=logger)
 
     # Remove the local files
-    download_path = params["dest_path"] + data["dir"]
-    logger.info("DataIntegrity: Removing all the files under the download path - {}".format(download_path))
-    if os.path.exists(download_path):
-      command = "rm -rf {}".format(download_path)
-      ret,console = exec_cmd(command, True, True, user_id)
-      if ret == 0:
-        logger.info("Removed all the downloaded files under prefix - {}".format(data["dir"]))
-      else:
-        logger.error("Failed to removed downloaded files for the prefix-{}".format(data["dir"]))
+    try:
+        download_path = os.path.abspath(params["dest_path"] + "/" + data["dir"])
+        logger.info("DataIntegrity: Removing files under the download path - {}".format(download_path))
+        for file_name in data["files"]:
+            downloaded_file_path = os.path.abspath(download_path + "/" + file_name)
+            if os.path.exists(downloaded_file_path):
+                command = "rm -rf {}".format(downloaded_file_path)
+                ret,console = exec_cmd(command, True, True, user_id)
+                if ret:
+                    logger.error("Failed to remove file -{}\n {}".format(downloaded_file_path,console))
+            else:
+                logger.error("File \"{}\" doesn't exist ".format(downloaded_file_path))
+    except Exception as e:
+        logger.excep("DataIntegrity-Remove {}".format(e))
 
 
 
@@ -404,6 +418,7 @@ class Task:
                        logger=self.logger)
       elif self.operation.lower() == "list":
         list(s3_client, params=self.params,
+                        worker_id=queue["worker_id"],
                         task_queue=queue["task_queue"],
                         index_data_queue=queue["index_data_queue"] ,
                         index_data_count=queue["index_data_count"],
@@ -426,6 +441,7 @@ class Task:
       elif self.operation.lower() == "test":
         data_integrity(s3_client, params=self.params,
                 status_queue=queue["status_queue"],
+                skip_upload=queue["skip_upload"],
                 logger=self.logger)
       elif self.operation.lower() == "indexing":
         indexing(data=self.params["data"],

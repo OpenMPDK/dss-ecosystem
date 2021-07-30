@@ -71,6 +71,9 @@ class Worker(object):
         self.listing_only = kwargs.get("listing_only", None)
         self.listing_objectkey_queue = kwargs.get("listing_objectkey_queue", None)
 
+        # Testing
+        self.skip_upload =  kwargs.get("skip_upload", False)
+
     def __del__(self):
         self.stop()
         # time.sleep(1)
@@ -175,7 +178,8 @@ class Worker(object):
             if self.task_queue and self.task_queue.qsize():
                 try:
                     task = self.task_queue.get()
-                    task.start(task_queue=self.task_queue,
+                    task.start(worker_id=self.id,
+                               task_queue=self.task_queue,
                                index_data_queue=self.index_data_queue,
                                status_queue=self.operation_status_queue,
                                logger=self.logger,
@@ -189,7 +193,8 @@ class Worker(object):
                                indexing_started_flag=self.indexing_started_flag,
                                listing_status=self.listing_status,
                                listing_only=self.listing_only,
-                               listing_objectkey_queue=self.listing_objectkey_queue
+                               listing_objectkey_queue=self.listing_objectkey_queue,
+                               skip_upload=self.skip_upload
                                )
                 except Exception as e:
                     self.logger.excep("WORKER-{}:{}".format(self.id, e))

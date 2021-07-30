@@ -119,7 +119,7 @@ class MultiprocessingLogger:
 
         while self.process.is_alive():
             time.sleep(1)
-            if self.queue.empty():
+            if self.queue.qsize() == 0:
                 try:
                     self.process.terminate()
                 except Exception as e:
@@ -159,7 +159,7 @@ class MultiprocessingLogger:
             while True:
                 fh = open(self.logfile, "a")
 
-                while not queue.empty():
+                while queue.qsize() > 0:
                     message = queue.get()
                     if type(message) == tuple:
                         (message_level,message_value) = message
@@ -170,7 +170,7 @@ class MultiprocessingLogger:
                 self.stop_lock.acquire()
                 stop = stop_logging.value
                 self.stop_lock.release()
-                if stop and queue.empty():
+                if stop and queue.qsize() == 0:
                     break
                 time.sleep(1)
                 fh.close()

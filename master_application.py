@@ -497,6 +497,8 @@ class Client(object):
 
         if self.operation.upper() == "GET" or self.operation.upper() == "TEST":
             command += " --dest_path {} ".format(self.destination_path)
+        if self.operation.upper() == "TEST" and self.config.get("skip_upload", False):
+            command += " --skip_upload "
         if self.master_host_or_ip_address == self.host_or_ip_address:
             command += " --master_node "
         if self.config.get("config", False):
