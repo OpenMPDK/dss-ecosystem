@@ -281,3 +281,21 @@ def get_ip_address(logger, hostname_or_ip_address=None, ip_address_family="IPV4"
     else:
       logger.error("Hostname or IP Address not specified!")
     return ip_address
+
+@exception
+def is_prefix_valid_for_nfs_share(logger, **kwargs):
+    """
+    Check if the prefix exist for a nfs share?
+    :param logger:
+    :param nfs_share: nfs_share 
+    :param prefix: A s3 prefix starts not with "/" and ends with "/".
+    """
+    nfs_share = kwargs["share"]
+    prefix = kwargs["prefix"]
+    ip_address = kwargs["ip_address"]
+    nfs_mount_prefix = ip_address + nfs_share
+
+    if prefix.startswith(nfs_mount_prefix) or nfs_mount_prefix.startswith(prefix):
+        return True
+    logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete 
+    return False

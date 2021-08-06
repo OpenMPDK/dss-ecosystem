@@ -399,7 +399,8 @@ def data_integrity(s3_client,**kwargs):
 class Task:
   def __init__(self,**kwargs):
     self.id = task_id.value
-    task_id.value +=1
+    with task_id.get_lock():
+        task_id.value +=1
     self.operation = kwargs["operation"]
     kwargs.pop("operation")
     self.params = kwargs

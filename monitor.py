@@ -297,7 +297,7 @@ class Monitor:
                 break
               index +=1
         except Exception as e:
-            self.logger.excep("Monitor-Index -{}".format(e))
+            #self.logger.excep("Monitor-Index -{}".format(e))
             socket.close()
             self.logger.info("Closed socket for Client-{}:{}".format(client.id,client.ip_address))
 
@@ -461,6 +461,10 @@ class Monitor:
         original_file_size_in_byte = 0
         if self.prefix:
           for prefix, value in prefix_index_data.items():
+            if self.operation.upper() == "PUT":
+              fields = prefix.split("/")[1:]
+              prefix = "/".join(fields) 
+             
             if prefix.startswith(self.prefix):
               original_file_size_in_byte += value["size"]
         else:

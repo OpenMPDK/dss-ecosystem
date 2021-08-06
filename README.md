@@ -136,6 +136,14 @@ Supported operations are PUT/DEL/GET
   ```
   sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction'
   ``` 
+### Partial upload of data from a NFS share
+  The partial data can be uploaded to S3 with proper prefix. A valid prefix should have following signature.
+  A prefix should start with "NFS" servre "ip_addres" and end with a forward slash "/".
+  <nfs_server_ip>/<prefix>/
+  ```
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction 
+              --preifx <nfs_servre_ip>/<prefix path>/ '
+  ``` 
 #### Configuration: 
   Include IP address of the DSS targets from the DataMover configuration file.
   ```
@@ -174,14 +182,19 @@ Supported operations are PUT/DEL/GET
   ```
   The DataIntegrity test, first start indexing and start uploading data for each prefix through a worker from a client
   node. During that process, it keep track of file and corresponding md5sum hash in a buffer. Subsequently, a GET 
-  operation is initiated with same prefix which downloads files in the temporary destination path and compares md5sum 
+  operation is initiated with same prefix and object keys which downloads files in the temporary destination path and compares md5sum 
   with corresponding file key in buffer.
   
-  The unit test to be initiated with "--unit" switch along with "TEST" operation. ( #TODO)
+  A prefix based data_integrity test should be executed as below. One need to provide prefix from a object-key.
+  A prefix should start as <nfs_server_ip>/<prefix path>/.
   ```
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --unit --dest_path <destiniation path>'
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --prefix <prefix/>'
   ```
-  
+  Data-integrity can be performed on pre-existing S3 data uploaded through DataMover. If \"--skip_upload" switch is 
+  specified then , DM skip uploading files under the prefix.
+  ```
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --skip_upload'
+  ```
  # NFS Cluster Setup
  ## Server Setup:
  ```

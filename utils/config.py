@@ -255,6 +255,8 @@ class CommandLineArgument:
                                help='Run DataMover data integrity test')
         subparser.add_argument("--skip_upload", "-su", required=False, action='store_true',
                                help='Skip data upload operation')
+        subparser.add_argument("--prefix", "-p", type=str, required=False,
+                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')

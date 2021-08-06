@@ -33,6 +33,7 @@
 """
 import os,sys
 from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, progress_bar, get_ip_address
+from utils.utility import is_prefix_valid_for_nfs_share, validate_s3_prefix
 from utils.config import Config, commandLineArgumentParser, CommandLineArgument
 from utils.signal_handler import SignalHandler
 from logger import  MultiprocessingLogger
@@ -319,6 +320,12 @@ class Master(object):
         Indexing is required for PUT operation
         :return:
         """
+        # Validate S3 prefix
+        if self.prefix and not validate_s3_prefix(self.logger, self.prefix):
+            self.logger.fatal("Bad prefix specified, exit application.")
+            self.indexing_started_flag.value = -1
+            return
+
         # Fist Mount all NFS share locally
         self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), "root", "" , self.logger)
         self.nfs_cluster_obj.mount_all()
@@ -333,12 +340,19 @@ class Master(object):
             self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
             self.nfs_shares.extend(nfs_shares)
             for nfs_share in nfs_shares:
-                #print("DEBUG: Creating task for {}".format(nfs_share))
-                nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share)
+                if self.prefix:
+                    if is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address, prefix=self.prefix):
+                        nfs_share_mount = os.path.abspath("/" + self.prefix)
+                    else:
+                        continue
+                else:
+                    #print("DEBUG: Creating task for {}".format(nfs_share))
+                    nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share)
                 task = Task(operation="indexing",
                             data=nfs_share_mount,
                             nfs_cluster=ip_address,
                             nfs_share=nfs_share,
+                            prefix=self.prefix,
                             max_index_size=self.max_index_size)
                 self.task_queue.put(task)
 
