@@ -138,11 +138,11 @@ Supported operations are PUT/DEL/GET
   ``` 
 ### Partial upload of data from a NFS share
   The partial data can be uploaded to S3 with proper prefix. A valid prefix should have following signature.
-  A prefix should start with "NFS" servre "ip_addres" and end with a forward slash "/".
+  A prefix should start with "NFS" server "ip_address" and end with a forward slash "/".
   <nfs_server_ip>/<prefix>/
   ```
   sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction 
-              --preifx <nfs_servre_ip>/<prefix path>/ '
+              --prefix <nfs_server_ip>/<prefix path>/ '
   ``` 
 #### Configuration: 
   Include IP address of the DSS targets from the DataMover configuration file.
