@@ -35,6 +35,7 @@ class VAE(nn.Module):
         self.log_scale = nn.Parameter(torch.Tensor([0.0]))
 
 
+
     def encode(self, x):
 
         x_encoded = self.encoder(x)
@@ -52,31 +53,45 @@ class VAE(nn.Module):
         x_hat = self.decoder(z)
 
         return x_hat
-
+    
     def forward(self, x):
-        mu , log_var = self.encode(x)
-        z = self.reparameterize(mu, log_var)
-        return [self.decode(z), z, mu, log_var]
+        #mu , log_var = self.encode(x)
+        #z = self.reparameterize(mu, log_var)
+        #return [self.decoder(z), z, mu, log_var]
+        #print(torch.cuda.current_device())
 
+        #print("x shape fwd: ", x.shape)
+
+        x_encoded = self.encoder(x)
+        mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
+        std = torch.exp(log_var / 2)
+        q = T.distributions.Normal(mu, std)
+        z = q.rsample()
+        return [self.decoder(z), z, mu, log_var]
+    
     def kl_divergence(self, z, mu, std):
         
-        # --------------------------
-        # Monte carlo estimation for computing KL divergence
-        # --------------------------
         
+        # --------------------------
+        # Monte carlo KL divergence
+        # --------------------------
+        # 1. define the first two probabilities (in this case Normal for both)
+
         
-        # First we define the prior, p, and variational distribution, q     
         p = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(std))
         q = torch.distributions.Normal(mu, std)
 
-        # The we sample p(z) and q(z|x)
-        log_qz_given_x = q.log_prob(z)
+        # 2. get the probabilities from the equation
+        log_qzx = q.log_prob(z)
         log_pz = p.log_prob(z)
 
-        # kl divergence
-        kl = (log_qz_given_x - log_pz)
+
+        # kl
+        kl = (log_qzx - log_pz)
         kl = kl.sum(-1)
         
+        #kl = -0.5 * torch.sum(1 + torch.log(std) - torch.pow(mu, 2) - std, dim = 1)
+        #print("kl shape", kl.shape)
         return kl
     
     def gaussian_likelihood(self, x_hat, logscale, x):
@@ -84,29 +99,36 @@ class VAE(nn.Module):
         mean = x_hat
         dist = torch.distributions.Normal(mean, scale)
 
-        # measure prob. of seeing image under p(x|z)
-        log_px_given_z = dist.log_prob(x)
-
-        #Then, we sum over all the dimensions (color channels, x-axis, and y-axis)
-        return log_px_given_z.sum(dim=(1, 2, 3))
+        # measure prob of seeing image under p(x|z)
+        log_pxz = dist.log_prob(x)
+        return log_pxz.sum(dim=(1, 2, 3))
     
-    
+    """
     def loss_function(self, x):
-    
+        # reconstruction loss
+        print(torch.cuda.current_device())
+
+        print(torch.cuda.device_count())
+
         mu, log_var = self.encode(x)
+
         std = torch.exp(log_var / 2)
 
         z = self.reparameterize(mu, std)
 
         x_hat = self.decode(z)
 
-        #reconstruction loss
+        #print(z.size())
+
         recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
+        #recon_loss = - F.mse_loss(x_hat, x, reduction = 'sum') / x.shape[0]
+        #print("recon_loss shape", recon_loss)
+        #print("x_hat")
         
-        # kl divergence
+        # kl
         kl = self.kl_divergence(z, mu, std).mean()
 
-        # nelbo
+        # elbo
         nelbo = (kl - recon_loss)
         kl = kl.mean()
         recon_loss = recon_loss.mean()
@@ -115,6 +137,28 @@ class VAE(nn.Module):
         summaries = dict([('loss', nelbo), ('elbo', -nelbo), ('kl', kl.mean()), ('rec_loss', recon_loss.mean())])
 
         return nelbo, summaries
+    """
+        
+    
+    def loss_function(self, x_hat, x, mu, log_var):
+        print(torch.cuda.current_device())
+
+        std = torch.exp(log_var / 2)
+
+        recon_loss = - F.mse_loss(x_hat, x, reduction = 'sum') / x.shape[0]
+
+        kl = -0.5 * torch.sum(1 + torch.log(std) - torch.pow(mu, 2) - std, dim = 1)
+
+        # elbo
+        nelbo = (kl - recon_loss)
+        nelbo = nelbo.mean()
+        kl = kl.mean()
+        recon_loss = recon_loss.mean()
+
+        summaries = dict([('loss', nelbo), ('elbo', -nelbo), ('kl', kl.mean()), ('rec_loss', recon_loss.mean())])
+
+        return nelbo, summaries
+    
     
     def sample(self, num_samples):
         p = torch.distributions.Normal(torch.zeros([latent_dim]), torch.ones([latent_dim]))
