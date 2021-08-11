@@ -73,10 +73,10 @@ def put(s3_client, **kwargs):
     success = 0
     failure_files_size = 0
     if s3_client:
-        start_time = datetime.now()
+        # start_time = datetime.now()
         for file_name in index_data["files"]:
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
-            if os.path.exists(file):
+            if os.access(file, os.R_OK):
                 try:
                     if dryrun:
                         # Read file for the purpose of testing
@@ -93,9 +93,12 @@ def put(s3_client, **kwargs):
                     logger.excep("PUT - {}".format(e))
                     failure_files_size += os.path.getsize(file)
             else:
-                logger.error("Task-Upload: File-{} doesn't exist".format(file))
-        upload_time = (datetime.now() - start_time).seconds
-        logger.debug("Upload Time: {} sec".format(upload_time))
+                if not os.path.exists(file):
+                    logger.error("File-{} doesn't exist".format(file))
+                else:
+                    logger.error("Read access denied - {}".format(file))
+        # upload_time = (datetime.now() - start_time).seconds
+        # logger.debug("Upload Time: {} sec".format(upload_time))
     else:
         logger.error("Unable to connect to S3 Storage for upload")
 
@@ -355,14 +358,19 @@ def data_integrity(s3_client,**kwargs):
     try:
       for file_name in data["files"]:
         file = os.path.abspath(data["dir"] + "/" + file_name)
-        if os.path.exists(file):
+        if os.access(file, os.R_OK):
             file_content_hash_key = get_hash_key(type="file", data=file, logger=logger)
             file_hash_map[file_name] = file_content_hash_key
             if not skip_upload:
-                # Create datastructure reuired for upload
+                # Create data structure reuired for upload
                 upload_data = {"dir": data["dir"], "files": [file_name]}
                 params["data"] = upload_data
                 put(s3_client, params=params, data_integrity=data_integrity, status_queue=status_queue, logger=logger)
+        else:
+            if not os.path.exists(file):
+                logger.error("File-{} doesn't exist".format(file))
+            else:
+                logger.error("Read access denied - {}".format(file))
     except Exception as e:
       logger.excep("DataIntegrity-PUT:{}".format(e))
     ## Download
@@ -497,36 +505,39 @@ def indexing(**kwargs):
     if indexing_started_flag.value == 0:
         indexing_started_flag.value = 1
         logger.info('Indexing on the shares started')
-    for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger,
-                              max_index_size=max_index_size):
-        # If files a directory, then create a task
-        if "dir" in result and "files" in result:
-            msg = {"dir": result["dir"], "files": result["files"], "size": result["size"],
-                   "nfs_cluster": nfs_cluster,
-                   "nfs_share": nfs_share}
-            try:
-              # Don't let index_data_queue grow more than 50K
-              while index_data_queue.qsize() > 50000:
-                  time.sleep(0.1)
-              index_data_queue.put(msg)
-              with index_msg_count.get_lock():
-                  index_msg_count.value +=1
+    if os.access(dir, os.R_OK):
+        for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger,
+                                  max_index_size=max_index_size):
+            # If files a directory, then create a task
+            if "dir" in result and "files" in result:
+                msg = {"dir": result["dir"], "files": result["files"], "size": result["size"],
+                       "nfs_cluster": nfs_cluster,
+                       "nfs_share": nfs_share}
+                try:
+                  # Don't let index_data_queue grow more than 50K
+                  while index_data_queue.qsize() > 50000:
+                      time.sleep(0.1)
+                  index_data_queue.put(msg)
+                  with index_msg_count.get_lock():
+                      index_msg_count.value +=1
 
-            except Exception as e:
-              logger.excep("Not able to enqueue index-msg : {}".format(e))
-            with index_data_count.get_lock():
-                index_data_count.value += len(result["files"])
-            logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
-                result["dir"], len(result["files"]), index_data_queue.qsize()))
-        elif "dir" in result:
-            subdir = result['dir']
-            if subdir in progress_of_indexing and progress_of_indexing[subdir] in ['Pending', 'Progress']:
-                logger.warn('SKIPPING the dir {} already present'.format(subdir))
-                continue
-            progress_of_indexing[subdir] = 'Pending'
-            task = Task(operation="indexing", data=subdir, nfs_cluster=nfs_cluster, nfs_share=nfs_share,
-                        max_index_size=max_index_size)
-            task_queue.put(task)
+                except Exception as e:
+                  logger.excep("Not able to enqueue index-msg : {}".format(e))
+                with index_data_count.get_lock():
+                    index_data_count.value += len(result["files"])
+                logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
+                    result["dir"], len(result["files"]), index_data_queue.qsize()))
+            elif "dir" in result:
+                subdir = result['dir']
+                if subdir in progress_of_indexing and progress_of_indexing[subdir] in ['Pending', 'Progress']:
+                    logger.warn('SKIPPING the dir {} already present'.format(subdir))
+                    continue
+                progress_of_indexing[subdir] = 'Pending'
+                task = Task(operation="indexing", data=subdir, nfs_cluster=nfs_cluster, nfs_share=nfs_share,
+                            max_index_size=max_index_size)
+                task_queue.put(task)
+    else:
+        logger.error("Read permission denied - {}".format(dir))
 
     progress_of_indexing.pop(dir)
 
