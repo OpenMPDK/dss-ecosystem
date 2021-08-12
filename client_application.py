@@ -426,34 +426,6 @@ class ClientApplication(object):
 
                     processed_objects_success_count += status_message["success"]
                     processed_objects_failure_count += status_message["failure"]
-                    """
-                    # Decrement index_buffer as those files have been processed.
-                    if status_message["dir"] in index_buffer:
-                        index_buffer[status_message["dir"]] -= (status_message["success"] + status_message["failure"])
-                        if index_buffer[status_message["dir"]] == 0:
-                            del index_buffer[status_message["dir"]]
-                    else:
-                        # This may arise when received index data is sent for process, but have not ben updated yet to
-                        # global shared buffer "index_buffer"
-                        if status_message["dir"] in local_index_buffer:
-                            local_index_buffer[status_message["dir"]] += (
-                                    status_message["success"] + status_message["failure"])
-                        else:
-                            local_index_buffer[status_message["dir"]] = (
-                                    status_message["success"] + status_message["failure"])
-                    """
-
-                """
-                if self.index_data_receive_completed.value:
-                    for dir_prefix, processed_file_count in index_buffer.items():
-                        # Check in local buffer if that key exists
-                        if dir_prefix in local_index_buffer:
-                            processed_file_count -= local_index_buffer[dir_prefix]
-                            del local_index_buffer[dir_prefix]
-
-                        if processed_file_count == 0:
-                            del index_buffer[dir_prefix]
-                """
 
             except Exception as e:
                 self.logger.excep("MessageHandler-Status {}".format(e))
@@ -530,7 +502,7 @@ class ClientApplication(object):
         - Log that message to client-log and send a message to Master.
         :return:
         """
-        time.sleep(5)
+        time.sleep(30)
         is_workers_alive = False
         for worker in self.workers:
             if self.operation_status_send_completed.value > 0:
@@ -538,8 +510,10 @@ class ClientApplication(object):
                 return False
             # Check status of the worker.
             if worker.status.value and worker.is_hung(self.operation):
-                self.logger.warn("Worker-{} Shutting down!".format(worker.id))
-                worker.stop()
+                #self.logger.warn("Worker-{} Shutting down!".format(worker.id))
+                #worker.stop()
+                #worker.start()
+                pass
             if worker.status.value:
                 is_workers_alive = True
 

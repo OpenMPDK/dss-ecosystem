@@ -34,7 +34,7 @@
 """
 
 import os
-from multiprocessing import Process, Value, Lock
+from multiprocessing import Process, Value, Queue
 from minio_client import MinioClient
 from s3_client import S3
 from logger import MultiprocessingLogger
@@ -56,6 +56,7 @@ class Worker(object):
         self.operation_status_queue = kwargs.get("status_queue", None)  # Used by only client Application
         self.task_count = Value('i', 0)
         self.task_count_previous = 0
+        self.latest_task_processed = Queue() # A queue only store the message processed through Task.
 
         self.s3_client = None
         self.s3_config = kwargs.get("s3_config", None)
@@ -82,6 +83,7 @@ class Worker(object):
 
         # Testing
         self.skip_upload =  kwargs.get("skip_upload", False)
+
 
     def __del__(self):
         self.stop()
@@ -183,7 +185,18 @@ class Worker(object):
                     self.operation_progress_counter_previous_value == self.operation_progress_status_counter.value:
                     hung_state_index = self.operation_progress_counter_previous_value % len(WORKER_OPERATION_STATUS[operation])
                     hung_state_name = WORKER_OPERATION_STATUS[operation][hung_state_index]
-                    self.logger.error("Worker-{} Possibly worker is in Hung state - at {}".format(self.id, hung_state_name))
+                    #hunged_task = self.latest_task_processed.get()
+                    #self.logger.info("Task_id:{}".format(hunged_task.id))
+                    latest_message = self.latest_task_processed.get()
+                    file_index =  int(self.operation_progress_status_counter.value / len(WORKER_OPERATION_STATUS[operation]))
+                    # self.logger.info("Index-{}, Total File-{}, FileIndex-{}".format(self.operation_progress_status_counter.value, len(latest_message["files"]), file_index))
+                    self.logger.error("Worker-{} Possibly is in Hung state \"{}\", {}/{}".format(self.id,
+                                                                                    hung_state_name,
+                                                                                    latest_message["dir"],
+                                                                                    latest_message["files"][file_index]
+                                                                                    ))
+                    #self.task_queue.put(hunged_task) # Put the task again.
+
                     return True
                 else:
                     self.operation_progress_counter_previous_value = self.operation_progress_status_counter.value
@@ -210,6 +223,11 @@ class Worker(object):
             if self.task_queue and self.task_queue.qsize() > 0 :
                 try:
                     task = self.task_queue.get()
+                    if self.latest_task_processed.qsize() > 0:
+                        self.latest_task_processed.get() # Empty queue
+                    self.latest_task_processed.put(task.params["data"]) # Add latest message
+                    self.operation_progress_status_counter.value = 0 # Reset counter
+
                     with self.task_count.get_lock():
                         self.task_count.value +=1
                     task.start(worker_id=self.id,
