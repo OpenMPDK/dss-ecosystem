@@ -328,14 +328,9 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os)
 			//TODO: std::move()
             Aws::Vector<Aws::S3::Model::Object> objects =
                                             out.GetResult().GetContents();
-        	Aws::Vector<Aws::S3::Model::CommonPrefix> cps =
-        									out.GetResult().GetCommonPrefixes();
 
             for (auto o : objects)
                 os->GetPage().insert(o.GetKey().c_str());
-            for (auto cp : cps)
-            	os->GetPage().insert(cp.GetPrefix().c_str());
-
         } else {
 			return Result(false, out.GetError());
         }
