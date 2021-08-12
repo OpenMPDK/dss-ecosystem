@@ -71,6 +71,7 @@ class ClientApplication(object):
         self.index_data_receive_completed = Value('i', 0)
         self.index_data_receive_completed_lock = Lock()
         self.operation_status_send_completed = Value('i', 0)
+        self.message_count = Value('i', 0)
 
         # self.operation_status_send_completed_lock = Lock()
         # Task
@@ -81,6 +82,7 @@ class ClientApplication(object):
         # Workers
         self.workers = []
         self.workers_count = self.client_config.get("workers", 10)
+        self.workers_alive = False
 
         # User credentials
         self.user_id = self.client_config.get("user_id", "ansible")
@@ -140,7 +142,9 @@ class ClientApplication(object):
         self.start_logging()
         self.logger.info("Started Client Application for id:{} on node {}".format(self.id, self.host_name))
         self.nfs_cluster = NFSCluster({}, "root", self.password, self.logger)
-        self.start_workers()
+        if not self.start_workers():
+            self.stop_logging()
+            sys.exit("Workers were not started.")
         self.start_message()
 
     def stop(self):
@@ -172,7 +176,6 @@ class ClientApplication(object):
         :return:
         """
         index = 0
-        # self.logger.write("DEBUG: Starting workers for client-{}\n".format(self.id))
         while index < self.workers_count:
             w = Worker(id=index,
                        task_queue=self.task_queue,
@@ -182,11 +185,19 @@ class ClientApplication(object):
                        s3_config=self.s3_config,
                        skip_upload=self.config.get("skip_upload", False),
                        aws_log_debug_val=self.aws_log_debug_val)
-            # self.logger.write("DEBUG: Starting worker-{}\n".format(index))
             w.start()
             self.workers.append(w)
             index += 1
-        # self.logger.write("DEBUG: All workers started\n")
+
+        # Check atleast one worker is RUNNING
+        workers_started = False
+        for w in self.workers:
+            if w.status.value == 1:
+                workers_started = True
+                break
+        if not workers_started:
+            self.logger.fatal("Workers were not started exit ClientApplication-{}!".format(self.id))
+        return workers_started
 
     def stop_workers(self, id=None):
         """
@@ -222,11 +233,7 @@ class ClientApplication(object):
         :return:
         """
         # First stop the loop in the process.
-        # self.message_lock.acquire()
         self.stop_messaging.value = 0
-        # self.message_lock.release()
-
-        print("Waiting for message process to finish ....")
 
         ## recv function is a blocking call, hence terminate the process
         while self.process_index.is_alive():
@@ -241,13 +248,10 @@ class ClientApplication(object):
             time.sleep(1)
             try:
                 self.process_status.terminate()
-                #print("INFO: Terminated MessageHandler - Status ...")
                 self.logger.info("Terminated MessageHandler - Status ...")
             except Exception as e:
-                #print("EXCEPTION: Terminated MessageHandler - Status  - {} ".format(e))
                 self.logger.excep("Terminated MessageHandler - Status  - {} ".format(e))
 
-        #print("DEBUG: Stopped all MessageHandler ...")
         self.logger.info("Stopped all MessageHandlers ... ")
 
     def message_server_index(self):
@@ -281,7 +285,7 @@ class ClientApplication(object):
             self.logger.excep("ZMQ Binding error - {} ".format(e))
             self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
             return
-        message_count = 0
+        #message_count = 0
         objects_count = 0
         while True:
 
@@ -299,7 +303,9 @@ class ClientApplication(object):
                         socket.send_json({"success": 1})
                         self.index_data_receive_completed.value = 1
                         break
-                    message_count +=1
+
+                    with self.message_count.get_lock():
+                        self.message_count.value +=1
                     if self.debug:
                         self.logger.debug("Received Indexed MSG, Operation:{} , Prefix:{}".format(self.operation, message["dir"]))
 
@@ -345,7 +351,7 @@ class ClientApplication(object):
             except Exception as e:
                 self.logger.excep("Monitor-Index - {}".format(e))
 
-        self.logger.info("Total message received from master-{}, Objects Count: {}".format(message_count, objects_count))
+        self.logger.info("Total message received from master-{}, Objects Count: {}".format(self.message_count.value, objects_count))
         # Close socket connection and destroy context
         try:
             socket.close()
@@ -374,6 +380,13 @@ class ClientApplication(object):
     def message_server_status(self):
         """
         The Monitor StatusHandler receive all the status from workers and send back to master for aggregation.
+        Shut Down monitor:
+        - Shutdown gracefully:
+            - All the indexes are received by the IndexReceive monitor and that got terminated.
+            - All the status have been received and PUSHed to master application.
+            - Shutdown
+        - Forcefully:
+            - Set "stop_messaging" to exit loop and thus shutdown process.
         :return:
         """
         try:
@@ -392,8 +405,7 @@ class ClientApplication(object):
         local_index_buffer = {}  # Keeps all prefix which doesn't belong to global shared index_buffer
         processed_objects_success_count = 0
         processed_objects_failure_count = 0
-
-
+        received_status_message_count = 0  # Received from workers / status messages sent to master
 
         while True:
 
@@ -410,8 +422,11 @@ class ClientApplication(object):
                 if status_message:
                     self.logger.debug("PUSH - Sending message - {}".format(status_message))
                     socket.send_json(status_message)
+                    received_status_message_count +=1
+
                     processed_objects_success_count += status_message["success"]
                     processed_objects_failure_count += status_message["failure"]
+                    """
                     # Decrement index_buffer as those files have been processed.
                     if status_message["dir"] in index_buffer:
                         index_buffer[status_message["dir"]] -= (status_message["success"] + status_message["failure"])
@@ -426,7 +441,9 @@ class ClientApplication(object):
                         else:
                             local_index_buffer[status_message["dir"]] = (
                                     status_message["success"] + status_message["failure"])
+                    """
 
+                """
                 if self.index_data_receive_completed.value:
                     for dir_prefix, processed_file_count in index_buffer.items():
                         # Check in local buffer if that key exists
@@ -436,14 +453,17 @@ class ClientApplication(object):
 
                         if processed_file_count == 0:
                             del index_buffer[dir_prefix]
+                """
 
             except Exception as e:
                 self.logger.excep("MessageHandler-Status {}".format(e))
 
-            if self.index_data_receive_completed.value and not index_buffer:
+            if self.index_data_receive_completed.value and self.message_count.value == received_status_message_count:
                 self.logger.info("All operation status sent to Master. Closing Monitor-StatusHandler !")
                 self.operation_status_send_completed.value = 1
                 break
+        self.logger.info(
+            "Total status message sent to master : {}".format(received_status_message_count))
         # Processing status
         self.logger.info("Total operation success count = {}".format(processed_objects_success_count))
         self.logger.info("Total operation failure count = {}".format(processed_objects_failure_count))
@@ -503,6 +523,34 @@ class ClientApplication(object):
         """
         self.logger.stop()
 
+    def monitor_workers(self):
+        """
+        Monitors workers and take appropriate actions
+        - When a worker in hung condition, it stop that worker and re-start
+        - Log that message to client-log and send a message to Master.
+        :return:
+        """
+        time.sleep(5)
+        is_workers_alive = False
+        for worker in self.workers:
+            if self.operation_status_send_completed.value > 0:
+                # self.logger.info("All the status messages have been sent out already.")
+                return False
+            # Check status of the worker.
+            if worker.status.value and worker.is_hung(self.operation):
+                self.logger.warn("Worker-{} Shutting down!".format(worker.id))
+                worker.stop()
+            if worker.status.value:
+                is_workers_alive = True
+
+        # If no worker alive, shutdown client monitors.
+        if not is_workers_alive:
+            self.logger.error("Workers are not alive!. Going to shutdown ClientApplication-{}".format(self.id))
+            self.stop_message()
+            return False
+        return True
+
+
 
 if __name__ == "__main__":
     params = ClientApplicationArgumentParser()
@@ -519,6 +567,7 @@ if __name__ == "__main__":
     ca.logger.info("Starting client application ...")
 
     while True:
+
         if ca.index_data_receive_completed.value and ca.operation_status_send_completed.value:
             # Un-mount local NFS shares
             while ca.nfs_share_list.qsize() > 0:
@@ -537,6 +586,9 @@ if __name__ == "__main__":
             ca.stop_workers()
             ca.logger.info("All workers terminated !")
             break
+        else:
+            if not ca.monitor_workers():
+                break
 
         time.sleep(1)
 

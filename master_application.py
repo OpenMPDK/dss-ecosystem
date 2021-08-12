@@ -156,7 +156,7 @@ class Master(object):
         if not self.start_workers():
             self.stop_logging()
             self.logger.info("Exit DataMover!")
-            sys.exit()
+            sys.exit("Workers were not started. Shutting down DataMover application")
 
         self.operation_start_time = datetime.now()
         if not self.operation.upper() == "LIST":

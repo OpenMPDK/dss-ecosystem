@@ -106,16 +106,16 @@ class DssClientLib:
                 self.logger.error("Upload Failed for  key - {}".format(object_key))
                 ret = 1
         except dss.FileIOError as e:
-            self.logger.execp("putObject - key:{}, {}".format(object_key, e))
+            self.logger.execp("FileIOError - key:{}, {}".format(object_key, e))
             ret = 1
         except dss.NetworkError as e:
-            self.logger.execp("putObject - key:{}, {}".format(object_key, e))
+            self.logger.execp("NetworkError - key:{}, {}".format(object_key, e))
             ret = -1
         except dss.NoSuchResouceError as e:
-            self.logger.excep("putObject - key:{}, {}".format(object_key, e))
+            self.logger.excep("NoSuchResourceError - key:{}, {}".format(object_key, e))
             ret = -1
         except dss.GenericError as e:
-            self.logger.excep("putObject - key:{}, {}".format(object_key, e))
+            self.logger.excep("GenericError - key:{}, {}".format(object_key, e))
             ret = 1
 
         return ret

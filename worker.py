@@ -40,7 +40,13 @@ from s3_client import S3
 from logger import MultiprocessingLogger
 import time
 
-
+WORKER_OPERATION_STATUS = {
+    "PUT": ["NFS_READ", "S3_UPLOAD"],
+    "LIST": ["S3_LIST","STATUS_SEND"],
+    "GET": ["S3_READ", "STATUS_SEND"],
+    "DEL": ["S3_DELETE", "STATUS_SEND"],
+    "TEST": ["NFS_READ", "S3_UPLOAD", "S3_READ", "MD5SUM_COMPARE", "STATUS_SEND", "DELETE_TEMP_FILES"]
+}
 class Worker(object):
     def __init__(self, **kwargs):
         self.id = kwargs.get("id", None)
@@ -48,13 +54,16 @@ class Worker(object):
         self.index_data_queue = kwargs.get("index_data_queue", None)
         self.logger = kwargs.get("logger", None)  # A multiprocessing logger queue
         self.operation_status_queue = kwargs.get("status_queue", None)  # Used by only client Application
+        self.task_count = Value('i', 0)
+        self.task_count_previous = 0
 
         self.s3_client = None
         self.s3_config = kwargs.get("s3_config", None)
         self.aws_log_debug_val = kwargs.get("aws_log_debug_val", None)
 
-        self.status = Value('i', 0)  # [0,1] => ["IDLE","RUNNING"]
-        self.lock = Lock()
+        self.status = Value('i', 0)  # [0,1,2] => ["READY","RUNNING","HUNG"]
+        self.operation_progress_status_counter = Value('i', 0)  #
+        self.operation_progress_counter_previous_value = 0
         self.process = None
         self.index_data_count = kwargs.get("index_data_count", 0)
         self.index_msg_count = kwargs.get("index_msg_count", 0)
@@ -164,6 +173,29 @@ class Worker(object):
         """
         return self.status.value
 
+    def is_hung(self, operation):
+        try:
+            # self.logger.info("worker-{}=> {}:{}".format(self.id, self.operation_progress_counter_previous_value, self.operation_progress_status_counter.value))
+            # self.logger.info("worker-{}=> {}:{}".format(self.id, self.task_count_previous, self.task_count.value))
+            # Detect hung condition
+            if self.task_count.value > 0 and self.task_count.value == self.task_count_previous:
+                if ( self.operation_progress_status_counter.value > 0 )  and \
+                    self.operation_progress_counter_previous_value == self.operation_progress_status_counter.value:
+                    hung_state_index = self.operation_progress_counter_previous_value % len(WORKER_OPERATION_STATUS[operation])
+                    hung_state_name = WORKER_OPERATION_STATUS[operation][hung_state_index]
+                    self.logger.error("Worker-{} Possibly worker is in Hung state - at {}".format(self.id, hung_state_name))
+                    return True
+                else:
+                    self.operation_progress_counter_previous_value = self.operation_progress_status_counter.value
+            else:
+                self.task_count_previous = self.task_count.value
+                self.operation_progress_counter_previous_value = self.operation_progress_status_counter.value
+        except Exception as e:
+            self.logger.excep("Hung Detection - {}".format(e))
+        return False
+
+
+
     def run(self, s3_client):
         """
         Run the actual process
@@ -175,9 +207,11 @@ class Worker(object):
             if not self.status.value:
                 break
             # Get the task from shared task_queue, shared among the workers.
-            if self.task_queue and self.task_queue.qsize():
+            if self.task_queue and self.task_queue.qsize() > 0 :
                 try:
                     task = self.task_queue.get()
+                    with self.task_count.get_lock():
+                        self.task_count.value +=1
                     task.start(worker_id=self.id,
                                task_queue=self.task_queue,
                                index_data_queue=self.index_data_queue,
@@ -194,7 +228,8 @@ class Worker(object):
                                listing_status=self.listing_status,
                                listing_only=self.listing_only,
                                listing_objectkey_queue=self.listing_objectkey_queue,
-                               skip_upload=self.skip_upload
+                               skip_upload=self.skip_upload,
+                               operation_progress_status_counter=self.operation_progress_status_counter
                                )
                 except Exception as e:
                     self.logger.excep("WORKER-{}:{}".format(self.id, e))

@@ -61,7 +61,7 @@ def put(s3_client, **kwargs):
     params = kwargs["params"]
     status_queue = kwargs["status_queue"]
     logger = kwargs["logger"]
-
+    operation_progress_status_counter = kwargs["operation_progress_status_counter"]
     index_data = params.get("data",{})
     s3config   = params["s3config"]
     minio_bucket = s3config.get("bucket","bucket")
@@ -77,6 +77,7 @@ def put(s3_client, **kwargs):
         for file_name in index_data["files"]:
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
             if os.access(file, os.R_OK):
+                operation_progress_status_counter.value +=1
                 try:
                     if dryrun:
                         # Read file for the purpose of testing
@@ -89,6 +90,8 @@ def put(s3_client, **kwargs):
                             success +=1
                         else:
                             failure_files_size += os.path.getsize(file)
+                        
+                        operation_progress_status_counter.value += 1
                 except Exception as e:
                     logger.excep("PUT - {}".format(e))
                     failure_files_size += os.path.getsize(file)
@@ -195,7 +198,7 @@ def list(s3_client, **kwargs):
                     task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                     task_queue.put(task)
                 else:
-                    logger.error("****WorkerId: {}, Prefix:{}, ".format(worker_id, result["prefix"]))
+                    logger.error("****WorkerId: {}, Prefix:{}, ".format(worker_id, prefix))
                 listing_progress_lock.release()
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
@@ -409,7 +412,7 @@ class Task:
     self.id = task_id.value
     with task_id.get_lock():
         task_id.value +=1
-    self.operation = kwargs["operation"]
+    self.operation = (kwargs["operation"]).lower()
     kwargs.pop("operation")
     self.params = kwargs
 
@@ -421,11 +424,12 @@ class Task:
     s3_client = queue["s3_client"]
     # self.logger.debug("Task: Operation-{}, Data-{}".format(self.operation, self.params["data"]))
     try:
-      if self.operation.lower() == "put":
+      if self.operation == "put":
         put(s3_client, params=self.params,
                        status_queue=queue["status_queue"],
+                       operation_progress_status_counter=queue["operation_progress_status_counter"],
                        logger=self.logger)
-      elif self.operation.lower() == "list":
+      elif self.operation == "list":
         list(s3_client, params=self.params,
                         worker_id=queue["worker_id"],
                         task_queue=queue["task_queue"],
@@ -438,21 +442,21 @@ class Task:
                         listing_status=queue["listing_status"],
                         listing_only=queue["listing_only"],
                         listing_objectkey_queue=queue["listing_objectkey_queue"])
-      elif self.operation.lower() == "del":
+      elif self.operation == "del":
         delete(s3_client, params=self.params,
                           status_queue=queue["status_queue"],
                           logger=self.logger)
 
-      elif self.operation.lower() == "get":
+      elif self.operation == "get":
         get(s3_client, params=self.params,
                        status_queue=queue["status_queue"],
                        logger=self.logger)
-      elif self.operation.lower() == "test":
+      elif self.operation == "test":
         data_integrity(s3_client, params=self.params,
                 status_queue=queue["status_queue"],
                 skip_upload=queue["skip_upload"],
                 logger=self.logger)
-      elif self.operation.lower() == "indexing":
+      elif self.operation == "indexing":
         indexing(data=self.params["data"],
                  nfs_cluster=self.params["nfs_cluster"],
                  nfs_share=self.params["nfs_share"],
