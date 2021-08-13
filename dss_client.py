@@ -34,6 +34,7 @@
 import os,sys
 import dss
 from datetime import datetime
+from minio.error import BucketAlreadyOwnedByYou
 
 
 
@@ -60,8 +61,8 @@ class DssClientLib:
                 self.logger.error("Failed to create s3 client from - {}".format(endpoint))
             else:
                 self.status = True
-        except dss.BucketAlreadyOwnedByYou as e: # Do nothing
-            self.logger.info("Bucket already created! ..")
+        except BucketAlreadyOwnedByYou as e: # Do nothing
+            self.logger.info("Bucket already Owned by you! ..")
             self.status = True
         except dss.DiscoverError as e:
             self.logger.excep("DiscoverError -  {}".format(e))

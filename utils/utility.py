@@ -297,5 +297,5 @@ def is_prefix_valid_for_nfs_share(logger, **kwargs):
 
     if prefix.startswith(nfs_mount_prefix) or nfs_mount_prefix.startswith(prefix):
         return True
-    logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete 
+    # logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete 
     return False
