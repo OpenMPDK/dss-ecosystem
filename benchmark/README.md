@@ -6,7 +6,7 @@ The tool tests the performance of PUT/GET/DEL/LIST calls.
 ## Prerequisites
 * aws-sdk-cpp library - Can be downloaded from wget https://codeload.github.com/aws/aws-sdk-cpp/tar.gz/1.8.99
 and build with gcc 9.3
-* dss library - Samsung's proprietary library
+* dss library - Samsung's proprietary library for data distribution across single or multi cluster setup
 
 ## Usage
 The tool can be used to generate files with a set prefix.
@@ -20,7 +20,7 @@ The help usage for this tool is
 ```
 [ansible@msl-dpe-da1 benchmark]# python3 benchmark.py -h
 usage: benchmark.py [-h] -a ACCESS_KEY -s SECRET_KEY -u ENDPOINT_URL
-                    [-l TOTAL_LOOPS] -n NUM_IOS [-o {0,1,2,3,4,8,9}]
+                    [-l TOTAL_LOOPS] -n NUM_IOS [-o {0,1,2,3,4,5,8,9}]
                     [-t THR_CNT] [-z OBJECT_SIZE] [-p KEY_PREFIX]
                     [-x DATA_DIR]
 
@@ -36,8 +36,8 @@ optional arguments:
                         Number of loops to run (default: 1)
   -n NUM_IOS, --num_ios NUM_IOS
                         Number of IOs to do (default: 1)
-  -o {0,1,2,3,4,8,9}, --op_type {0,1,2,3,4,8,9}
-                        Type of IO (1 - PUT, 2 - GET, 3 - DEL, 4 - LIST, 8 -
+  -o {0,1,2,3,4,5,8,9}, --op_type {0,1,2,3,4,5,8,9}
+                        Type of IO (1 - PUT, 2 - GET, 3 - DEL, 4 - LIST, 5 - GET WITH INTEGRITY CHECK, 8 -
                         PREPARE DATA FOR PUT, 9 - CLEANUP, 0 - PUT/GET/DEL)
   -t THR_CNT, --num_threads THR_CNT
                         Number of threads to start (default: 1)
@@ -69,6 +69,13 @@ The above command prepares the files, perform PUT/GET/DEL on all the files and p
 -t 20 -z 1024 -p <myprefix> -x <mydir>
 ```
 ** Running performance test for  PUT requires the files to be present before. Use "-o 8" option to create files prior **
+
+* To run the performance test for only PUT calls in a particular custom directory of the destination folder for the above 
+configuration, run
+```
+[ansible@msl-dpe-da1 benchmark]# python3 benchmark.py -u http://202.0.0.1:9000 -a minio -s minio123 -n 1000 -o 1
+-t 20 -z 1024 -p <custom_dir>/<myprefix> -x <mydir>
+```
 
 * To run the performance test for only GET calls for the above configuration, run
 ```
