@@ -39,6 +39,7 @@ from multiprocessing import Process, Queue, Value, Lock, Manager
 from worker import Worker
 from task import Task
 from nfs_cluster import NFSCluster
+from datetime import datetime
 import time
 import zmq
 import socket
@@ -47,6 +48,8 @@ mgr = Manager()
 index_buffer = mgr.dict()
 
 BASE_DIR = os.path.dirname(__file__)
+MONITOR_INACTIVE_WAIT_TIME = 1200 # 20 Mins
+DEBUG_MESSAGE_INTERVAL = 300 # 5 Mins
 
 
 class ClientApplication(object):
@@ -264,13 +267,13 @@ class ClientApplication(object):
         operation.
 
         Termination of Process:
-        - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler. #TODO
+        - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
         - Gracefully: The client application stop the message handler with "stop_messaging" shared variable.
         - Forcefully, process gets terminated on receiving termination signal.
 
         ## TODO
         - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
-        - Forcefully, process gets terminated on receiving termination signal. Need to add signal handler.
+        - Forcefully: process gets terminated on receiving termination signal. Need to add signal handler.
         :return:
         """
         try:
@@ -287,12 +290,13 @@ class ClientApplication(object):
             return
         #message_count = 0
         objects_count = 0
+        start_time_no_response = 0 # Start time of no response from master
+        debug_message_timer =  datetime.now()
         while True:
 
             # Check messaging flag  and break the  , generally multiprocessing Queue and value is thread/process safe.
             if self.stop_messaging.value == 0:
                 break
-
             try:
                 received_response = socket.poll(timeout=1000)  # Wait 1 secs
                 if received_response:
@@ -348,10 +352,29 @@ class ClientApplication(object):
                             index_buffer[message["dir"]] += len(message["files"])
                         else:
                             index_buffer[message["dir"]] = len(message["files"])
+
+                    start_time_no_response = 0
+                else:
+                    if start_time_no_response == 0:
+                        start_time_no_response = datetime.now()
+                    else:
+                        # Check for 20 Min inactivity
+                        if (datetime.now() - start_time_no_response).seconds > MONITOR_INACTIVE_WAIT_TIME:
+                            self.logger.error("No message received from master in last 20 mins. Exit Monitor-Index-Receiver ")
+                            self.index_data_receive_completed.value = 1
+                            break
+
+                # Debug message
+                if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
+                    self.logger.info(
+                        "Messages received from master-{}, Objects Count: {}".format(self.message_count.value,
+                                                                                          objects_count))
+                    debug_message_timer = datetime.now()
+
             except Exception as e:
                 self.logger.excep("Monitor-Index - {}".format(e))
 
-        self.logger.info("Total message received from master-{}, Objects Count: {}".format(self.message_count.value, objects_count))
+        self.logger.info("Total messages received from master-{}, Objects Count: {}".format(self.message_count.value, objects_count))
         # Close socket connection and destroy context
         try:
             socket.close()
@@ -387,6 +410,7 @@ class ClientApplication(object):
             - Shutdown
         - Forcefully:
             - Set "stop_messaging" to exit loop and thus shutdown process.
+            - If things get HUNG, it wait for 20 mins and if doesn't receive any status message then exit.
         :return:
         """
         try:
@@ -402,11 +426,11 @@ class ClientApplication(object):
             self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
             return
 
-        local_index_buffer = {}  # Keeps all prefix which doesn't belong to global shared index_buffer
         processed_objects_success_count = 0
         processed_objects_failure_count = 0
         received_status_message_count = 0  # Received from workers / status messages sent to master
-
+        start_time_not_receiving_status_message = 0 # Time, monitor not receiving any status message from workers.
+        debug_message_timer = datetime.now()
         while True:
 
             # Check messaging flag  and break the loop
@@ -421,12 +445,29 @@ class ClientApplication(object):
                 # Send response after adding data to operation data_queue as success
                 if status_message:
                     self.logger.debug("PUSH - Sending message - {}".format(status_message))
-                    socket.send_json(status_message)
+                    socket.send_json(status_message, zmq.NOBLOCK)
                     received_status_message_count +=1
 
                     processed_objects_success_count += status_message["success"]
                     processed_objects_failure_count += status_message["failure"]
+                else:
+                    if start_time_not_receiving_status_message == 0:
+                        start_time_not_receiving_status_message = datetime.now()
+                    else:
+                        # Check for 20 Min inactivity, shutdown forcefully
+                        if (datetime.now() - start_time_not_receiving_status_message).seconds > MONITOR_INACTIVE_WAIT_TIME:
+                            self.logger.error("No message received from workers in last 20 mins. Exit Monitor-Status-Handler!")
+                            self.operation_status_send_completed.value = 1
+                            break
 
+                # Debugging message, print in every 5 mints
+                if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
+                    self.logger.info("Status messages sent to master : {}, Operation (success, failure) = ({}, {})"
+                                     .format(received_status_message_count, processed_objects_success_count,
+                                             processed_objects_failure_count))
+                    debug_message_timer = datetime.now()
+            except ZMQError as e:
+                self.logger.excep("ZMQError - {}".format(e))
             except Exception as e:
                 self.logger.excep("MessageHandler-Status {}".format(e))
 
@@ -434,20 +475,23 @@ class ClientApplication(object):
                 self.logger.info("All operation status sent to Master. Closing Monitor-StatusHandler !")
                 self.operation_status_send_completed.value = 1
                 break
-        self.logger.info(
-            "Total status message sent to master : {}".format(received_status_message_count))
+        self.logger.info("Total status message sent to master : {}".format(received_status_message_count))
         # Processing status
         self.logger.info("Total operation success count = {}".format(processed_objects_success_count))
         self.logger.info("Total operation failure count = {}".format(processed_objects_failure_count))
 
         # Close socket and destroy context.
         try:
-            # Send end message to PULL socket at master
-            end_message= {"exit" : True , "client": self.id}
-            socket.send_json(end_message)
+            # Send end message to status_poller socket at master if all messages were not processed.
+            # The exit message will help to exit the status_poller.
+            if self.message_count.value > received_status_message_count:
+                end_message= {"exit" : True , "client": self.id}
+                socket.send_json(end_message, flags=zmq.NOBLOCK)
             time.sleep(1)
             socket.close()
             self.logger.info("Monitor-StatusHandler is terminated gracefully !")
+        except ZMQError as e:
+            self.logger.excep("ZMQError - {}".fromat(e))
         except Exception as e:
             self.logger.excep("Monitor-StatusHandler - {}".format(e))
         finally:
@@ -552,10 +596,8 @@ if __name__ == "__main__":
                 ret, console = ca.nfs_cluster.umount(local_nfs_mount)
                 if ret == 0:
                     ca.logger.info("Un-mounted NFS share {} => {} successfully".format(nfs_share["nfs_share"] , local_nfs_mount))
-
             # Stop message-handler
             ca.stop_message()  # May not be required, Already those process stopped.
-
             # Stop workers
             ca.stop_workers()
             ca.logger.info("All workers terminated !")

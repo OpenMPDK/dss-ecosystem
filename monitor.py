@@ -112,9 +112,9 @@ class Monitor:
     def stop(self):
 
         self.logger.warn("Stopping monitors forcefully!")
-        self.status_lock.acquire()
+        #self.status_lock.acquire()
         self.stop_status_poller.value = 1
-        self.status_lock.release()
+        #self.status_lock.release()
         time.sleep(2)
 
         while self.process_listing_aggregator and self.process_listing_aggregator.is_alive():
@@ -174,9 +174,9 @@ class Monitor:
         while True:
 
             # Forcefully stop the process
-            self.status_lock.acquire()
+            #self.status_lock.acquire()
             stop = self.stop_status_poller.value
-            self.status_lock.release()
+            #self.status_lock.release()
             if stop :
                 self.logger.error("Forcefully shutting down Monitor-index!")
                 break
@@ -382,9 +382,9 @@ class Monitor:
         finally:
             context.term() # Terminate context.
 
-        self.status_lock.acquire()
+        #self.status_lock.acquire()
         self.monitor_status_poller.value = 1
-        self.status_lock.release()
+        #self.status_lock.release()
         self.logger.info("Monitor-Status-Poller terminated gracefully! ")
 
 
@@ -443,9 +443,7 @@ class Monitor:
 
             ## All index data distributed to clients and received all operation status back from clients.
             if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
-                self.status_lock.acquire()
                 self.stop_status_poller.value = 1   # This will stop Monitor-Poller
-                self.status_lock.release()
 
         total_operation_time = (datetime.now() - self.operation_start_time).seconds
 

@@ -190,14 +190,15 @@ class Worker(object):
                     latest_message = self.latest_task_processed.get()
                     file_index =  int(self.operation_progress_status_counter.value / len(WORKER_OPERATION_STATUS[operation]))
                     # self.logger.info("Index-{}, Total File-{}, FileIndex-{}".format(self.operation_progress_status_counter.value, len(latest_message["files"]), file_index))
-                    self.logger.error("Worker-{} Possibly is in Hung state \"{}\", {}/{}".format(self.id,
+                    if file_index < len(latest_message["files"]):
+                        self.logger.error("Worker-{} Possibly is in Hung state \"{}\", {}/{}".format(self.id,
                                                                                     hung_state_name,
                                                                                     latest_message["dir"],
                                                                                     latest_message["files"][file_index]
                                                                                     ))
-                    #self.task_queue.put(hunged_task) # Put the task again.
+                        #self.task_queue.put(hunged_task) # Put the task again.
 
-                    return True
+                        return True
                 else:
                     self.operation_progress_counter_previous_value = self.operation_progress_status_counter.value
             else:
