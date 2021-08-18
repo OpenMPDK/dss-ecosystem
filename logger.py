@@ -183,46 +183,46 @@ class MultiprocessingLogger:
     @exception
     def info(self, message):
         msg = (0, message)
-        self.logger_lock.acquire()
+        # self.logger_lock.acquire()
         self.queue.put(msg)
-        self.logger_lock.release()
+        # self.logger_lock.release()
 
     @exception
     def debug(self, message):
       if self.logging_level < len(LOGGING_LEVEL) and LOGGING_LEVEL[self.logging_level] == "DEBUG":
         msg = (1, message)
-        self.logger_lock.acquire()
+        # self.logger_lock.acquire()
         self.queue.put(msg)
-        self.logger_lock.release()
+        # self.logger_lock.release()
 
     @exception
     def warn(self, message):
         if self.logging_level <= 2:
           msg = (2, message)
-          self.logger_lock.acquire()
+          # self.logger_lock.acquire()
           self.queue.put(msg)
-          self.logger_lock.release()
+          # self.logger_lock.release()
 
     @exception
     def error(self, message):
         if self.logging_level <= 3:
           msg = (3, message)
-          self.logger_lock.acquire()
+          # self.logger_lock.acquire()
           self.queue.put(msg)
-          self.logger_lock.release()
+          # self.logger_lock.release()
 
     @exception
     def excep(self, message):
         if self.logging_level <= 4:
           msg = (4, message)
-          self.logger_lock.acquire()
+          # self.logger_lock.acquire()
           self.queue.put(msg)
-          self.logger_lock.release()
+          # self.logger_lock.release()
 
     @exception
     def fatal(self, message):
         if self.logging_level <= 5:
           msg = (5, message)
-          self.logger_lock.acquire()
+          # self.logger_lock.acquire()
           self.queue.put(msg)
-          self.logger_lock.release()
+          # self.logger_lock.release()

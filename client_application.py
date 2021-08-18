@@ -48,8 +48,8 @@ mgr = Manager()
 index_buffer = mgr.dict()
 
 BASE_DIR = os.path.dirname(__file__)
-MONITOR_INACTIVE_WAIT_TIME = 1200 # 20 Mins
-DEBUG_MESSAGE_INTERVAL = 300 # 5 Mins
+MONITOR_INACTIVE_WAIT_TIME = 1800 # 30 Mins
+DEBUG_MESSAGE_INTERVAL = 600 # 10 Mins
 
 
 class ClientApplication(object):
@@ -360,9 +360,9 @@ class ClientApplication(object):
                     else:
                         # Check for 20 Min inactivity
                         if (datetime.now() - start_time_no_response).seconds > MONITOR_INACTIVE_WAIT_TIME:
-                            self.logger.error("No message received from master in last 20 mins. Exit Monitor-Index-Receiver ")
-                            self.index_data_receive_completed.value = 1
-                            break
+                            self.logger.error("No message received from master in last 30 mins.")
+                            # self.index_data_receive_completed.value = 1
+                            # break
 
                 # Debug message
                 if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
@@ -454,11 +454,11 @@ class ClientApplication(object):
                     if start_time_not_receiving_status_message == 0:
                         start_time_not_receiving_status_message = datetime.now()
                     else:
-                        # Check for 20 Min inactivity, shutdown forcefully
+                        # Check for 60 Min inactivity, shutdown forcefully
                         if (datetime.now() - start_time_not_receiving_status_message).seconds > MONITOR_INACTIVE_WAIT_TIME:
-                            self.logger.error("No message received from workers in last 20 mins. Exit Monitor-Status-Handler!")
-                            self.operation_status_send_completed.value = 1
-                            break
+                            self.logger.error("No message received from workers in last 30 mins.")
+                            # self.operation_status_send_completed.value = 1
+                            # break
 
                 # Debugging message, print in every 5 mints
                 if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:

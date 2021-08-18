@@ -47,6 +47,8 @@ Monitor the progress of operation.
 - Display/Store result
 """
 manager = Manager()
+MONITOR_INACTIVE_WAIT_TIME = 1800 # 30 Mins
+DEBUG_MESSAGE_INTERVAL = 100 # 10 Mins
 
 class Monitor:
 
@@ -170,6 +172,7 @@ class Monitor:
         index_distribution_start_time = datetime.now()
         message_count = 0
         object_count = 0
+        debug_message_timer = datetime.now()
 
         while True:
 
@@ -227,11 +230,16 @@ class Monitor:
 
                         object_count += object_count_under_prefix
 
+            # Debug message
+            if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
+                self.logger.info("Messages distributed to clients-{}, Objects Count: {}".format(message_count,
+                                                                                             object_count))
+                debug_message_timer = datetime.now()
             if self.index_data_generation_complete.value == 1  and self.index_data_queue.qsize() == 0 and (self.index_msg_count.value == message_count) :
                 self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
-                self.logger.info("Total distributed messages- {}, distributed Objects Count-{}".format(message_count, object_count))
+                self.logger.info("Total distributed messages- {}, Objects Count-{}".format(message_count, object_count))
 
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
@@ -366,6 +374,7 @@ class Monitor:
                 except Exception as e:
                     self.logger.excep("Monitor-Status-Poller {} ".format(e))
 
+
             # Check if all client_applications terminated?
             if all_client_applications_terminated:
                 self.logger.debug("Monitor-Status-Poller: All ClientApplications Terminated, EXITs! ")
@@ -402,6 +411,8 @@ class Monitor:
         display_percentage = 10
         failure_file_size_in_byte = 0
         processed_prefix = {} # A hash which store the prefixes those have been exercised from S3
+        debug_message_timer = datetime.now()
+
         while True:
             # Condition to break the loop:
             # If status poller has stopped  and status_queue is empty
@@ -431,14 +442,21 @@ class Monitor:
                     processed_prefix[prefix] = status.get("success", 0) + status.get("failure", 0)
 
                 file_index_count = operation_success_count + operation_failure_count
-                self.logger.debug("OperationProgress: Total Files-{}, Success-{}, Failure-{}".format(self.index_data_count.value,
-                                                                                  operation_success_count,
-                                                                                  operation_failure_count))
+                #self.logger.debug("OperationProgress: Total Files-{}, Success-{}, Failure-{}".format(self.index_data_count.value,
+                #                                                                  operation_success_count,
+                #                                                                  operation_failure_count))
+                # Debug message
+                if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
+                    self.logger.info("OperationProgress: Indexed Files={}, Operation (Success={}, Failure={})".format(
+                                                                                           self.index_data_count.value,
+                                                                                           operation_success_count,
+                                                                                           operation_failure_count))
+                    debug_message_timer = datetime.now()
                 if self.all_index_data_distributed.value and self.index_data_count.value:
 
                     upload_percentage = (file_index_count / self.index_data_count.value) * 100
                     if upload_percentage > display_percentage:
-                        self.logger.info(" ** Monitor-Progress - Operation Status Progress - {:.2f}% **".format(upload_percentage))
+                        self.logger.info(" ** Monitor-Progress - Operation Progress Statuss - {:.2f}% **".format(upload_percentage))
                         display_percentage +=10
 
             ## All index data distributed to clients and received all operation status back from clients.
@@ -480,6 +498,7 @@ class Monitor:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
             self.logger.info("Total {} Operation:{}, Operation Failure:{} - {:.2f}%".format(self.operation, self.index_data_count.value, operation_failure_count,failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
+            self.logger.warn("DataMover RESUME operation is required!")
 
         bandwidth = 0
         if total_operation_time:
