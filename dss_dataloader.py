@@ -5,8 +5,10 @@ import os
 import math
 import time
 import argparse
-from PIL import Image
 
+from PIL import Image, ImageFile
+# avoid data stream broken issue
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 class DSSDataset(torch.utils.data.Dataset):
     def __init__(self, prefix, access_key, secret_key, endpoint, dss_option, client_num, transforms=None, load2memory=True):
         super(DSSDataset).__init__()
