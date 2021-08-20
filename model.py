@@ -27,7 +27,7 @@ class VAE(nn.Module):
             maxpool1=False
         )
 
-        # distribution parameters
+        # variational distribution parameters
         self.fc_mu = nn.Linear(enc_out_dim, latent_dim)
         self.fc_var = nn.Linear(enc_out_dim, latent_dim)
 
@@ -55,13 +55,6 @@ class VAE(nn.Module):
         return x_hat
     
     def forward(self, x):
-        #mu , log_var = self.encode(x)
-        #z = self.reparameterize(mu, log_var)
-        #return [self.decoder(z), z, mu, log_var]
-        #print(torch.cuda.current_device())
-
-        #print("x shape fwd: ", x.shape)
-
         x_encoded = self.encoder(x)
         mu, log_var = self.fc_mu(x_encoded), self.fc_var(x_encoded)
         std = torch.exp(log_var / 2)
@@ -75,23 +68,29 @@ class VAE(nn.Module):
         # --------------------------
         # Monte carlo KL divergence
         # --------------------------
-        # 1. define the first two probabilities (in this case Normal for both)
 
-        
+        # p is our prior distribution: a normal distribution
         p = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(std))
+        
+        #q is our variational distribution
         q = torch.distributions.Normal(mu, std)
 
-        # 2. get the probabilities from the equation
+        # find q(z|x)
         log_qzx = q.log_prob(z)
+        
+        #find p(z)
         log_pz = p.log_prob(z)
 
+        """
+         kl divergence would be the monte carlo estimation of kl divergence 
+         of variational distribution and the prior
+         """
 
-        # kl
         kl = (log_qzx - log_pz)
+        
+        #summing over the last dimension provides us an output of size (batchsize, )
         kl = kl.sum(-1)
         
-        #kl = -0.5 * torch.sum(1 + torch.log(std) - torch.pow(mu, 2) - std, dim = 1)
-        #print("kl shape", kl.shape)
         return kl
     
     def gaussian_likelihood(self, x_hat, logscale, x):
@@ -101,14 +100,13 @@ class VAE(nn.Module):
 
         # measure prob of seeing image under p(x|z)
         log_pxz = dist.log_prob(x)
+
+        #return the probabilities for the images with shape (batchsize, ) by summing over dim 1,2 and 3
         return log_pxz.sum(dim=(1, 2, 3))
     
-    """
+
     def loss_function(self, x):
         # reconstruction loss
-        print(torch.cuda.current_device())
-
-        print(torch.cuda.device_count())
 
         mu, log_var = self.encode(x)
 
@@ -118,17 +116,11 @@ class VAE(nn.Module):
 
         x_hat = self.decode(z)
 
-        #print(z.size())
-
         recon_loss = self.gaussian_likelihood(x_hat, self.log_scale, x)
-        #recon_loss = - F.mse_loss(x_hat, x, reduction = 'sum') / x.shape[0]
-        #print("recon_loss shape", recon_loss)
-        #print("x_hat")
         
-        # kl
-        kl = self.kl_divergence(z, mu, std).mean()
+        kl = self.kl_divergence(z, mu, std)
 
-        # elbo
+        # loss function = negate of evidence lower bound
         nelbo = (kl - recon_loss)
         kl = kl.mean()
         recon_loss = recon_loss.mean()
@@ -137,29 +129,9 @@ class VAE(nn.Module):
         summaries = dict([('loss', nelbo), ('elbo', -nelbo), ('kl', kl.mean()), ('rec_loss', recon_loss.mean())])
 
         return nelbo, summaries
-    """
-        
-    
-    def loss_function(self, x_hat, x, mu, log_var):
-        print(torch.cuda.current_device())
-
-        std = torch.exp(log_var / 2)
-
-        recon_loss = - F.mse_loss(x_hat, x, reduction = 'sum') / x.shape[0]
-
-        kl = -0.5 * torch.sum(1 + torch.log(std) - torch.pow(mu, 2) - std, dim = 1)
-
-        # elbo
-        nelbo = (kl - recon_loss)
-        nelbo = nelbo.mean()
-        kl = kl.mean()
-        recon_loss = recon_loss.mean()
-
-        summaries = dict([('loss', nelbo), ('elbo', -nelbo), ('kl', kl.mean()), ('rec_loss', recon_loss.mean())])
-
-        return nelbo, summaries
     
     
+    #sample images from standard gaussians
     def sample(self, num_samples):
         p = torch.distributions.Normal(torch.zeros([latent_dim]), torch.ones([latent_dim]))
         z = p.rsample((num_samples,))
@@ -167,6 +139,7 @@ class VAE(nn.Module):
 
         return samples
     
+    #generate fake images given a set of images
     def generate_fake(self, x):
         return self.forward(x)[0]
 

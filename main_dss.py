@@ -47,20 +47,7 @@ option.maxConnections = 1
 # create dataloader instance
 data_loader = torch.utils.data.DataLoader
 
-"""
-normalize = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                     std=[0.2023, 0.1994, 0.2010])
 
-
-                        
-transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])
-
-       """ 
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
@@ -120,19 +107,11 @@ class ProgressMeter(object):
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
 
-def adjust_learning_rate(optimizer, epoch, args):
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = args.lr * (0.1 ** (epoch // 30))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
 
 def train(train_loader, model, optimizer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    #top1 = AverageMeter('Acc@1', ':6.2f')
-    #top5 = AverageMeter('Acc@5', ':6.2f')
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses],
@@ -150,21 +129,13 @@ def train(train_loader, model, optimizer, epoch, args):
         data_time.update(dataloading_time)
 
         iamges = images.to(device)
-
-        #if args.gpu is not None:
-           # images = images.cuda(args.gpu, non_blocking=True)
-        #if torch.cuda.is_available():
-          #  target = target.cuda(args.gpu, non_blocking=True)
-        
         
         # compute loss
         optimizer.zero_grad()
         loss, summaries = model.loss_function(images)
 
-        # measure accuracy and record loss
+        # measure record loss
         losses.update(loss.item(), images.size(0))
-        #top1.update(acc1[0], images.size(0))
-        #top5.update(acc5[0], images.size(0))
 
         # compute gradient and do SGD step
 
@@ -207,24 +178,14 @@ if args.model == "vae":
 optimizer = torch.optim.Adam(model.parameters(), lr = args.lr)
 
 
-
-
-
 for epoch in range(args.epochs):
     # if args.distributed:
     #     train_sampler.set_epoch(epoch)
-    # adjust_learning_rate(optimizer, epoch, args)
 
     # train for one epoch
     print("epoch: {}".format(epoch))
     train(train_loader, model, optimizer, epoch, args)
 
-    # evaluate on validation set
-    # acc1 = validate(val_loader, model, criterion, args)
-
-    # remember best acc@1 and save checkpoint
-    # is_best = acc1 > best_acc1
-    # best_acc1 = max(acc1, best_acc1)
 
     
 
