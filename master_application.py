@@ -36,6 +36,7 @@ from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, p
 from utils.utility import is_prefix_valid_for_nfs_share, validate_s3_prefix
 from utils.config import Config, commandLineArgumentParser, CommandLineArgument
 from utils.signal_handler import SignalHandler
+from utils import __VERSION__
 from logger import  MultiprocessingLogger
 
 from multiprocessing import Process,Queue,Value, Lock, Manager
@@ -305,6 +306,7 @@ class Master(object):
                            __file__,
                            self.logging_level)
         self.logger.start()
+        self.logger.info("** DataMover VERSION:{} **".format(__VERSION__))
         self.logger.info("Started Logger with {} mode!".format(self.logging_level))
 
     def stop_logging(self):
