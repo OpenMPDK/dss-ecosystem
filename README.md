@@ -5,7 +5,7 @@ There are three files to consider: main_dss.py, dss_dataloader.py, and model.py.
 The main file to run is main_dss.py which instantiates a DSS dataloader object to read the images and creates a variational autoencoder model to train using the loaded images.
 
 In order to run the code:
-    run python3 main.py
+    run python3 main_dss.py
 
 There are a number of arguments that can be handled in the run:
 -w: the number of workers, default is 0.
