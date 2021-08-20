@@ -1,4 +1,4 @@
-# dss_AIPytorch 
+# TESS Pytorch Data Loader 
 
 There are three files to consider: main_dss.py, dss_dataloader.py, and model.py.
 
@@ -14,7 +14,7 @@ There are a number of arguments that can be handled in the run:
 -e: the number of epochs for training, default is 1.
 
 
-# DSSDataset
+# DSS Dataset
 In dss_dataloader.py, we design a new dataset class on top of torch.utils.data.Dataset, to abstract objects from S3 storage system (DSS).
 
 ## DataPath
@@ -38,11 +38,11 @@ DSSDataset needs arguments of dss backend info (i.e., access key, secret key, an
         self.load2memory = load2memory
 ```
 
-# example for specifying S3 storage parameters
+# Example of minio parameters
 '''
-access_key = "minio"
-secret_key = "minio123"
-endpoint = "http://202.0.0.3:9000"
+access_key = "myminio"
+secret_key = "test"
+endpoint = "http://100.1.1.100:9000"
 option = dss.clientOption()
 option.maxConnections = 1
 '''
