@@ -25,15 +25,10 @@ parser.add_argument("--batch", "-b", type=int, default=16, help="batch size")
 parser.add_argument("--client", "-c", type=int, default=1, help="the number of dss client instances")
 parser.add_argument("--epochs", "-e", type=int, default=1, help="epoches of training")
 parser.add_argument("--model","-m", type=str, default="vae", help="model name" )
-parser.add_argument('--lr', default=0.1, type=float,
-                    metavar='LR', help='initial learning rate', dest='lr')
-parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                    help='momentum')
-parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)',
-                    dest='weight_decay')
-parser.add_argument('--gpu', default=None, type=int,
-                    help='GPU id to use.')
+parser.add_argument('--lr', default=1e-4, type=float,
+                    metavar='LR', help='learning rate', dest='lr')
+
+#parser.add_argument('--gpu', default=None, type=int, help='GPU id to use.')
 
 args = parser.parse_args()
 
