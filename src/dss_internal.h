@@ -194,9 +194,8 @@ private:
 		PARTIAL	
 	};
 	enum class State : int {
-		TEST,
 		CREATE,
-		RETEST,
+		TEST,
 		EXIT
 	};
 

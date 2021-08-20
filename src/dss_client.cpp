@@ -327,10 +327,18 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os)
         if (out.IsSuccess()) {
 			//TODO: std::move()
             Aws::Vector<Aws::S3::Model::Object> objects =
-                                            out.GetResult().GetContents();
-
+                                        std::move(out.GetResult().GetContents());
             for (auto o : objects)
                 os->GetPage().insert(o.GetKey().c_str());
+
+            if (os->NeedCommPrefix()) {
+            	Aws::Vector<Aws::S3::Model::CommonPrefix> cps =
+                                        std::move(out.GetResult().GetCommonPrefixes());
+            	for (auto cp : cps) {
+            		printf("cp %s\n", cp.GetPrefix().c_str());
+            	    os->GetPage().insert(cp.GetPrefix().c_str());
+            	}
+            }
         } else {
 			return Result(false, out.GetError());
         }
@@ -414,7 +422,7 @@ ClusterMap::AcquireClusterConf()
 }
 
 ClusterMap::Status
-ClusterMap::DetectClusterBuckets(bool print)
+ClusterMap::DetectClusterBuckets(bool force)
 {
 	const size_t err_len = 256;
 	char err_buf[err_len];
@@ -433,14 +441,14 @@ ClusterMap::DetectClusterBuckets(bool print)
 		std::string err_str;
 	
 		for (auto it : empty) {
-			if (print) {
+			if (force) {
 				snprintf(err_buf, err_len, "cluster %u : %s\n",
 						 i++, (unsigned)it ? "missing" : "present");
 				err_str.append(err_buf);
 			}
 		}
 
-		if (print)
+		if (force)
 			throw NewClientError(err_str);
 
 		return ClusterMap::Status::PARTIAL;
@@ -458,47 +466,33 @@ ClusterMap::VerifyClusterConf()
 	const size_t err_len = 256;
 	char err_buf[err_len];
 	Status s = Status::EMPTY;
-	State st = State::TEST;
+	State st = State::CREATE;
 
 	while (1) {
 		switch (st) {
-		case State::TEST:
-			s = DetectClusterBuckets(false);
-			if (s == Status::ALL_GOOD)
-				st = State::EXIT;
-			else if (s == Status::PARTIAL)
-				st = State::RETEST;
-			else
-				st = State::CREATE;
-			break;
 		case State::CREATE:
-			if (!TryLockClusters().IsSuccess()) {
-				pr_err("Lock failed\n");
-				break;
-			} 
-
 			for (auto c : m_clusters) {
 				Result r = c->CreateBucket();
-				if (r.IsSuccess())
+				if (r.IsSuccess() ||
+					r.GetErrorType() == S3::S3Errors::BUCKET_ALREADY_OWNED_BY_YOU)
 					continue;
 
                	snprintf(err_buf, err_len, "Failed to create bucket on cluster %u (msg=%s)\n",
 						 c->GetID(), r.GetErrorMsg().c_str());
 				
-				UnlockClusters();
 				throw NewClientError(err_buf);
 				st = State::EXIT;
 				return -1;
 			}
-
-			st = State::RETEST;
-			UnlockClusters();
+			st = State::TEST;
 			break;
-		case State::RETEST:
-			//TODO: Wait minio to propagate buckets to other endpoints 
-			// ask Som
-			usleep(5 * (1ULL << 20));
-			s = DetectClusterBuckets(true);
+		case State::TEST:
+			if ((s = DetectClusterBuckets(false)) != Status::ALL_GOOD) {
+				//TODO: Wait minio to propagate buckets to other endpoints 
+				// ask Som
+				usleep(10 * (1ULL << 20));
+				s = DetectClusterBuckets(true);
+			}
 			st = State::EXIT;
 			break;
 		case State::EXIT:
@@ -879,9 +873,9 @@ int Objects::GetObjKeys()
 }
 
 std::unique_ptr<Objects>
-Client::GetObjects(std::string prefix, std::string delimiter,
+Client::GetObjects(std::string prefix, std::string delimiter, bool cp,
     			   uint32_t page_size) {
-	return std::unique_ptr<Objects>(new Objects(m_cluster_map, prefix, delimiter, page_size));
+	return std::unique_ptr<Objects>(new Objects(m_cluster_map, prefix, delimiter, cp, page_size));
 };
 
 Client::Client(const std::string& url, const std::string& user, const std::string& pwd,

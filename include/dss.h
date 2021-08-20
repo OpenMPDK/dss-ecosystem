@@ -126,8 +126,13 @@ struct SesOptions {
 
 class Objects {
 public:
-    Objects(ClusterMap* map, std::string prefix, std::string delimiter, uint32_t ps) :
-        m_cur_id(-1), m_cluster_map(map), m_prefix(prefix), m_delim(delimiter), m_pagesize(ps) {}
+    Objects(ClusterMap* map, std::string prefix, std::string delimiter, bool cp, uint32_t ps) :
+        m_cur_id(-1),
+        m_cluster_map(map),
+        m_prefix(prefix),
+        m_delim(delimiter),
+        m_comm_prefix(cp),
+        m_pagesize(ps) {}
     const char *GetPrefix() { return m_prefix.c_str(); }
     std::string& GetDelim() { return m_delim; }
 	uint32_t GetPageSize() { return m_pagesize; }
@@ -136,6 +141,7 @@ public:
 	void SetToken(Aws::String str) { m_token = str; }
 	Aws::String& GetToken() { return m_token; }
     bool TokenSet() { return m_token.size() != 0; }
+    bool NeedCommPrefix() { return m_comm_prefix; }
     bool PageSizeSet() { return m_pagesize != 0; }
     std::set<std::string>& GetPage() { return m_page; }
 
@@ -146,6 +152,7 @@ private:
 	ClusterMap* m_cluster_map;
 	std::string m_prefix;
 	std::string m_delim;
+	bool m_comm_prefix;
 	uint32_t m_pagesize;
     std::set<std::string> m_page;
 
@@ -180,6 +187,7 @@ public:
 					   void *cb_arg = nullptr);
     int DeleteObject(const Aws::String& objectName);
     std::unique_ptr<Objects> GetObjects(std::string prefix, std::string delimiter,
+    									bool comm_prefix = false,
     									uint32_t page_size = DSS_PAGINATION_DEFAULT);
     std::set<std::string>&& ListObjects(const std::string& prefix, const std::string& delimiter);
     std::set<std::string> ListBuckets();

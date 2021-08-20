@@ -123,6 +123,7 @@ PYBIND11_MODULE(dss, m) {
 		.def("getObjects", &Client::GetObjects, "Create a iterable key list",
 			py::arg("prefix") = "",
 			py::arg("delimiter") = "",
+			py::arg("common_prefix") = false,
 			py::arg("limit") = DSS_PAGINATION_DEFAULT);
 
 	class NoIterator : std::exception {
