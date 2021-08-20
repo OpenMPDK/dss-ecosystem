@@ -335,7 +335,6 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os)
             	Aws::Vector<Aws::S3::Model::CommonPrefix> cps =
                                         std::move(out.GetResult().GetCommonPrefixes());
             	for (auto cp : cps) {
-            		printf("cp %s\n", cp.GetPrefix().c_str());
             	    os->GetPage().insert(cp.GetPrefix().c_str());
             	}
             }
@@ -487,12 +486,10 @@ ClusterMap::VerifyClusterConf()
 			st = State::TEST;
 			break;
 		case State::TEST:
-			if ((s = DetectClusterBuckets(false)) != Status::ALL_GOOD) {
-				//TODO: Wait minio to propagate buckets to other endpoints 
-				// ask Som
-				usleep(10 * (1ULL << 20));
-				s = DetectClusterBuckets(true);
-			}
+			//TODO: Wait minio to propagate buckets to other endpoints 
+			// ask Som
+			usleep(10 * (1ULL << 20));
+			s = DetectClusterBuckets(true);
 			st = State::EXIT;
 			break;
 		case State::EXIT:
