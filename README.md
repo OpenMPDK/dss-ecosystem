@@ -36,15 +36,15 @@ Below as example of shown.
 # datamover_logging_level: INFO
 ```
 
-In these parameters,  ```datamover_logging_path , datamover_conf_dir ``` used to set the path to the datamover config and logging. It is also required to keep ```datamover_client_lib: dss_client``` as is. ```datamover_message_port_index , datamover_message_port_status``` can be modified based on the machine's available port, the default port is 4000. Parameters such as ```datamover_master_size, datamover_master_size``` is not needed to be set.
+In these parameters,  ```datamover_logging_path , datamover_conf_dir ``` used to set the path to the datamover config and logging. It is also required to keep ```datamover_client_lib: dss_client``` as is. ```datamover_message_port_index , datamover_message_port_status``` can be modified based on the machine's available port, the default port is 4000. Parameters such as ```datamover_master_size``` is not needed to be set.
 Table below shows the tunable parameters.
 
 | Parameter                       | Description   |
 | --------------------------------|-------------- |
-| datamover_master_workers        | Based on the core available on data mover master, tune the number of master workers to improve the performance |
-| datamover_master_max_index_size | Per each master worker how many indexes can be handled simultaneously, on a physical server this value can be >= 1000|
-| datamover_client_workers        | The number of worker each client uses to perform the I/O operation, the value can be tuned based on available cores on each client|
-| datamover_client_max_index_size | Per each client worker how many indexes can be handled simultaneously for I/O operations, on a physical system this value can be >= 1000 |
+| datamover_master_workers        | Number of workers does parallel indexing and listing. Based on the core available on data mover master, tune the number of master workers to improve the performance |
+| datamover_master_max_index_size | Per each master worker how many file indexes can be handled simultaneously, on a physical server this value can be >= 1000, meaning each client worker can process maximum 1000 files sequentially to S3 storage|
+| datamover_client_workers        | Number of client workers performing parallel I/O operation on a single node, the value can be tuned based on available cores on each client|
+| datamover_client_max_index_size | Maximum number of file index can be passed through an index message to the different client-application, on a physical system this value can be >= 1000 |
 | datamover_nfs_shares:           | The ip address of the NFS server and their share directories are set, respectively.|
 | datamover_logging_level: INFO   | The log level INFO, DEBUG, WARNING of data mover is specified.|
 
@@ -80,19 +80,20 @@ Using the start_datamover playbook we can execute I/O operations (GET, DEL, LIST
 ```ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=DEL"```
 ```ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=LIST"```
 
+To test DM uploaded the files into S3 storage can be checked as below.
+- Data mover LIST operation to indicate how many objects have been uploaded
+- Checking Dry Run datamover I/O operation without uploading files.
+- Checking Data Integrity that the file uploaded on S3 is the same as data on NFS. 
+
 ### Dry Run
 
-Dry Run option is to exercises the data mover I/O operation without actually calling the s3 functions. Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance. Dry run in PUT operation access the data on the NFS server copy it to the buffer and then without writing the data to TESS Storage will skip the s3 call and delete the buffer content. Dry run GET and DEL is initiate indexing on the master and distribute the work across the clients, but no GET and DEL is happening.
+Dry Run option is to exercises the data mover I/O operation without actually calling the s3 functions. Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance. Dry run in PUT operation access the data on the NFS server copy it to the buffer and then without writing the data to TESS Storage will skip the s3 call and delete the buffer content. Dry run GET/DEL is dependent on parallel listing operation. It performs listing and exercise all the part of code except calling S3 download / remove object.
 
 ```ansible-playbook -i your_inventory playbooks/start_datamover.yml -e "datamover_dryrun=true"```
 
 ### Data Integrity Test
 
-The Data Integrity test is to make sure the data uploaded on TESS is the same as the data on the NFS. When the option is enabled, data mover Performs a checksum validation test of all objects on object store. It starts indexing and then uploading data for each prefix through a worker from a client
-node. During that process, it keeps track of file and corresponding md5sum hash in a buffer. Subsequently, a GET
-operation is initiated with the same prefix which downloads files in the temporary destination path and compares md5sum
-with corresponding file key in buffer.
-
+The Data Integrity test is to make sure the data uploaded on TESS is the same as the data on the NFS. When the option is enabled, data mover performs a checksum validation test of all objects on object store. It also performs data-integrity check for uploaded data when “—skip_upload” option is specified.
 ```ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=TEST"```
 
 ## (II) Data Mover Mannual Deployment
@@ -171,7 +172,7 @@ Here are the examples to run data mover with integrity test and dry run options:
 
 ```
   sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path>'
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --unit --dest_path <destiniation path>'
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity –skip_upload --dest_path <destiniation path>'
   sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --dryrun'
 
 ```
