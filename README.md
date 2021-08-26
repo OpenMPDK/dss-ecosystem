@@ -77,7 +77,7 @@ Start DataMover using start_start_datamover.yml playbook to move the data from N
 ansible-playbook -i inv_file  playbooks/start_datamover.yml 
 ```
 
-to test that the data is moved from nfs to TESS storage on client/storage server
+to test that the data is moved from NFS to TESS storage on client/storage server
 data is generally stored under dss<em>i</em> bucket which *i* specifies the cluster's index and *dss* bucket will keep the datamover configuration file.
 
 ```
@@ -180,6 +180,7 @@ verify mounted shared directory
 ### I/O Operations
 - Running PUT operation with compaction option, optimizes the performance for GET and LIST of objects on TESS.
 - LIST/GET/DEL operations can be performed either recursively for the whole data on TESS or only for a specific prefix. 
+- In case of PUT failure, with warning ```WARNING: DataMover RESUME operation is required!```, please retry the put operation again.  
 - The default path for Data mover config file ```/usr/dss/nkv-datamover/config/config.json``` to specify the config path use --config option. 
  
  ```--config {{ datamover_conf_dir }}/config.json```
