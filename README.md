@@ -36,7 +36,14 @@ Below as example of shown.
 # datamover_logging_level: INFO
 ```
 
-In these parameters,  ```datamover_logging_path , datamover_conf_dir ``` used to set the path to the datamover config and logging. It is also required to keep ```datamover_client_lib: dss_client``` as is. ```datamover_message_port_index , datamover_message_port_status``` can be modified based on the machine's available port, the default port is 4000. Parameters such as ```datamover_master_size``` is not needed to be set.
+In these parameters,  ```datamover_logging_path , datamover_conf_dir ``` are used to set the path to the datamover config and log files. 
+
+It is also required to keep ```datamover_client_lib: dss_client``` as is. 
+
+```datamover_message_port_index , datamover_message_port_status``` can be modified based on the machine's available port, the default port is 4000. 
+
+Parameters such as ```datamover_master_size``` is not needed to be set.
+
 Table below shows the tunable parameters.
 
 | Parameter                       | Description   |
@@ -52,17 +59,23 @@ Table below shows the tunable parameters.
 
 After Deploying the DSS software using the ansible playbook, Datamover is already deployed
 
-```ansible-playbook -i inv_file  playbooks/deploy_dss_software.yml ```
+```
+ansible-playbook -i inv_file  playbooks/deploy_dss_software.yml 
+```
 
 In case you change datamover configuration after deployment of the dss_software, datamover should be deployed again.
 
-```ansible-playbook -i inv_file  playbooks/deploy_datamover.yml ```
+```
+ansible-playbook -i inv_file  playbooks/deploy_datamover.yml 
+```
 
 ### Start DataMover
 
 Start DataMover using start_start_datamover.yml playbook to move the data from NFS server and PUT it to TESS storage servers.
 
-```ansible-playbook -i inv_file  playbooks/start_datamover.yml ```
+```
+ansible-playbook -i inv_file  playbooks/start_datamover.yml 
+```
 
 to test that the data is moved from nfs to TESS storage on client/storage server
 data is generally stored under dss<em>i</em> bucket which *i* specifies the cluster's index and *dss* bucket will keep the datamover configuration file.
@@ -76,9 +89,14 @@ cd /usr/dss/nkv-datamover
 ### I/O Operations
 
 Using the start_datamover playbook we can execute I/O operations (GET, DEL, LIST):
-```ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=GET"```
-```ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=DEL"```
-```ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=LIST"```
+
+```
+ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=GET"
+
+ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=DEL"
+
+ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=LIST"
+```
 
 To test DM uploaded the files into S3 storage can be checked as below.
 - Data mover LIST operation to indicate how many objects have been uploaded
@@ -89,12 +107,17 @@ To test DM uploaded the files into S3 storage can be checked as below.
 
 Dry Run option is to exercises the data mover I/O operation without actually calling the s3 functions. Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance. Dry run in PUT operation access the data on the NFS server copy it to the buffer and then without writing the data to TESS Storage will skip the s3 call and delete the buffer content. Dry run GET/DEL is dependent on parallel listing operation. It performs listing and exercise all the part of code except calling S3 download / remove object.
 
-```ansible-playbook -i your_inventory playbooks/start_datamover.yml -e "datamover_dryrun=true"```
+```
+ansible-playbook -i your_inventory playbooks/start_datamover.yml -e "datamover_dryrun=true"
+```
 
 ### Data Integrity Test
 
 The Data Integrity test is to make sure the data uploaded on TESS is the same as the data on the NFS. When the option is enabled, data mover performs a checksum validation test of all objects on object store. It also performs data-integrity check for uploaded data when “—skip_upload” option is specified.
-```ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=TEST"```
+
+```
+ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=TEST"
+```
 
 ## (II) Data Mover Mannual Deployment
 
@@ -124,6 +147,7 @@ for example:
 ```
 
 Restart the export file
+
 ``` exportfs –r ```
 
 verify shared mount paths
@@ -133,6 +157,7 @@ verify shared mount paths
 #### NFS Client Setup
 
 Install the NFS lib
+
 ``` yum –y install nfs-utils libnfsidmap ```
 
 enable and start the rpcbind service
@@ -153,15 +178,24 @@ verify mounted shared directory
 ```df –kh```
 
 ### I/O Operations
+- Running PUT operation with compaction option, optimizes the performance for GET and LIST of objects on TESS.
+- LIST/GET/DEL operations can be performed either recursively for the whole data on TESS or only for a specific prefix. 
+- The default path for Data mover config file ```/usr/dss/nkv-datamover/config/config.json``` to specify the config path use --config option. 
+ 
+ ```--config {{ datamover_conf_dir }}/config.json```
 
 ```
 cd /usr/dss/nkv-datamover
+
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  '
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  --compaction'
+
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
+
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL '
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
+
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <Destination Path>'
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --prefix bird/ --dest_path <Destination Path>'
 ```
@@ -176,3 +210,5 @@ Here are the examples to run data mover with integrity test and dry run options:
   sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --dryrun'
 
 ```
+
+### NFS Share Guideline
