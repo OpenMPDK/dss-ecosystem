@@ -213,3 +213,27 @@ Here are the examples to run data mover with integrity test and dry run options:
 ```
 
 ### NFS Share Guideline
+- For a better perfromance, it is advised to put the number of files per directory, same or slightly more than master max index. For example, if there are 10,000 files under a directory , and that directory get processed by a worker W1, you should be getting 10 message if mas_index_size is set to 1000. 
+You may chose to set 2000, which 'll send out 5 message and that may speed up process further. 
+On another note make sure that in nested directory each directory has reasonable number of files (same or slightly more than master max index).
+
+- Here is an example mounted multiple NFS share on client server and one of its NFS server
+```
+[ansible@client]$ df -h
+Filesystem                                   Size  Used Avail Use% Mounted on
+nfs.srv1.ip:/mnt/nfs_share/5gb           985G  224G  711G  24% /srv1/mnt/nfs_share/5gb
+nfs.srv2.ip:/mnt/nfs_share/10gb-B        246G  207G   27G  89% /srv2/mnt/nfs_share/10gb-B
+nfs.srv2.ip:/mnt/nfs_share/5gb-B         246G  207G   27G  89% /srv2/mnt/nfs_share/5gb-B
+nfs.srv1.ip:/mnt/nfs_share/15gb          985G  224G  711G  24% /srv1/mnt/nfs_share/15gb
+nfs.srv1.ip:/mnt/nfs_share/10gb          985G  224G  711G  24% /srv1/mnt/nfs_share/10gb
+nfs.srv2.ip:/mnt/nfs_share/15gb-B        246G  207G   27G  89% /srv2/mnt/nfs_share/15gb-B
+```
+
+```
+[ansible@nfs.srv1.ip ~]$ ls /mnt/nfs_share/
+10gb  15gb   5gb  
+[ansible@nfs.srv1.ip ~]$ls /mnt/nfs_share/5gb
+0_0  1MB_0001.dat  1MB_0003.dat  1MB_0005.dat  1MB_0007.dat  1MB_0009.dat  1MB_0011.dat  1MB_0013.dat  1MB_0015.dat  1MB_0017.dat  1MB_0019.dat
+0_1  1MB_0002.dat  1MB_0004.dat  1MB_0006.dat  1MB_0008.dat  1MB_0010.dat  1MB_0012.dat  1MB_0014.dat  1MB_0016.dat  1MB_0018.dat  1MB_0020.dat
+```
+
