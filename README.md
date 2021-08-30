@@ -15,7 +15,7 @@ under ./build directory.
 
 ### Build Setup Enviroment
 
-The easiest way to setup the build env is to use Anaconda to install gcc, cmake, etc. , if Anacoda is not available, one can mannully build gcc and cmake.
+The easiest way to setup the build env is to use Anaconda to install gcc, cmake, etc. , if Anacoda is not available, one can manully build gcc and cmake.
 
 #### Anaconda
 
@@ -48,7 +48,7 @@ make
 sudo make install
 ```
 
-#### Mannual Build
+#### Manual Build
 
 - Install dependencies
 
