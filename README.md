@@ -170,7 +170,7 @@ all client should mount NFS shared directory before accessing them.
 
 ```
 sudo mkdir /nfs-shared1     # Create local directory to be mapped to remote directory.(optional)           
-mount <nfs node ip address>:/<nfs Shared Directoyr>  /nfs-shaed1”           
+mount <nfs node ip address>:/<nfs Shared Directory>  /nfs-shared1”           
 ```
 
 verify mounted shared directory
