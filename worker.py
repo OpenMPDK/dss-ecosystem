@@ -34,7 +34,7 @@
 """
 
 import os
-from multiprocessing import Process, Value, Queue
+from multiprocessing import Process, Value, Queue, current_process
 from minio_client import MinioClient
 from s3_client import S3
 from logger import MultiprocessingLogger
@@ -54,6 +54,7 @@ class Worker(object):
         self.index_data_queue = kwargs.get("index_data_queue", None)
         self.logger = kwargs.get("logger", None)  # A multiprocessing logger queue
         self.operation_status_queue = kwargs.get("status_queue", None)  # Used by only client Application
+        self.worker_pid = Value('i', 0)
         self.task_count = Value('i', 0)
         self.task_count_previous = 0
         self.latest_task_processed = Queue() # A queue only store the message processed through Task.
@@ -142,6 +143,7 @@ class Worker(object):
               return
 
             self.process = Process(target=self.run, args=(self.s3_client, ))
+            self.process.name = "Worker-{}".format(self.id)
             self.process.start()
         except Exception as e:
             self.logger.excep("{}".format(e))
@@ -149,7 +151,7 @@ class Worker(object):
 
         while self.status.value == 0:
           time.sleep(0.1)
-        self.logger.info("Worker-{} started ... ".format(self.id))
+        self.logger.info("Worker-{}, PID-{} started ... ".format(self.id, self.worker_pid.value))
 
     def stop(self):
         """
@@ -216,6 +218,7 @@ class Worker(object):
         :return:
         """
         self.status.value = 1
+        self.worker_pid.value = current_process().pid
         while True:
             # Get the status of worker from a shared flag.
             if not self.status.value:

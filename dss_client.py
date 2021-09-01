@@ -155,14 +155,14 @@ class DssClientLib:
                 self.logger.error("deleteObject filed for key - {}".format(object_key))
                 ret = 1
         except dss.FileIOError as e:
-            self.logger.execp("deleteObject - key:{}, {}".format(object_key, e))
+            self.logger.execp("FileIOError - key:{}, {}".format(object_key, e))
             ret = 1
         except dss.NetworkError as e:
-            self.logger.execp("deleteObject - key:{}, {}".format(object_key, e))
+            self.logger.execp("NetworkError - key:{}, {}".format(object_key, e))
         except dss.NoSuchResouceError as e:
-            self.logger.excep("deleteObject - key:{}, {}".format(object_key, e))
+            self.logger.excep("NoSuchResouceError - key:{}, {}".format(object_key, e))
         except dss.GenericError as e:
-            self.logger.excep("deleteObject - key:{}, {}".format(object_key, e))
+            self.logger.excep("GenericError - key:{}, {}".format(object_key, e))
             ret = 1
         return ret
 
@@ -198,29 +198,30 @@ class DssClientLib:
             else:
                 self.logger.error("Download Failed for Object-Key - {}".format(object_key))
         except dss.FileIOError as e:
-            self.logger.execp("getObject - key:{}, {}".format(object_key, e))
+            self.logger.execp("FileIOError - key:{}, {}".format(object_key, e))
             ret = 1
         except dss.NetworkError as e:
-            self.logger.execp("getObject - key:{}, {}".format(object_key, e))
+            self.logger.execp("NetworkError - key:{}, {}".format(object_key, e))
         except dss.NoSuchResouceError as e:
-            self.logger.excep("getObject - {} , {}".format(object_key, e))
+            self.logger.excep("NoSuchResouceError - {} , {}".format(object_key, e))
         except dss.GenericError as e:
-            self.logger.excep("getObject - {} , {}".format(object_key, e))
+            self.logger.excep("GenericError - {} , {}".format(object_key, e))
             ret = 1
         except Exception as e:
-            self.logger.excep("getObject - {} , {}".format(object_key, e))
+            self.logger.excep("OtherException - {} , {}".format(object_key, e))
         return ret
 
     def listObjects(self, bucket=None,  prefix="", delimiter="/"):
         """
-        List object keys under a specified prefix .
+        List object-keys under a specified prefix . 
+        The getObjects function has 3rd argument common_prefix should be True
         :param bucket: None ( for dss_client ) , For minio and boto3 there should be an bucket already created.
         :param prefix: A object key prefix
         :param delimiter: Default is "/" to receive first level object keys.
         :return: List of object keys.
         """
         try:
-            objects = self.dss_client.getObjects(prefix, delimiter)
+            objects = self.dss_client.getObjects(prefix, delimiter, True)
             while True:
                 try:
                     for obj_key in objects:
@@ -230,12 +231,12 @@ class DssClientLib:
                 except Exception as e:
                     self.logger.info("ListObjects {} - {}".format(prefix, e))
         except dss.FileIOError as e:
-            self.logger.execp("listObjects - key:{}, {}".format(object_key, e))
+            self.logger.execp("FileIOError - key:{}, {}".format(object_key, e))
         except dss.NoIterator as e:
-            self.logger.excep("listObjects - {}".format(e))
+            self.logger.excep("NoIterator - {}".format(e))
         except dss.NetworkError as e:
-            self.logger.execp("listObjects - key:{}, {}".format(object_key, e))
+            self.logger.execp("NetworkError - key:{}, {}".format(object_key, e))
         except dss.NoSuchResouceError as e:
-            self.logger.excep("listObjects - {}".format(e))
+            self.logger.excep("NoSuchResouceError - {}".format(e))
         except dss.GenericError as e:
-            self.logger.excep("listObjects {}- {}".format(prefix, e))
+            self.logger.excep("GenericError {}- {}".format(prefix, e))

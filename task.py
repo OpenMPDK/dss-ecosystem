@@ -33,7 +33,7 @@
 
 import os,sys
 from utils.utility import exception, exec_cmd, get_hash_key
-from multiprocessing import Value,Manager
+from multiprocessing import Value,Manager, current_process
 from minio_client import MinioClient
 from s3_client import S3
 import json
@@ -97,9 +97,9 @@ def put(s3_client, **kwargs):
                     failure_files_size += os.path.getsize(file)
             else:
                 if not os.path.exists(file):
-                    logger.error("File-{} doesn't exist".format(file))
+                    logger.error("{},PID-{} File-{} doesn't exist".format(current_process().name, current_process().pid, file))
                 else:
-                    logger.error("Read access denied - {}".format(file))
+                    logger.error("{},PID-{} Read access denied -{}".format(current_process().name, current_process().pid, file))
         # upload_time = (datetime.now() - start_time).seconds
         # logger.debug("Upload Time: {} sec".format(upload_time))
     else:
@@ -181,7 +181,7 @@ def list(s3_client, **kwargs):
                     listing_progress_lock.release()
             with index_data_count.get_lock():
                 index_data_count.value += object_keys_count
-            logger.debug("Worker Id:{}, LIST: Prefix-\"{}\" ObjectKeys: {}".format(worker_id, prefix, object_keys_count)) ## DELETE
+            # logger.debug("Worker Id:{}, LIST: Prefix-\"{}\" ObjectKeys: {}".format(worker_id, prefix, object_keys_count)) ## DELETE
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
     else:
@@ -198,7 +198,7 @@ def list(s3_client, **kwargs):
                     task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
                     task_queue.put(task)
                 else:
-                    logger.error("****WorkerId: {}, Prefix:{}, ".format(worker_id, prefix))
+                    logger.error("Worker-{}: ObjectPrefix:{} was not uploaded through latest DM run".format(worker_id, prefix))
                 listing_progress_lock.release()
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))

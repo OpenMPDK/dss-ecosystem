@@ -298,7 +298,12 @@ class ClientApplication(object):
             if self.stop_messaging.value == 0:
                 break
             try:
-                received_response = socket.poll(timeout=1000)  # Wait 1 secs
+                poll_index = 0
+                while poll_index < 30:
+                    received_response = socket.poll(timeout=1000)  # Wait 1 secs
+                    if received_response:
+                        break
+                    poll_index +=1
                 if received_response:
                     message = socket.recv_json()
                     # Check the end message arrived, exit loop
@@ -358,8 +363,9 @@ class ClientApplication(object):
                     if start_time_no_response == 0:
                         start_time_no_response = datetime.now()
                     else:
-                        # Check for 20 Min inactivity
+                        # Check for 30 Min inactivity
                         if (datetime.now() - start_time_no_response).seconds > MONITOR_INACTIVE_WAIT_TIME:
+                            start_time_no_response = datetime.now()
                             self.logger.error("No message received from master in last 30 mins.")
                             # self.index_data_receive_completed.value = 1
                             # break
@@ -454,8 +460,9 @@ class ClientApplication(object):
                     if start_time_not_receiving_status_message == 0:
                         start_time_not_receiving_status_message = datetime.now()
                     else:
-                        # Check for 60 Min inactivity, shutdown forcefully
+                        # Check for 30 Min inactivity, shutdown forcefully
                         if (datetime.now() - start_time_not_receiving_status_message).seconds > MONITOR_INACTIVE_WAIT_TIME:
+                            start_time_not_receiving_status_message = datetime.now()
                             self.logger.error("No message received from workers in last 30 mins.")
                             # self.operation_status_send_completed.value = 1
                             # break

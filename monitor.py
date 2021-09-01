@@ -221,6 +221,8 @@ class Monitor:
                             self.logger.info("Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip_address))
                         if self.send_index_data(client, data):
                             previous_client_operation_status = 1
+                        else:
+                            self.logger.error("Failed to send message to Client-{} ".format(client.id))
 
                     # Debug message , for success
                     if previous_client_operation_status == 1:
@@ -235,7 +237,7 @@ class Monitor:
                 self.logger.info("Messages distributed to clients-{}, Objects Count: {}".format(message_count,
                                                                                              object_count))
                 debug_message_timer = datetime.now()
-            if self.index_data_generation_complete.value == 1  and self.index_data_queue.qsize() == 0 and (self.index_msg_count.value == message_count) :
+            if self.index_data_generation_complete.value == 1  and (self.index_msg_count.value == message_count) :
                 self.logger.info("Indexed data distribution is completed!")
                 self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
@@ -296,10 +298,10 @@ class Monitor:
         socket = client.socket_index
         try:
             socket.send_json(data) # Send index data
-            # Wait (3sec) for ClientApplication's response on operation. Otherwise re-send index data.
+            # Wait maximum (30sec) for ClientApplication's response. Otherwise re-send index-data.
             index = 0
-            while index < 3 :
-              received_response = socket.poll(timeout=1000)  # Wait 3 secs
+            while index < 30 : # Retry 30 times at max
+              received_response = socket.poll(timeout=1000)  # Wait 1 sec
               if received_response:
                 status = socket.recv_json()
                 break
