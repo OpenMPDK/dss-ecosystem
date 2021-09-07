@@ -10,7 +10,7 @@
 ## Build
 
 In source code tree, there is a build.sh can be used as reference to build Client lib which
-consists of C++ libdss.so file and a dss.cpython-xxxxxx.so which provides python interface
+consists of libdss.so and dss.cpython-XXXXXX.so which provides python interface
 under ./build directory.
 
 ### Build Setup Enviroment
@@ -174,4 +174,4 @@ comma.
 To feed conf.json from local filesystem, set environment variable DSS_CONFIG_FILE to the path
 pointing to the config file
 
-```DSS_CONFIG_FILE=/path/to/clientlib/dss_client/conf.jso python3 test/example.py```
+```DSS_CONFIG_FILE=/path/to/clientlib/dss_client/conf.json python3 test/example.py```
