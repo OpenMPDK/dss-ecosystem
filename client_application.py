@@ -43,13 +43,14 @@ from datetime import datetime
 import time
 import zmq
 import socket
+from socket_communication import ServerSocket
 
 mgr = Manager()
 index_buffer = mgr.dict()
 
 BASE_DIR = os.path.dirname(__file__)
-MONITOR_INACTIVE_WAIT_TIME = 1800 # 30 Mins
-DEBUG_MESSAGE_INTERVAL = 600 # 10 Mins
+MONITOR_INACTIVE_WAIT_TIME = 300 # 30 Mins
+DEBUG_MESSAGE_INTERVAL = 60 # 10 Mins
 
 
 class ClientApplication(object):
@@ -221,7 +222,7 @@ class ClientApplication(object):
         :return:
         """
         print("INFO: Starting messaging system ...")
-        self.process_index = Process(target=self.message_server_index)
+        self.process_index = Process(target=self.message_server_index1)
         self.process_index.start()
 
         self.process_status = Process(target=self.message_server_status)
@@ -303,7 +304,7 @@ class ClientApplication(object):
                     received_response = socket.poll(timeout=1000)  # Wait 1 secs
                     if received_response:
                         break
-                    poll_index +=1
+                    poll_index += 1
                 if received_response:
                     message = socket.recv_json()
                     # Check the end message arrived, exit loop
@@ -389,6 +390,117 @@ class ClientApplication(object):
             self.logger.excep("Monitor-Index-Receiver - {}".fromat(e))
         finally:
             context.term()
+
+    def message_server_index1(self):
+        """
+        Message Handler process incoming file index
+        index message:{"dir":<>,"files":["f1","f2"],"size":<size of all files>, "nfs_cluster":<IP>, "nfs_share":<path>}
+        end message: {"indexing" : 1 }
+
+        Once indexing is completed at Master application side, master send a end message to all clients to finish their
+        operation.
+
+        Termination of Process:
+        - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
+        - Gracefully: The client application stop the message handler with "stop_messaging" shared variable.
+        - Forcefully, process gets terminated on receiving termination signal.
+
+        ## TODO
+        - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
+        - Forcefully: process gets terminated on receiving termination signal. Need to add signal handler.
+        :return:
+        """
+        try:
+            socket =  ServerSocket(self.logger)
+            socket_index_address = "{}:{}".format(self.ip_address, self.port_index)
+            socket.bind(self.ip_address, self.port_index)
+            self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
+        except Exception as e:
+            self.logger.excep("ZMQ Binding error - {} ".format(e))
+            self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
+            return
+        socket.accept()
+        objects_count = 0
+        start_time_no_response = 0 # Start time of no response from master
+        debug_message_timer =  datetime.now()
+        while True:
+
+            # Check messaging flag  and break the  , generally multiprocessing Queue and value is thread/process safe.
+            if self.stop_messaging.value == 0:
+                break
+            try:
+                #received_response = socket.poll(timeout=1000)  # Wait 1 secs
+                if True:
+                    message = socket.recv_json()
+                    # Check the end message arrived, exit loop
+                    if "indexing_done" in message and message["indexing_done"]:
+                        self.logger.info("Receiving Index-data completed. Closing Monitor-Index-Receiver! ")
+                        self.index_data_receive_completed.value = 1
+                        break
+
+                    with self.message_count.get_lock():
+                        self.message_count.value +=1
+                    if self.debug:
+                        self.logger.debug("Received Indexed MSG, Operation:{} , Prefix:{}".format(self.operation, message["dir"]))
+
+                    is_index_data_added = False
+
+                    if self.operation.upper() == "PUT" or self.operation.upper() == "TEST":
+                        ## Message validation, NFS Mounting if not already mounted on client node
+                        if "nfs_cluster" in message and "dir" in message:
+                            if self.config.get("master_node", None) and self.config["master_node"] == 1:
+                                self.add_task(message)
+                                is_index_data_added = True
+                            else:
+                                if self.nfs_mount(message["nfs_cluster"], message["nfs_share"]):
+                                    self.add_task(message)
+                                    is_index_data_added = True
+                                else:
+                                    self.logger.error("Issue with mounting! NFS-Share {}".format(message["nfs_share"]))
+                        else:
+                            self.logger.error("Bad formed message -{}".format(message))
+                    elif self.operation.upper() == "DEL" or self.operation.upper() == "GET":
+                        self.add_task(message)  # Add message to task queue to be consumed by workers.
+                        is_index_data_added = True
+
+                    objects_count_under_prefix = len(message["files"])
+                    objects_count += objects_count_under_prefix
+                    if is_index_data_added:
+                        ## Create a Shared dictionary to check progress of PUT/DEL/GET operation
+                        if message["dir"] in index_buffer:
+                            index_buffer[message["dir"]] += len(message["files"])
+                        else:
+                            index_buffer[message["dir"]] = len(message["files"])
+
+                    start_time_no_response = 0
+                else:
+                    if start_time_no_response == 0:
+                        start_time_no_response = datetime.now()
+                    else:
+                        # Check for 30 Min inactivity
+                        if (datetime.now() - start_time_no_response).seconds > MONITOR_INACTIVE_WAIT_TIME:
+                            start_time_no_response = datetime.now()
+                            self.logger.error("No message received from master in last 30 mins.")
+                            # self.index_data_receive_completed.value = 1
+                            # break
+
+                # Debug message
+                if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
+                    self.logger.info(
+                        "Messages received from master-{}, Objects Count: {}".format(self.message_count.value,
+                                                                                          objects_count))
+                    debug_message_timer = datetime.now()
+
+            except Exception as e:
+                self.logger.excep("Monitor-Index - {}".format(e))
+
+        self.logger.info("Total messages received from master-{}, Objects Count: {}".format(self.message_count.value, objects_count))
+        # Close socket connection and destroy context
+        try:
+            socket.close()
+            self.logger.info("Monitor-Index-Receiver terminated gracefully !")
+        except Exception as e:
+            self.logger.excep("Monitor-Index-Receiver - {}".fromat(e))
 
     def add_task(self,message):
         """
@@ -610,8 +722,9 @@ if __name__ == "__main__":
             ca.logger.info("All workers terminated !")
             break
         else:
-            if not ca.monitor_workers():
-                break
+            #if not ca.monitor_workers():
+            #    break
+            pass
 
         time.sleep(1)
 

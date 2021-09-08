@@ -39,6 +39,7 @@ from utils.utility import exception, exec_cmd, progress_bar, get_ip_address
 from datetime import datetime
 import json
 from logger import  MultiprocessingLogger
+from socket_communication import ClientSocket
 
 """
 Monitor the progress of operation.
@@ -47,7 +48,7 @@ Monitor the progress of operation.
 - Display/Store result
 """
 manager = Manager()
-MONITOR_INACTIVE_WAIT_TIME = 1800 # 30 Mins
+MONITOR_INACTIVE_WAIT_TIME = 180 # 30 Mins
 DEBUG_MESSAGE_INTERVAL = 100 # 10 Mins
 
 class Monitor:
@@ -98,7 +99,7 @@ class Monitor:
           self.process_listing_aggregator.start()
         else:
           # Start index process
-          self.process_index = Process(target=self.message_handler_index)
+          self.process_index = Process(target=self.message_handler_index1)
           self.process_index.start()
 
           # Start status_poller  process
@@ -172,7 +173,7 @@ class Monitor:
         index_distribution_start_time = datetime.now()
         message_count = 0
         object_count = 0
-        debug_message_timer = datetime.now()
+
 
         while True:
 
@@ -284,6 +285,156 @@ class Monitor:
 
         self.monitor_index_data_sender.value = 1
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
+
+
+    def message_handler_index1(self):
+        """
+        The "message_handler_index" function send index information to all the clients in round-robin fashion.
+        message data = {"dir":"/bird/bird1", "files":[], "nfs_cluster":"10.1.51.54"}
+        Stop Processing:
+          Gracefully shut down monitor
+          - All indexed is processed and thus "index_data_generation_complete" is set to 1
+          - The "index_data_queue" has sent all outstanding messages to client application.
+          Forcefully: If process is terminated
+          - Forcefully stopped through "stop_status_poller" by setting it to 1.
+
+        :return: None
+        """
+        try:
+            for client in self.clients:
+                client.socket_index = ClientSocket(self.logger)
+                client.socket_index.connect(client.ip_address, client.port_index)
+                self.logger.info("Connecting to INDEX MessageHandler {}:{}".format(client.ip_address, client.port_index))
+        except ConnectionError as e:
+            self.logger.excep("Socket Connection error: {}".format(e))
+            return
+
+        # Buffer to store prefix index and file count  {"prefix":<file count>}
+        first_index_distribution  = 0
+        index_distribution_start_time = datetime.now()
+        message_count = 0
+        object_count = 0
+        debug_message_timer = datetime.now()
+
+        while True:
+
+            # Forcefully stop the process
+            if self.stop_status_poller.value :
+                self.logger.error("Forcefully shutting down Monitor-index!")
+                break
+
+            previous_client_operation_status = 1
+            data = {}
+            # Send index data to each client in round-robin fashion
+            for client in self.clients:
+                # Get data from shared index queue, if the previous client processed data successfully
+                if previous_client_operation_status:
+                    data = {}
+                    if self.index_data_queue.qsize() > 0:
+                        data = self.index_data_queue.get()
+                # Send data to ClientApplication running on a  Client-Physical Node
+                if data:
+                    object_count_under_prefix = len(data["files"])
+                    # Buffer prefix_index_data for persistent storage only to be used during PUT
+                    if self.operation.upper() == "PUT":
+                        object_prefix_key = data["dir"][1:] + "/"
+                        if object_prefix_key in self.prefix_index_data:
+                            self.prefix_index_data[object_prefix_key]["files"] += object_count_under_prefix
+                            self.prefix_index_data[object_prefix_key]["size"]  += data["size"]
+                        else:
+                            self.prefix_index_data[object_prefix_key] = manager.dict()
+                            self.prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
+
+                    # self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip_address, client.port_index, data))
+                    if self.send_index_data1(client, data):
+                        previous_client_operation_status = 1
+                        # Just for OPERATION stats collection
+                        if first_index_distribution == 0:
+                            index_distribution_start_time = datetime.now()
+                            first_index_distribution =1
+                    else: # Re-send once again
+                        previous_client_operation_status = 0
+                        self.logger.error("Failed to send message to Client-{} ".format(client.id))
+
+                    # Debug message , for success
+                    if previous_client_operation_status == 1:
+                        message_count += 1
+                        with self.received_index_msg_count.get_lock():
+                          self.received_index_msg_count.value +=1
+
+                        object_count += object_count_under_prefix
+
+            # Debug message
+            if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
+                self.logger.info("Messages distributed to clients-{}, Objects Count: {}".format(message_count,
+                                                                                             object_count))
+                debug_message_timer = datetime.now()
+            if self.index_data_generation_complete.value == 1  and (self.index_msg_count.value == message_count) :
+                self.logger.info("Indexed data distribution is completed!")
+                self.all_index_data_distributed.value = 1
+                self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
+                self.logger.info("Total distributed messages- {}, Objects Count-{}".format(message_count, object_count))
+
+                # Inform all the client applications running on different nodes
+                for client in self.clients:
+                    data = {"indexing_done": 1}
+                    if not self.send_index_data1(client, data):
+                        if not self.send_index_data1(client, data):
+                            self.logger.error("Unable to send indexing completion message to client-{}".format(client.id))
+                    self.logger.info("Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip_address, client.port_index, data))
+                # Intimidated all the clients, exit the loop.
+                break
+
+        # Closing all socket connection
+        try:
+            # Close all sockets associated with clients.
+            for client in self.clients:
+                client.socket_index.close()
+        except Exception as e:
+            self.logger.excep("{}: monitor-index Closing Socket {}".format(e))
+
+
+
+        # Update MasterApplication about termination of Monitor
+        #self.monitor_index_data_sender.value = 1
+
+        # Storing prefix index data to persistent storage
+        if self.operation.upper() == "PUT":
+            prefix_storage_file = "/var/log/prefix_index_data.json"
+            prefix_index_data = {}
+            for key,value in self.prefix_index_data.items():
+                prefix_index_data[key] = value.copy()
+
+            self.logger.info("Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
+            try:
+                with open(prefix_storage_file, "w") as persistent_storage:
+                    json.dump(prefix_index_data, persistent_storage)
+                self.logger.info("INFO: Stored file index data to {}".format(prefix_storage_file))
+            except Exception as e:
+                self.logger.info("Dump Persistent Data - {}".format(e))
+
+        self.monitor_index_data_sender.value = 1
+        self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
+
+
+    def send_index_data1(self, client, data):
+        """
+        Send index data for a socket client. On failure, resend once.
+        The error code is returned by the client and captured here in the log.
+        :param socket: client socket
+        :param data: index data
+        :return: success/failure 1/0
+        """
+        socket = client.socket_index
+        ret = False
+        try:
+            ret = socket.send_json(data) # Send index data
+        except RuntimeError as e:
+            self.logger.excep("MSG send error - {}".format(e))
+        except Exception as e:
+            self.logger.excep("Monitor-Index -{}".format(e))
+
+        return ret
 
 
     def send_index_data(self, client, data):
