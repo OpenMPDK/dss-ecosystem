@@ -40,7 +40,9 @@ import time
 import hashlib
 import paramiko
 import socket
+import queue
 from multiprocessing import Process, Queue, Value, Lock
+
 
 """
 Contains list of utility functions...
@@ -299,3 +301,23 @@ def is_prefix_valid_for_nfs_share(logger, **kwargs):
         return True
     # logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete 
     return False
+
+
+@exception
+def is_queue_empty(mp_queue=None):
+    queue_empty = True
+    if mp_queue:
+        if mp_queue.qsize() == 0:
+            try:
+                value = mp_queue.get(timeout=1)
+                queue_empty = False
+                mp_queue.put(value)
+            except queue.Empty:
+                pass
+            except Exception as e:
+                print("empty queue - {}".format(e))
+        else:
+            queue_empty = False
+    else:
+        print("Multi-processing Queue is not passed")
+    return queue_empty

@@ -33,7 +33,7 @@
 """
 import os,sys
 import time
-from utils.utility import  exception
+from utils.utility import  exception, is_queue_empty
 from multiprocessing import Process, Queue, Value, Lock
 
 """
@@ -159,7 +159,7 @@ class MultiprocessingLogger:
             while True:
                 fh = open(self.logfile, "a")
 
-                while queue.qsize() > 0:
+                while not is_queue_empty(queue):
                     message = queue.get()
                     if type(message) == tuple:
                         (message_level,message_value) = message
@@ -167,10 +167,8 @@ class MultiprocessingLogger:
                         fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
                     else:
                         fh.write(str(time.ctime()) + ": "+ message + "\n")
-                self.stop_lock.acquire()
-                stop = stop_logging.value
-                self.stop_lock.release()
-                if stop and queue.qsize() == 0:
+
+                if stop_logging.value and is_queue_empty(queue):
                     break
                 time.sleep(1)
                 fh.close()

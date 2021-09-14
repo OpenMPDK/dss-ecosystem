@@ -35,11 +35,11 @@ import os,sys
 import time
 import  zmq
 from multiprocessing import Process,Queue,Value, Lock, Manager
-from utils.utility import exception, exec_cmd, progress_bar, get_ip_address
+from utils.utility import exception, exec_cmd, progress_bar, get_ip_address, is_queue_empty
 from datetime import datetime
 import json
 from logger import  MultiprocessingLogger
-from socket_communication import ClientSocket
+from socket_communication import ClientSocket, ServerSocket
 
 """
 Monitor the progress of operation.
@@ -48,8 +48,8 @@ Monitor the progress of operation.
 - Display/Store result
 """
 manager = Manager()
-MONITOR_INACTIVE_WAIT_TIME = 180 # 30 Mins
-DEBUG_MESSAGE_INTERVAL = 100 # 10 Mins
+MONITOR_INACTIVE_WAIT_TIME = 1800 # 30 Mins
+DEBUG_MESSAGE_INTERVAL = 120 # 10 Mins
 
 class Monitor:
 
@@ -99,7 +99,7 @@ class Monitor:
           self.process_listing_aggregator.start()
         else:
           # Start index process
-          self.process_index = Process(target=self.message_handler_index1)
+          self.process_index = Process(target=self.message_handler_index)
           self.process_index.start()
 
           # Start status_poller  process
@@ -157,150 +157,6 @@ class Monitor:
         :return: None
         """
         try:
-            context = zmq.Context()
-            for client in self.clients:
-                client.socket_index = context.socket(zmq.REQ)
-                if self.ip_address_family.upper() == "IPV6":
-                    client.socket_index.setsockopt(zmq.IPV6, 1)
-                client.socket_index.connect("tcp://{}:{}".format(client.ip_address, client.port_index))
-                self.logger.info("Connecting to INDEX MessageHandler tcp://{}:{}".format(client.ip_address, client.port_index))
-        except Exception as e:
-            self.logger.excep("ZMQ Connection error IndexDistributor - {}".format(e))
-            return
-
-        # Buffer to store prefix index and file count  {"prefix":<file count>}
-        first_index_distribution  = 0
-        index_distribution_start_time = datetime.now()
-        message_count = 0
-        object_count = 0
-
-
-        while True:
-
-            # Forcefully stop the process
-            #self.status_lock.acquire()
-            stop = self.stop_status_poller.value
-            #self.status_lock.release()
-            if stop :
-                self.logger.error("Forcefully shutting down Monitor-index!")
-                break
-
-            previous_client_operation_status = 1
-            data = {}
-            # Send index data to each client in round-robin fashion
-            for client in self.clients:
-                # Get data from shared index queue, if the previous client processed data successfully
-                if previous_client_operation_status:
-                    data = {}
-                    if self.index_data_queue.qsize() > 0:
-                        data = self.index_data_queue.get()
-                # Send data to ClientApplication running on a  Client-Physical Node
-                if data:
-                    object_count_under_prefix = len(data["files"])
-                    # Buffer prefix_index_data for persistent storage only to be used during PUT
-                    if self.operation.upper() == "PUT":
-                        object_prefix_key = data["dir"][1:] + "/"
-                        if object_prefix_key in self.prefix_index_data:
-                            self.prefix_index_data[object_prefix_key]["files"] += object_count_under_prefix
-                            self.prefix_index_data[object_prefix_key]["size"]  += data["size"]
-                        else:
-                            self.prefix_index_data[object_prefix_key] = manager.dict()
-                            self.prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
-
-                    # self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip_address, client.port_index, data))
-                    if self.send_index_data(client, data):
-                        previous_client_operation_status = 1
-                        # Just for OPERATION stats collection
-                        if first_index_distribution == 0:
-                            index_distribution_start_time = datetime.now()
-                            first_index_distribution =1
-                    else: # Re-send once again
-                        previous_client_operation_status = 0
-                        if client.socket_index.closed:
-                            client.socket_index = context.socket(zmq.REQ)
-                            client.socket_index.connect("tcp://{}:{}".format(client.ip_address, client.port_index))
-                            self.logger.info("Refreshed the socket-index for the Client-{} : {}".format(client.id, client.ip_address))
-                        if self.send_index_data(client, data):
-                            previous_client_operation_status = 1
-                        else:
-                            self.logger.error("Failed to send message to Client-{} ".format(client.id))
-
-                    # Debug message , for success
-                    if previous_client_operation_status == 1:
-                        message_count += 1
-                        with self.received_index_msg_count.get_lock():
-                          self.received_index_msg_count.value +=1
-
-                        object_count += object_count_under_prefix
-
-            # Debug message
-            if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
-                self.logger.info("Messages distributed to clients-{}, Objects Count: {}".format(message_count,
-                                                                                             object_count))
-                debug_message_timer = datetime.now()
-            if self.index_data_generation_complete.value == 1  and (self.index_msg_count.value == message_count) :
-                self.logger.info("Indexed data distribution is completed!")
-                self.all_index_data_distributed.value = 1
-                self.logger.info("Index Distribution FINISHED, time - {} Sec".format((datetime.now() - index_distribution_start_time).seconds))
-                self.logger.info("Total distributed messages- {}, Objects Count-{}".format(message_count, object_count))
-
-                # Inform all the client applications running on different nodes
-                for client in self.clients:
-                    data = {"indexing_done": 1}
-                    if not self.send_index_data(client, data):
-                        if not self.send_index_data(client, data):
-                            self.logger.error("Unable to send indexing completion message to client-{}".format(client.id))
-                    self.logger.info("Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip_address, client.port_index, data))
-                # Intimidated all the clients, exit the loop.
-                break
-
-        # Closing all socket connection
-        try:
-            # Close all sockets associated with clients.
-            for client in self.clients:
-                client.socket_index.close()
-        except Exception as e:
-            self.logger.excep("{}: monitor-index Closing Socket {}".format(e))
-        finally:
-            context.term() # Terminate context
-
-
-        # Update MasterApplication about termination of Monitor
-        #self.monitor_index_data_sender.value = 1
-
-        # Storing prefix index data to persistent storage
-        if self.operation.upper() == "PUT":
-            prefix_storage_file = "/var/log/prefix_index_data.json"
-            prefix_index_data = {}
-            for key,value in self.prefix_index_data.items():
-                prefix_index_data[key] = value.copy()
-
-            self.logger.info("Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
-            try:
-                with open(prefix_storage_file, "w") as persistent_storage:
-                    json.dump(prefix_index_data, persistent_storage)
-                self.logger.info("INFO: Stored file index data to {}".format(prefix_storage_file))
-            except Exception as e:
-                self.logger.info("Dump Persistent Data - {}".format(e))
-
-        self.monitor_index_data_sender.value = 1
-        self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
-
-
-    def message_handler_index1(self):
-        """
-        The "message_handler_index" function send index information to all the clients in round-robin fashion.
-        message data = {"dir":"/bird/bird1", "files":[], "nfs_cluster":"10.1.51.54"}
-        Stop Processing:
-          Gracefully shut down monitor
-          - All indexed is processed and thus "index_data_generation_complete" is set to 1
-          - The "index_data_queue" has sent all outstanding messages to client application.
-          Forcefully: If process is terminated
-          - Forcefully stopped through "stop_status_poller" by setting it to 1.
-
-        :return: None
-        """
-        try:
             for client in self.clients:
                 client.socket_index = ClientSocket(self.logger)
                 client.socket_index.connect(client.ip_address, client.port_index)
@@ -315,6 +171,7 @@ class Monitor:
         message_count = 0
         object_count = 0
         debug_message_timer = datetime.now()
+        prefix_index_data = {}
 
         while True:
 
@@ -338,15 +195,15 @@ class Monitor:
                     # Buffer prefix_index_data for persistent storage only to be used during PUT
                     if self.operation.upper() == "PUT":
                         object_prefix_key = data["dir"][1:] + "/"
-                        if object_prefix_key in self.prefix_index_data:
-                            self.prefix_index_data[object_prefix_key]["files"] += object_count_under_prefix
-                            self.prefix_index_data[object_prefix_key]["size"]  += data["size"]
+                        if object_prefix_key in prefix_index_data:
+                            prefix_index_data[object_prefix_key]["files"] += object_count_under_prefix
+                            prefix_index_data[object_prefix_key]["size"]  += data["size"]
                         else:
-                            self.prefix_index_data[object_prefix_key] = manager.dict()
-                            self.prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
+                            prefix_index_data[object_prefix_key] = {"files": len(data["files"]), "size": data["size"]}
+                            #prefix_index_data[object_prefix_key].update({"files": len(data["files"]), "size": data["size"]})
 
                     # self.logger.debug("Sending index data - {}:{} -> {}".format(client.ip_address, client.port_index, data))
-                    if self.send_index_data1(client, data):
+                    if self.send_index_data(client, data):
                         previous_client_operation_status = 1
                         # Just for OPERATION stats collection
                         if first_index_distribution == 0:
@@ -378,13 +235,12 @@ class Monitor:
                 # Inform all the client applications running on different nodes
                 for client in self.clients:
                     data = {"indexing_done": 1}
-                    if not self.send_index_data1(client, data):
-                        if not self.send_index_data1(client, data):
+                    if not self.send_index_data(client, data):
+                        if not self.send_index_data(client, data):
                             self.logger.error("Unable to send indexing completion message to client-{}".format(client.id))
                     self.logger.info("Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(client.ip_address, client.port_index, data))
                 # Intimidated all the clients, exit the loop.
                 break
-
         # Closing all socket connection
         try:
             # Close all sockets associated with clients.
@@ -393,18 +249,9 @@ class Monitor:
         except Exception as e:
             self.logger.excep("{}: monitor-index Closing Socket {}".format(e))
 
-
-
-        # Update MasterApplication about termination of Monitor
-        #self.monitor_index_data_sender.value = 1
-
         # Storing prefix index data to persistent storage
         if self.operation.upper() == "PUT":
             prefix_storage_file = "/var/log/prefix_index_data.json"
-            prefix_index_data = {}
-            for key,value in self.prefix_index_data.items():
-                prefix_index_data[key] = value.copy()
-
             self.logger.info("Storing prefix_index_data to persistent storage - {}".format(prefix_storage_file))
             try:
                 with open(prefix_storage_file, "w") as persistent_storage:
@@ -417,7 +264,7 @@ class Monitor:
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
 
 
-    def send_index_data1(self, client, data):
+    def send_index_data(self, client, data):
         """
         Send index data for a socket client. On failure, resend once.
         The error code is returned by the client and captured here in the log.
@@ -436,42 +283,6 @@ class Monitor:
 
         return ret
 
-
-    def send_index_data(self, client, data):
-        """
-        Send index data for a socket client. On failure, resend once.
-        The error code is returned by the client and captured here in the log.
-        :param socket: client socket
-        :param data: index data
-        :return: success/failure 1/0
-        """
-        status = {}
-        socket = client.socket_index
-        try:
-            socket.send_json(data) # Send index data
-            # Wait maximum (30sec) for ClientApplication's response. Otherwise re-send index-data.
-            index = 0
-            while index < 30 : # Retry 30 times at max
-              received_response = socket.poll(timeout=1000)  # Wait 1 sec
-              if received_response:
-                status = socket.recv_json()
-                break
-              index +=1
-        except Exception as e:
-            #self.logger.excep("Monitor-Index -{}".format(e))
-            socket.close()
-            self.logger.info("Closed socket for Client-{}:{}".format(client.id,client.ip_address))
-
-        # status = {"success": 1} or {"success": 0}  for failure, try second time
-        if status.get("success", False):
-          if status["success"] == 1:
-            return 1
-          elif status["success"] == 0:
-            self.logger.error("ERROR:{}".format(status["ERROR"]))
-
-        return 0
-
-
     def message_handler_poller(self):
         """
         Monitor: Status Poller
@@ -479,18 +290,21 @@ class Monitor:
         :return:
         """
         try:
-            context = zmq.Context()
             for client in self.clients:
-                client.socket_status = context.socket(zmq.PULL)
-                if self.ip_address_family.upper() == "IPV6":
-                    client.socket_status.setsockopt(zmq.IPV6, 1)
-                self.logger.info("Monitor-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id, client.ip_address, client.port_status))
-                client.socket_status.connect("tcp://{}:{}".format(client.ip_address, client.port_status))
+                client.socket_status = ClientSocket(self.logger)
+                client.socket_status.connect(client.ip_address, client.port_status)
+                #if self.ip_address_family.upper() == "IPV6":
+                #    client.socket_status.setsockopt(zmq.IPV6, 1)
+                self.logger.info("Monitor-Status-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id,
+                                                                                                    client.ip_address,
+                                                                                                    client.port_status))
+                #client.socket_status.accept()
         except Exception as e:
-            self.logger.excep("ZMQ Connection ERROR, StatusPoller - {}".format(e))
+            self.logger.excep("ZMQ Connection ERROR, Monitor-Status-Poller - {}".format(e))
             return
 
         client_application_exit_count = 0
+        received_status_msg_count = 0
         while True:
 
             ## Condition to break the loop:
@@ -505,7 +319,7 @@ class Monitor:
                 if client.socket_status is None:
                     continue
                 ## ERROR Handling: If the ClientApplication abruptly gets shutdown, exit code should be non-zero,
-                #  We don't except for end message to be reached, hence the socket can be closed.
+                #  We don't expect end message to be reached, hence the socket can be closed.
                 if client.status.value and client.exit_status_code.value != 0:
                     client.socket_status.close()
                     client.socket_status = None
@@ -513,9 +327,8 @@ class Monitor:
                     continue
                 try:
                     all_client_applications_terminated = False
-                    received_response = client.socket_status.poll(timeout=1000)  # Wait 1 secs
-                    if received_response:
-                        status = client.socket_status.recv_json()
+                    status = client.socket_status.recv_json()
+                    if status:
                         # Check status message or end message for that Client
                         self.logger.debug("Monitor-Poller Operation Status for client-{}, Status - {}".format(client.id, status))
                         if "exit" in status and status["exit"]:
@@ -524,13 +337,18 @@ class Monitor:
                             client_application_exit_count += 1
                         else:
                             self.status_queue.put(status)
+                            received_status_msg_count +=1
                 except Exception as e:
                     self.logger.excep("Monitor-Status-Poller {} ".format(e))
 
-
             # Check if all client_applications terminated?
             if all_client_applications_terminated:
-                self.logger.debug("Monitor-Status-Poller: All ClientApplications Terminated, EXITs! ")
+                self.logger.debug("Monitor-Status-Poller: All ClientApplications Terminated, Exit!")
+                self.stop_status_poller.value = 1
+                break
+            # Exit monitor-status-poller if all messages received back from client-app.
+            if self.all_index_data_distributed.value and ( self.index_msg_count.value == received_status_msg_count ):
+                self.logger.info("Monitor-Status-Poller received all the status messages = {} , Exit!".format(received_status_msg_count))
                 self.stop_status_poller.value = 1
                 break
 
@@ -541,14 +359,9 @@ class Monitor:
                     client.socket_status.close()
         except Exception as e:
             self.logger.excep("Minitor-Poller {}".format(e))
-        finally:
-            context.term() # Terminate context.
 
-        #self.status_lock.acquire()
         self.monitor_status_poller.value = 1
-        #self.status_lock.release()
         self.logger.info("Monitor-Status-Poller terminated gracefully! ")
-
 
     @exception
     def operation_progress(self):
@@ -567,14 +380,12 @@ class Monitor:
         debug_message_timer = datetime.now()
 
         while True:
-            # Condition to break the loop:
-            # If status poller has stopped  and status_queue is empty
-
-            # Forcefully stop the process
-            if self.stop_status_poller.value == 1 and self.status_queue.qsize() == 0:
+            # Stop the monitor when status-poller is stopped and status_queue is empty.
+            if self.stop_status_poller.value == 1 and is_queue_empty(self.status_queue):
+                self.logger.info("Monitor-Operation-Progress is about to exit!")
                 break
 
-            if self.status_queue.qsize() > 0:
+            if not is_queue_empty(self.status_queue):
                 status = self.status_queue.get()
                 operation_success_count += status.get("success", 0)
                 if status.get("failure", 0):
@@ -595,9 +406,6 @@ class Monitor:
                     processed_prefix[prefix] = status.get("success", 0) + status.get("failure", 0)
 
                 file_index_count = operation_success_count + operation_failure_count
-                #self.logger.debug("OperationProgress: Total Files-{}, Success-{}, Failure-{}".format(self.index_data_count.value,
-                #                                                                  operation_success_count,
-                #                                                                  operation_failure_count))
                 # Debug message
                 if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
                     self.logger.info("OperationProgress: Indexed Files={}, Operation (Success={}, Failure={})".format(
@@ -609,22 +417,24 @@ class Monitor:
 
                     upload_percentage = (file_index_count / self.index_data_count.value) * 100
                     if upload_percentage > display_percentage:
-                        self.logger.info(" ** Monitor-Progress - Operation Progress Statuss - {:.2f}% **".format(upload_percentage))
+                        self.logger.info(" ** Monitor-Progress - Operation Progress Status - {:.2f}% **".format(upload_percentage))
                         display_percentage +=10
 
             ## All index data distributed to clients and received all operation status back from clients.
             if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
                 self.stop_status_poller.value = 1   # This will stop Monitor-Poller
+                self.logger.info("Monitor-Operation-Progress received status of all objects = {}".format(file_index_count))
 
         total_operation_time = (datetime.now() - self.operation_start_time).seconds
 
         # Calculate operation BandWidth
-        if self.operation.upper() == "DEL" or self.operation.upper() == "GET":
-            prefix_index_data_file = "/var/log/prefix_index_data.json"
-            with open(prefix_index_data_file, "r") as prefix_index_data_handler:
+        prefix_index_data_file = "/var/log/prefix_index_data.json"
+        prefix_index_data = {}
+        with open(prefix_index_data_file, "r") as prefix_index_data_handler:
+            try:
                 prefix_index_data = json.load(prefix_index_data_handler)
-        else:
-            prefix_index_data = self.prefix_index_data
+            except json.JSONDecodeError as e:
+                self.logger.error("Persistent index data - {}".format(e))
 
         # Calculate total operation(PUT/GET/DEL) size
         original_file_size_in_byte = 0
@@ -664,7 +474,7 @@ class Monitor:
         # Check if TestCase has passed
         if self.index_data_count.value == operation_success_count:
             self.testcase_passed.value = True
-        self.logger.info("Monitor-Progress-Status terminated! ")
+        self.logger.info("Monitor-Operation-Progress terminated! ")
 
 
     def object_keys_aggregator(self):
@@ -692,11 +502,11 @@ class Monitor:
             return   
           self.logger.debug("ObjectKeys aggregation started!")
           while True:
-            if self.listing_status and self.listing_status.value == 2 and self.listing_objectkey_queue.qsize() == 0:
+            if self.listing_status and self.listing_status.value == 2 and is_queue_empty(self.listing_objectkey_queue):
               self.listing_aggregation_status.value = 1
               self.logger.debug("Object Keys aggregation is completed!")
               break
-            if self.listing_objectkey_queue.qsize() > 0:
+            if not is_queue_empty(self.listing_objectkey_queue):
               object_keys_data = self.listing_objectkey_queue.get()
               prefix = object_keys_data["prefix"]
               object_keys = object_keys_data["object_keys"]

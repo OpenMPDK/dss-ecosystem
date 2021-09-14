@@ -43,14 +43,14 @@ from datetime import datetime
 import time
 import zmq
 import socket
-from socket_communication import ServerSocket
+from socket_communication import ServerSocket, ClientSocket
 
 mgr = Manager()
 index_buffer = mgr.dict()
 
 BASE_DIR = os.path.dirname(__file__)
-MONITOR_INACTIVE_WAIT_TIME = 300 # 30 Mins
-DEBUG_MESSAGE_INTERVAL = 60 # 10 Mins
+MONITOR_INACTIVE_WAIT_TIME = 1800 # 30 Mins
+DEBUG_MESSAGE_INTERVAL = 120 # 10 Mins
 
 
 class ClientApplication(object):
@@ -222,7 +222,7 @@ class ClientApplication(object):
         :return:
         """
         print("INFO: Starting messaging system ...")
-        self.process_index = Process(target=self.message_server_index1)
+        self.process_index = Process(target=self.message_server_index)
         self.process_index.start()
 
         self.process_status = Process(target=self.message_server_status)
@@ -278,145 +278,12 @@ class ClientApplication(object):
         :return:
         """
         try:
-            context = zmq.Context()
-            socket_index_address = "tcp://{}:{}".format(self.ip_address, self.port_index)
-            socket = context.socket(zmq.REP)
-            if self.ip_address_family.upper() == "IPV6":
-                socket.setsockopt(zmq.IPV6,1)
-            socket.bind(socket_index_address)
-            self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
-        except Exception as e:
-            self.logger.excep("ZMQ Binding error - {} ".format(e))
-            self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
-            return
-        #message_count = 0
-        objects_count = 0
-        start_time_no_response = 0 # Start time of no response from master
-        debug_message_timer =  datetime.now()
-        while True:
-
-            # Check messaging flag  and break the  , generally multiprocessing Queue and value is thread/process safe.
-            if self.stop_messaging.value == 0:
-                break
-            try:
-                poll_index = 0
-                while poll_index < 30:
-                    received_response = socket.poll(timeout=1000)  # Wait 1 secs
-                    if received_response:
-                        break
-                    poll_index += 1
-                if received_response:
-                    message = socket.recv_json()
-                    # Check the end message arrived, exit loop
-                    if "indexing_done" in message and message["indexing_done"]:
-                        self.logger.info("Receiving Index-data completed. Closing Monitor-Index-Receiver! ")
-                        socket.send_json({"success": 1})
-                        self.index_data_receive_completed.value = 1
-                        break
-
-                    with self.message_count.get_lock():
-                        self.message_count.value +=1
-                    if self.debug:
-                        self.logger.debug("Received Indexed MSG, Operation:{} , Prefix:{}".format(self.operation, message["dir"]))
-
-                    is_index_data_added = False
-
-                    if self.operation.upper() == "PUT" or self.operation.upper() == "TEST":
-                        ## Message validation, NFS Mounting if not already mounted on client node
-                        if "nfs_cluster" in message and "dir" in message:
-                            if self.config.get("master_node", None) and self.config["master_node"] == 1:
-                                self.add_task(message)
-                                socket.send_json({"success": 1})  # Send response back to MasterApp
-                                is_index_data_added = True
-                            else:
-                                if self.nfs_mount(message["nfs_cluster"], message["nfs_share"]):
-                                    self.add_task(message)
-                                    socket.send_json({"success": 1})  # Send response back to MasterApp
-                                    is_index_data_added = True
-                                else:
-                                    self.logger.error("Issue with mounting! NFS-Share {}".format(message["nfs_share"]))
-                                    ## Send the success/failure status to master
-                                    socket.send_json({"success": 0,
-                                                      "ERROR": "Client-{} , Failed NFS -{} mounting".format(self.id,
-                                                                                                            message[
-                                                                                                                "dir"])})
-                        else:
-                            self.logger.error("Bad formed message -{}".format(message))
-                            socket.send_json({"success": 0,
-                                              "ERROR": "Client-{} , Bad Index MSG format -{}".format(self.id, message)})
-
-                    elif self.operation.upper() == "DEL" or self.operation.upper() == "GET":
-                        self.add_task(message)  # Add message to task queue to be consumed by workers.
-                        socket.send_json({"success": 1})  # Send response back to MasterApp
-                        is_index_data_added = True
-
-                    objects_count_under_prefix = len(message["files"])
-                    objects_count += objects_count_under_prefix
-                    if is_index_data_added:
-                        ## Create a Shared dictionary to check progress of PUT/DEL/GET operation
-                        if message["dir"] in index_buffer:
-                            index_buffer[message["dir"]] += len(message["files"])
-                        else:
-                            index_buffer[message["dir"]] = len(message["files"])
-
-                    start_time_no_response = 0
-                else:
-                    if start_time_no_response == 0:
-                        start_time_no_response = datetime.now()
-                    else:
-                        # Check for 30 Min inactivity
-                        if (datetime.now() - start_time_no_response).seconds > MONITOR_INACTIVE_WAIT_TIME:
-                            start_time_no_response = datetime.now()
-                            self.logger.error("No message received from master in last 30 mins.")
-                            # self.index_data_receive_completed.value = 1
-                            # break
-
-                # Debug message
-                if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
-                    self.logger.info(
-                        "Messages received from master-{}, Objects Count: {}".format(self.message_count.value,
-                                                                                          objects_count))
-                    debug_message_timer = datetime.now()
-
-            except Exception as e:
-                self.logger.excep("Monitor-Index - {}".format(e))
-
-        self.logger.info("Total messages received from master-{}, Objects Count: {}".format(self.message_count.value, objects_count))
-        # Close socket connection and destroy context
-        try:
-            socket.close()
-            self.logger.info("Monitor-Index-Receiver terminated gracefully !")
-        except Exception as e:
-            self.logger.excep("Monitor-Index-Receiver - {}".fromat(e))
-        finally:
-            context.term()
-
-    def message_server_index1(self):
-        """
-        Message Handler process incoming file index
-        index message:{"dir":<>,"files":["f1","f2"],"size":<size of all files>, "nfs_cluster":<IP>, "nfs_share":<path>}
-        end message: {"indexing" : 1 }
-
-        Once indexing is completed at Master application side, master send a end message to all clients to finish their
-        operation.
-
-        Termination of Process:
-        - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
-        - Gracefully: The client application stop the message handler with "stop_messaging" shared variable.
-        - Forcefully, process gets terminated on receiving termination signal.
-
-        ## TODO
-        - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
-        - Forcefully: process gets terminated on receiving termination signal. Need to add signal handler.
-        :return:
-        """
-        try:
             socket =  ServerSocket(self.logger)
             socket_index_address = "{}:{}".format(self.ip_address, self.port_index)
             socket.bind(self.ip_address, self.port_index)
             self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
         except Exception as e:
-            self.logger.excep("ZMQ Binding error - {} ".format(e))
+            self.logger.excep("Monitor-Index-Receiver, binding error - {} ".format(e))
             self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
             return
         socket.accept()
@@ -429,7 +296,6 @@ class ClientApplication(object):
             if self.stop_messaging.value == 0:
                 break
             try:
-                #received_response = socket.poll(timeout=1000)  # Wait 1 secs
                 if True:
                     message = socket.recv_json()
                     # Check the end message arrived, exit loop
@@ -532,15 +398,13 @@ class ClientApplication(object):
         :return:
         """
         try:
-            context = zmq.Context()
             socket_address = "tcp://{}:{}".format(self.ip_address, self.port_status)
-            socket = context.socket(zmq.PUSH)
-            if self.ip_address_family.upper() == "IPV6":
-                socket.setsockopt(zmq.IPV6,1)
-            socket.bind(socket_address)
+            socket = ServerSocket(self.logger)
+            socket.bind(self.ip_address, self.port_status)
+            socket.accept()
             self.logger.info("MessageHandler-Status Socket Address-{}".format(socket_address))
         except Exception as e:
-            self.logger.excep("ZMQ Binding error - {}".format(e))
+            self.logger.excep("Monitor-Status socket binding error - {}".format(e))
             self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))
             return
 
@@ -560,10 +424,11 @@ class ClientApplication(object):
             try:
                 if self.operation_status_queue.qsize() > 0:
                     status_message = self.operation_status_queue.get()  ## {"success": <>, "failure":<>}
+
                 # Send response after adding data to operation data_queue as success
                 if status_message:
                     self.logger.debug("PUSH - Sending message - {}".format(status_message))
-                    socket.send_json(status_message, zmq.NOBLOCK)
+                    socket.send_json(status_message)
                     received_status_message_count +=1
 
                     processed_objects_success_count += status_message["success"]
@@ -603,9 +468,9 @@ class ClientApplication(object):
         try:
             # Send end message to status_poller socket at master if all messages were not processed.
             # The exit message will help to exit the status_poller.
-            if self.message_count.value > received_status_message_count:
+            if self.message_count.value >= received_status_message_count:
                 end_message= {"exit" : True , "client": self.id}
-                socket.send_json(end_message, flags=zmq.NOBLOCK)
+                socket.send_json(end_message)
             time.sleep(1)
             socket.close()
             self.logger.info("Monitor-StatusHandler is terminated gracefully !")
@@ -613,8 +478,6 @@ class ClientApplication(object):
             self.logger.excep("ZMQError - {}".fromat(e))
         except Exception as e:
             self.logger.excep("Monitor-StatusHandler - {}".format(e))
-        finally:
-            context.term()
 
     @exception
     def nfs_mount(self, nfs_cluster_ip=None, nfs_share=None):

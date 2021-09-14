@@ -81,9 +81,9 @@ def put(s3_client, **kwargs):
                 try:
                     if dryrun:
                         # Read file for the purpose of testing
-                        with open(file, "rb") as FH:
-                            lines = FH.readlines()
-                        lines = []
+                        #with open(file, "rb") as FH:
+                        #    lines = FH.readlines()
+                        #lines = []
                         success +=1
                     else:
                         if s3_client.putObject(minio_bucket, file):
@@ -100,8 +100,6 @@ def put(s3_client, **kwargs):
                     logger.error("{},PID-{} File-{} doesn't exist".format(current_process().name, current_process().pid, file))
                 else:
                     logger.error("{},PID-{} Read access denied -{}".format(current_process().name, current_process().pid, file))
-        # upload_time = (datetime.now() - start_time).seconds
-        # logger.debug("Upload Time: {} sec".format(upload_time))
     else:
         logger.error("Unable to connect to S3 Storage for upload")
 
@@ -666,14 +664,18 @@ def iterate_dir(**kwargs):
         if entry.is_dir():
             yield {"dir": path}
         else:
+            file_size = entry.stat().st_size
+            # Eliminate zero size file.
+            if file_size == 0:
+                #logger.warn("Zero Byte File - {}".format(entry.name))
+                continue
             if len(file_set) == max_index_size:
                 yield {"dir": dir, "files": file_set, "size": file_set_size}
-                # print("Files:{}".format(file_set))
                 file_set = [entry.name]
-                file_set_size = entry.stat().st_size
+                file_set_size = file_size
             else:
                 file_set.append(entry.name)
-                file_set_size += entry.stat().st_size
+                file_set_size += file_size
 
     # Remaining files to be added.
     if file_set:

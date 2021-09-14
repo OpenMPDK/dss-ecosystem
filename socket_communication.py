@@ -44,6 +44,7 @@ IP_ADDRESS_FAMILY = {
     "IPv6": socket.AF_INET6
 }
 
+CONNECTION_DELAY_INTERVAL = 2
 CONNECTION_TIME_THRESHOLD = 180 # 3 Minutes, maximum wait time for socket connection.
 
 class ClientSocket:
@@ -74,20 +75,23 @@ class ClientSocket:
 
         is_connection_refused = True
         connection_time_start = datetime.now()
+        time_to_sleep = CONNECTION_DELAY_INTERVAL
         while is_connection_refused:
             is_connection_refused =False
             try:
                 self.socket.connect((host, int(port)))
             except ConnectionRefusedError as e:
-                self.logger.warn("ConnectionRefusedError - retrying to connect")
+                self.logger.warn("ConnectionRefusedError - retrying to connect {}".format(time_to_sleep))
                 is_connection_refused = True
             except ConnectionError as e:
                 self.logger.excep("ConnectionError -- {}".format(e))
             except Exception as e:
                 self.logger.excep("GenericException - {}".format(e))
-            time.sleep(1)
+            # Add a delay in increasing order of 2 sec.
+            time.sleep(time_to_sleep)
+            time_to_sleep += CONNECTION_DELAY_INTERVAL
             if (datetime.now() - connection_time_start).seconds > CONNECTION_TIME_THRESHOLD:
-                raise TimeoutError("Client socket connection timedout!")
+                raise TimeoutError("Socket connection timeout!")
 
     def send_json(self,message={}):
         """
@@ -112,34 +116,41 @@ class ClientSocket:
                 self.logger.excep("Message Send Failed - {}".format(e))
         return False
 
-    def recv_json(self):
+    def recv_json(self, format="JSON"):
         """
         Receive the data from socket based on data length. and return data in JSON format.
         :return: Return received data in json format.
         """
         msg_len = None
-        msg = {}
+        msg = "{}"
         msg_body =None
         try:
             msg_len = self.socket.recv(10)
-            if msg_len == b'':
-                raise RuntimeError("Socket connection broken")
+            if msg_len != b'':
+                msg_len = int(msg_len)
         except Exception as e:
             print("Exception: {}".format(e))
 
-        try:
-            msg_body = self.socket.recv(int(msg_len))
-            if msg_body == b'':
-                raise RuntimeError("Socket connection broken")
-        except Exception as e:
-            print("Exception: {}".format(e))
-
-        if msg_body:
-            msg = msg_body.decode("ascii")
-        if format.upper() == "JSON":
-            return json.loads(msg)
-        else:
-            return msg
+        if msg_len:
+            msg_body = b''
+            try:
+                # Iterate till we receive desired number of bytes.
+                received_data_size = 0
+                while received_data_size < msg_len:
+                    data_size = msg_len - received_data_size
+                    received_data = self.socket.recv(data_size)
+                    received_data_size += len(received_data)
+                    msg_body += received_data
+                if msg_body == b'':
+                    raise RuntimeError("ClientSocket: Empty message for message length -{}".format(msg_len))
+            except Exception as e:
+                self.logger.excep("ClientSocket receive bytes -  {}".format(e))
+            if msg_body :
+                msg = msg_body.decode("ascii")
+            if format.upper() == "JSON":
+                return json.loads(msg)
+            else:
+                return msg
     def close(self):
         try:
             #self.socket.shutdown(SHUT_RDWR)
@@ -165,11 +176,11 @@ class ServerSocket:
         try:
             self.socket.bind((host,port))
             self.socket.listen(5)
-            self.logger.info("Client is listening message on {}:{} ".format(host,port))
+            self.logger.info("Client is listening for message on {}:{} ".format(host,port))
         except ConnectionError as e:
             self.logger.error("Address ({}:{}) bind error - {}".format(e))
         except Exception as e:
-            self.logger.error("Not able to bind to host={}:{}".format(host,port))
+            self.logger.error("Not able to bind to host={}:{}, {}".format(host,port, e))
 
     def accept(self):
         client_sock, address = self.socket.accept()
@@ -209,15 +220,13 @@ class ServerSocket:
         :return: Return received data in json format.
         """
         msg_len = None
-        msg = {}
+        msg = "{}"
         try:
             msg_len = self.client_socket.recv(10)
-            #self.logger.info("MSG Length: {}".format(msg_len))
-            if msg_len == b'':
-                raise RuntimeError("Socket connection broken")
-            msg_len = int(msg_len)
+            if msg_len != b'':
+                msg_len = int(msg_len)
         except Exception as e:
-            self.logger.error("Determine msg length - {}".format(e))
+            self.logger.error("ServerSocket: Determine msg length - {}".format(e))
         if msg_len:
             msg_body = b''
             try:
@@ -225,12 +234,13 @@ class ServerSocket:
                 received_data_size = 0
                 while received_data_size < msg_len:
                     data_size = msg_len - received_data_size
-                    msg_body += self.client_socket.recv(data_size)
-                    received_data_size += len(msg_body)
+                    received_data = self.client_socket.recv(data_size)
+                    received_data_size += len(received_data)
+                    msg_body += received_data
+
 
                 if msg_body == b'':
-                    raise RuntimeError("Socket connection broken")
-                #self.logger.info("RECEIVED MSG-LEN:{}, SIZE:{}".format(msg_len, len(msg_body)))
+                    raise RuntimeError("Empty message for message length -{}".format(msg_len))
             except Exception as e:
                 self.logger.excep("ServerSocket receive bytes -  {}".format(e))
             if msg_body :
