@@ -278,7 +278,7 @@ class ClientApplication(object):
         :return:
         """
         try:
-            socket =  ServerSocket(self.logger)
+            socket =  ServerSocket(self.logger, self.ip_address_family)
             socket_index_address = "{}:{}".format(self.ip_address, self.port_index)
             socket.bind(self.ip_address, self.port_index)
             self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
@@ -399,10 +399,10 @@ class ClientApplication(object):
         """
         try:
             socket_address = "tcp://{}:{}".format(self.ip_address, self.port_status)
-            socket = ServerSocket(self.logger)
+            socket = ServerSocket(self.logger, self.ip_address_family)
             socket.bind(self.ip_address, self.port_status)
             socket.accept()
-            self.logger.info("MessageHandler-Status Socket Address-{}".format(socket_address))
+            self.logger.info("Monitor-Status Socket Address-{}".format(socket_address))
         except Exception as e:
             self.logger.excep("Monitor-Status socket binding error - {}".format(e))
             self.logger.fatal("** Clean all ClientApplication-{} running on the node **".format(self.id))

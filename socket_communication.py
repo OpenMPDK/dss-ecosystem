@@ -45,21 +45,19 @@ IP_ADDRESS_FAMILY = {
 }
 
 CONNECTION_DELAY_INTERVAL = 2
-CONNECTION_TIME_THRESHOLD = 180 # 3 Minutes, maximum wait time for socket connection.
+CONNECTION_TIME_THRESHOLD = 300 # 5 Minutes, maximum wait time for socket connection.
 
 class ClientSocket:
-    def __init__(self, logger=None, sock=None, ip_address_family="IPv4"):
+    def __init__(self, logger=None, ip_address_family="IPv4"):
         self.logger = logger
-        if sock is None:
-            if ip_address_family.upper() == "IPV4":
-                self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            elif ip_address_family.upper() == "IPV6":
-                self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            else:
-                self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family,
-                                                                                      IP_ADDRESS_FAMILY))
+        self.socket = None
+        if ip_address_family.upper() == "IPV4":
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        elif ip_address_family.upper() == "IPV6":
+            self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         else:
-            self.socket = sock
+            self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
+            raise ConnectionError("Socket initialization failed! ")
 
     def connect(self,host,port):
         """
@@ -91,7 +89,7 @@ class ClientSocket:
             time.sleep(time_to_sleep)
             time_to_sleep += CONNECTION_DELAY_INTERVAL
             if (datetime.now() - connection_time_start).seconds > CONNECTION_TIME_THRESHOLD:
-                raise TimeoutError("Socket connection timeout!")
+                raise TimeoutError("Socket connection timeout=300sec !")
 
     def send_json(self,message={}):
         """
@@ -112,6 +110,8 @@ class ClientSocket:
                     self.logger.error("Failed to send msg - {}".format(msg))
             except BrokenPipeError as e:
                 self.logger.excep("BrokenPipeError - {}".format(e))
+            except ConnectionError as e:
+                self.logger.error("ConnectionError- {}".format(e))
             except Exception as e:
                 self.logger.excep("Message Send Failed - {}".format(e))
         return False
@@ -160,12 +160,17 @@ class ClientSocket:
 
 
 class ServerSocket:
-    def __init__(self, logger=None, sock=None, ip_address_family="IPv4"):
-        if sock is None:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            self.socket = sock
+    def __init__(self, logger=None, ip_address_family="IPv4"):
+        self.socket = None
         self.logger = logger
+        if ip_address_family.upper() == "IPV4":
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        elif ip_address_family.upper() == "IPV6":
+            self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        else:
+            self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
+            raise ConnectionError("Socket initialization failed!")
+
 
     def bind(self,host,port):
         if not host:
@@ -208,10 +213,14 @@ class ServerSocket:
                     return True
                 else:
                     self.logger.error("Failed to send msg - {}".format(msg_body))
+            except BrokenPipeError as e:
+                self.logger.error("BrokenPipeError- Socket connection closed by the peer! {}".format(e))
+            except ConnectionError as e:
+                self.logger.error("ConnectionError- {}".format(e))
             except RuntimeError as e:
-                    self.logger.error("RuntimeError - {}".format(e))
+                self.logger.error("RuntimeError - {}".format(e))
             except Exception as e:
-                raise RuntimeError("Message Send Failed")
+                self.logger.error("Message Send Failed - {}".fromat(e))
         return False
 
     def recv_json(self, format="JSON"):

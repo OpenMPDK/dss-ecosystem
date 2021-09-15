@@ -66,9 +66,6 @@ class MultiprocessingLogger:
         self.logger_lock = lock
         self.logger_status = status  # 0=NOT-STARTED, 1=RUNNING, 2= STOPPED
         self.stop_logging = Value('i', 0)
-        self.stop_lock = Lock()
-
-
         self.process = None
 
     @exception
@@ -109,17 +106,11 @@ class MultiprocessingLogger:
             self.warn("Logger already started!")
 
     def stop(self):
-
-        ## DEBUG - Remove letter
         self.info("LOGGER Stopping logging!")
-
-        self.stop_lock.acquire()
-        self.stop_logging.value = 1
-        self.stop_lock.release()
-
         while self.process.is_alive():
+            self.stop_logging.value = 1
             time.sleep(1)
-            if self.queue.qsize() == 0:
+            if is_queue_empty(self.queue):
                 try:
                     self.process.terminate()
                 except Exception as e:
@@ -150,6 +141,7 @@ class MultiprocessingLogger:
         """
         try:
             print("Log file:{}".format(self.logfile))
+            fh = None
             # Move existing log file to log1
             if os.path.exists(self.logfile):
                 newfile = self.logfile + ".bak"
@@ -168,7 +160,7 @@ class MultiprocessingLogger:
                     else:
                         fh.write(str(time.ctime()) + ": "+ message + "\n")
 
-                if stop_logging.value and is_queue_empty(queue):
+                if stop_logging.value and queue.qsize() == 0:
                     break
                 time.sleep(1)
                 fh.close()
@@ -176,51 +168,40 @@ class MultiprocessingLogger:
         except Exception as e:
             print("Exception: {}".format(e))
         finally:
-            fh.close()
+            if fh:
+                fh.close()
 
     @exception
     def info(self, message):
         msg = (0, message)
-        # self.logger_lock.acquire()
         self.queue.put(msg)
-        # self.logger_lock.release()
 
     @exception
     def debug(self, message):
       if self.logging_level < len(LOGGING_LEVEL) and LOGGING_LEVEL[self.logging_level] == "DEBUG":
         msg = (1, message)
-        # self.logger_lock.acquire()
         self.queue.put(msg)
-        # self.logger_lock.release()
 
     @exception
     def warn(self, message):
         if self.logging_level <= 2:
           msg = (2, message)
-          # self.logger_lock.acquire()
           self.queue.put(msg)
-          # self.logger_lock.release()
 
     @exception
     def error(self, message):
         if self.logging_level <= 3:
           msg = (3, message)
-          # self.logger_lock.acquire()
           self.queue.put(msg)
-          # self.logger_lock.release()
 
     @exception
     def excep(self, message):
         if self.logging_level <= 4:
           msg = (4, message)
-          # self.logger_lock.acquire()
           self.queue.put(msg)
-          # self.logger_lock.release()
 
     @exception
     def fatal(self, message):
         if self.logging_level <= 5:
           msg = (5, message)
-          # self.logger_lock.acquire()
           self.queue.put(msg)
-          # self.logger_lock.release()

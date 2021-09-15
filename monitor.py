@@ -153,18 +153,24 @@ class Monitor:
           - The "index_data_queue" has sent all outstanding messages to client application.
           Forcefully: If process is terminated
           - Forcefully stopped through "stop_status_poller" by setting it to 1.
-
+        # TODO
+            - In case socket-communication were not established with any clientApp, Monitor should stop
+              and stop all other processes to shutdown DM.
         :return: None
         """
-        try:
-            for client in self.clients:
-                client.socket_index = ClientSocket(self.logger)
+        successful_socket_connection = 0
+        for client in self.clients:
+            try:
+                client.socket_index = ClientSocket(self.logger, self.ip_address_family)
                 client.socket_index.connect(client.ip_address, client.port_index)
+                successful_socket_connection +=1
                 self.logger.info("Connecting to INDEX MessageHandler {}:{}".format(client.ip_address, client.port_index))
-        except ConnectionError as e:
-            self.logger.excep("Socket Connection error: {}".format(e))
-            return
-
+            except ConnectionError as e:
+                self.logger.excep("Socket Connection error for ClientApp-{} : {}".format(client.id, e))
+                client.socket_index = None
+        if successful_socket_connection == 0:
+            self.logger.fatal("Monitor-Index: Socket connection was not established with any client. Exit!")
+            # TODO Need to terminate master and along with all client-apps.
         # Buffer to store prefix index and file count  {"prefix":<file count>}
         first_index_distribution  = 0
         index_distribution_start_time = datetime.now()
@@ -184,6 +190,9 @@ class Monitor:
             data = {}
             # Send index data to each client in round-robin fashion
             for client in self.clients:
+                # Skip sending message if a client is not connected via socket.
+                if client.socket_index is None:
+                    continue
                 # Get data from shared index queue, if the previous client processed data successfully
                 if previous_client_operation_status:
                     data = {}
@@ -289,19 +298,23 @@ class Monitor:
         Collect the status from all the clients and add status to status_queue
         :return:
         """
-        try:
-            for client in self.clients:
-                client.socket_status = ClientSocket(self.logger)
+        successful_socket_connection = 0
+        for client in self.clients:
+            try:
+                client.socket_status = ClientSocket(self.logger, self.ip_address_family)
                 client.socket_status.connect(client.ip_address, client.port_status)
-                #if self.ip_address_family.upper() == "IPV6":
-                #    client.socket_status.setsockopt(zmq.IPV6, 1)
                 self.logger.info("Monitor-Status-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id,
                                                                                                     client.ip_address,
                                                                                                     client.port_status))
-                #client.socket_status.accept()
-        except Exception as e:
-            self.logger.excep("ZMQ Connection ERROR, Monitor-Status-Poller - {}".format(e))
-            return
+                successful_socket_connection +=1
+            except Exception as e:
+                self.logger.excep("Monitor-Status-Poller: Socket connection error for ClientApp-{}".format(client.id, e))
+                client.socket_status = None
+
+        if successful_socket_connection == 0:
+            self.logger.fatal("Monitor-Status-Poller: Socket connection was not established with any client. Exit!")
+            # TODO Need to terminate master and along with all client-apps.
+            # Need to eliminate client from client-list of connection was not successful.
 
         client_application_exit_count = 0
         received_status_msg_count = 0
