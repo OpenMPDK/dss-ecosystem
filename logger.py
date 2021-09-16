@@ -58,8 +58,7 @@ LOGGER_STATE = [
     "STOPPED"
 ]
 
-####
-class MultiprocessingLogger:
+class MultiprocessingLogger(object):
 
     def __init__(self, queue, lock, status):
         self.queue = queue

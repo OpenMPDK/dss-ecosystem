@@ -37,9 +37,7 @@ from datetime import datetime
 from minio.error import BucketAlreadyOwnedByYou
 
 
-
-
-class DssClientLib:
+class DssClientLib(object):
     def __init__(self, s3_endpoint, access_key, secret_key, logger=None):
         self.s3_endpoint = "http://" + s3_endpoint
         self.logger = logger

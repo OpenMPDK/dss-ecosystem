@@ -47,6 +47,8 @@ WORKER_OPERATION_STATUS = {
     "DEL": ["S3_DELETE", "STATUS_SEND"],
     "TEST": ["NFS_READ", "S3_UPLOAD", "S3_READ", "MD5SUM_COMPARE", "STATUS_SEND", "DELETE_TEMP_FILES"]
 }
+
+
 class Worker(object):
     def __init__(self, **kwargs):
         self.id = kwargs.get("id", None)
@@ -57,7 +59,7 @@ class Worker(object):
         self.worker_pid = Value('i', 0)
         self.task_count = Value('i', 0)
         self.task_count_previous = 0
-        self.latest_task_processed = Queue() # A queue only store the message processed through Task.
+        self.latest_task_processed = Queue()  # A queue only store the message processed through Task.
 
         self.s3_client = None
         self.s3_config = kwargs.get("s3_config", None)
@@ -81,10 +83,12 @@ class Worker(object):
         self.listing_status = kwargs.get("listing_status", None)
         self.listing_only = kwargs.get("listing_only", None)
         self.listing_objectkey_queue = kwargs.get("listing_objectkey_queue", None)
+        self.index_data_queue_size = kwargs.get("index_data_queue_size")
 
         # Testing
         self.skip_upload =  kwargs.get("skip_upload", False)
-
+        self.prefix_index_data = kwargs.get("prefix_index_data", {})
+        self.standalone = kwargs.get("standalone", False)
 
     def __del__(self):
         self.stop()
@@ -138,9 +142,9 @@ class Worker(object):
         try:
             self.create_s3_client()
             if not self.s3_client.status:
-              self.status.value = 0
-              self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
-              return
+                self.status.value = 0
+                self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
+                return
 
             self.process = Process(target=self.run, args=(self.s3_client, ))
             self.process.name = "Worker-{}".format(self.id)
@@ -210,8 +214,6 @@ class Worker(object):
             self.logger.excep("Hung Detection - {}".format(e))
         return False
 
-
-
     def run(self, s3_client):
         """
         Run the actual process
@@ -224,16 +226,17 @@ class Worker(object):
             if not self.status.value:
                 break
             # Get the task from shared task_queue, shared among the workers.
-            if self.task_queue and self.task_queue.qsize() > 0 :
+            if self.task_queue and self.task_queue.qsize() > 0:
                 try:
                     task = self.task_queue.get()
                     if self.latest_task_processed.qsize() > 0:
-                        self.latest_task_processed.get() # Empty queue
-                    self.latest_task_processed.put(task.params["data"]) # Add latest message
-                    self.operation_progress_status_counter.value = 0 # Reset counter
+                        self.latest_task_processed.get()  # Empty queue
+                    self.latest_task_processed.put(task.params["data"])  # Add latest message
+                    self.operation_progress_status_counter.value = 0  # Reset counter
 
                     with self.task_count.get_lock():
-                        self.task_count.value +=1
+                        self.task_count.value += 1
+
                     task.start(worker_id=self.id,
                                task_queue=self.task_queue,
                                index_data_queue=self.index_data_queue,
@@ -251,7 +254,10 @@ class Worker(object):
                                listing_only=self.listing_only,
                                listing_objectkey_queue=self.listing_objectkey_queue,
                                skip_upload=self.skip_upload,
-                               operation_progress_status_counter=self.operation_progress_status_counter
+                               operation_progress_status_counter=self.operation_progress_status_counter,
+                               index_data_queue_size=self.index_data_queue_size,
+                               prefix_index_data=self.prefix_index_data,
+                               standalone=self.standalone
                                )
                 except Exception as e:
-                    self.logger.excep("WORKER-{}:{}".format(self.id, e))
+                    self.logger.excep("Failed to start task-{} by Worker -{}:{}".format(task.id, self.id, e))

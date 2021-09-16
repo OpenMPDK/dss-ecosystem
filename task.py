@@ -31,9 +31,9 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os,sys
+import os, sys
 from utils.utility import exception, exec_cmd, get_hash_key
-from multiprocessing import Value,Manager, current_process
+from multiprocessing import Value, Manager, current_process
 from minio_client import MinioClient
 from s3_client import S3
 import json
@@ -45,30 +45,31 @@ task_id = Value('i', 1)
 mgr = Manager()
 ds = mgr.dict()
 
-
-
 """
 Need to be updated 
 """
+
+
 @exception
 def put(s3_client, **kwargs):
     """
     Upload operation
     :param s3_client:
-    :param kwargs: conatins params, status_queue, logger
+    :param kwargs: contains params, status_queue, logger
     :return:
     """
     params = kwargs["params"]
     status_queue = kwargs["status_queue"]
     logger = kwargs["logger"]
     operation_progress_status_counter = kwargs["operation_progress_status_counter"]
-    index_data = params.get("data",{})
-    s3config   = params["s3config"]
-    minio_bucket = s3config.get("bucket","bucket")
+    index_data = params.get("data", {})
+    s3config = params["s3config"]
+    minio_bucket = s3config.get("bucket", "bucket")
 
     # Data Integrity
     data_integrity = kwargs.get("data_integrity", False)
     dryrun = params.get("dryrun", False)
+    failed_files = []
 
     success = 0
     failure_files_size = 0
@@ -77,29 +78,33 @@ def put(s3_client, **kwargs):
         for file_name in index_data["files"]:
             file = os.path.abspath(index_data["dir"] + "/" + file_name)
             if os.access(file, os.R_OK):
-                operation_progress_status_counter.value +=1
+                operation_progress_status_counter.value += 1
                 try:
                     if dryrun:
                         # Read file for the purpose of testing
                         #with open(file, "rb") as FH:
                         #    lines = FH.readlines()
                         #lines = []
-                        success +=1
+                        success += 1
                     else:
                         if s3_client.putObject(minio_bucket, file):
-                            success +=1
+                            success += 1
                         else:
                             failure_files_size += os.path.getsize(file)
-                        
+                            failed_files.append(file_name)
                         operation_progress_status_counter.value += 1
                 except Exception as e:
                     logger.excep("PUT - {}".format(e))
                     failure_files_size += os.path.getsize(file)
+                    failed_files.append(file_name)
             else:
                 if not os.path.exists(file):
-                    logger.error("{},PID-{} File-{} doesn't exist".format(current_process().name, current_process().pid, file))
+                    logger.error("{},PID-{} File-{} doesn't exist".format(current_process().name,
+                                                                          current_process().pid, file))
                 else:
-                    logger.error("{},PID-{} Read access denied -{}".format(current_process().name, current_process().pid, file))
+                    logger.error("{},PID-{} Read access denied -{}".format(current_process().name,
+                                                                           current_process().pid, file))
+                failed_files.append(file_name)
     else:
         logger.error("Unable to connect to S3 Storage for upload")
 
@@ -107,6 +112,7 @@ def put(s3_client, **kwargs):
         # Update following section for upload status.
         status_message = {"success": success, "failure": (len(index_data["files"]) - success) ,
                           "dir": index_data["dir"] ,
+                          "failed_files": failed_files,
                           "size" : failure_files_size}
         status_queue.put(status_message)
 
@@ -128,15 +134,14 @@ def list(s3_client, **kwargs):
     params = kwargs["params"]
     logger = kwargs["logger"]
     task_queue = kwargs["task_queue"]  # Contains task Object
-    index_data_queue = kwargs["index_data_queue"] # Contains index_data
+    index_data_queue = kwargs["index_data_queue"]  # Contains index_data
     index_data_count = kwargs["index_data_count"]
     index_msg_count = kwargs["index_msg_count"]
-    listing_progress = kwargs["listing_progress"] # The shared memory is used to hold progress status.
+    listing_progress = kwargs["listing_progress"]  # The shared memory is used to hold progress status.
     listing_progress_lock = kwargs["listing_progress_lock"]
     listing_status = kwargs["listing_status"]
     listing_only = kwargs["listing_only"]
     listing_objectkey_queue = kwargs["listing_objectkey_queue"]
-    
 
     max_index_size = params["max_index_size"]
 
@@ -151,7 +156,7 @@ def list(s3_client, **kwargs):
     # That mean lowest level of directory.
     s3config = params["s3config"]
     minio_bucket = s3config.get("bucket", "bucket")
-    s3_client_library = s3config.get("client_lib","minio_client")
+    s3_client_library = s3config.get("client_lib", "minio_client")
 
     if prefix in prefix_index_data:
         object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
@@ -159,27 +164,29 @@ def list(s3_client, **kwargs):
             object_keys_count = 0
             for result in list_object_keys(object_keys_iterator, max_index_size, s3_client_library):
                 if "object_keys" in result:
-                    index_data_message ={"dir": prefix, "files": result["object_keys"]}
+                    index_data_message = {"dir": prefix, "files": result["object_keys"]}
                     object_keys_count += len(result["object_keys"])
                     if listing_only.value:
-                      result.update({"prefix" : prefix})
-                      listing_objectkey_queue.put(result)
+                        result.update({"prefix": prefix})
+                        listing_objectkey_queue.put(result)
                     else:
-                      index_data_queue.put(index_data_message)
-                      with index_msg_count.get_lock():
-                          index_msg_count.value += 1
+                        index_data_queue.put(index_data_message)
+                        with index_msg_count.get_lock():
+                            index_msg_count.value += 1
                 else:
                     listing_progress_lock.acquire()
                     if result["prefix"] not in listing_progress:
                         listing_progress[result["prefix"]] = 1
-                        task = Task(operation="list", data=result, s3config=params["s3config"], max_index_size=max_index_size)
+                        task = Task(operation="list", data=result, s3config=params["s3config"],
+                                    max_index_size=max_index_size)
                         task_queue.put(task)
                     else:
-                        logger.error("Worker:{}, Prefix:{}".format(worker_id, result["prefix"]))
+                        logger.error(
+                            "Worker-{}, ObjectPrefix:{} was not uploaded through latest DM run".format(worker_id,
+                                                                                                       result["prefix"]))
                     listing_progress_lock.release()
             with index_data_count.get_lock():
                 index_data_count.value += object_keys_count
-            # logger.debug("Worker Id:{}, LIST: Prefix-\"{}\" ObjectKeys: {}".format(worker_id, prefix, object_keys_count)) ## DELETE
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
     else:
@@ -187,28 +194,30 @@ def list(s3_client, **kwargs):
         if object_keys:
             for obj_key in object_keys:
                 if s3_client_library.lower() == "minio":
-                    object_key_prefix =  obj_key.object_name
+                    object_key_prefix = obj_key.object_name
                 elif s3_client_library.lower() == "dss_client":
-                    object_key_prefix =  obj_key
+                    object_key_prefix = obj_key
+                else:
+                    object_key_prefix = None
                 listing_progress_lock.acquire()
                 if object_key_prefix not in listing_progress:
                     listing_progress[object_key_prefix] = 1
-                    task = Task(operation="list", data={"prefix":object_key_prefix}, s3config=params["s3config"], max_index_size=max_index_size)
+                    task = Task(operation="list", data={"prefix": object_key_prefix}, s3config=params["s3config"],
+                                max_index_size=max_index_size)
                     task_queue.put(task)
                 else:
-                    logger.error("Worker-{}: ObjectPrefix:{} was not uploaded through latest DM run".format(worker_id, prefix))
+                    logger.error("Worker-{}: ObjectPrefix:{} was not uploaded through latest DM run".format(worker_id, object_key_prefix))
                 listing_progress_lock.release()
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
 
-    if listing_status.value  != 1:
+    if listing_status.value != 1:
         listing_status.value = 1
-    #listing_progress[prefix] = 0
+    # listing_progress[prefix] = 0
     listing_progress_lock.acquire()
     if prefix in listing_progress:
-      del listing_progress[prefix]
+        del listing_progress[prefix]
     listing_progress_lock.release()
-
 
 
 def list_object_keys(object_keys_iterator, max_index_size, s3_client_lib):
@@ -224,9 +233,11 @@ def list_object_keys(object_keys_iterator, max_index_size, s3_client_lib):
     object_keys = []
     for obj_key_iter in object_keys_iterator:
         if s3_client_lib.lower() == "minio":
-          obj_key = obj_key_iter.object_name
+            obj_key = obj_key_iter.object_name
         elif s3_client_lib.lower() == "dss_client":
-          obj_key = obj_key_iter
+            obj_key = obj_key_iter
+        else:
+            obj_key = ""
         # To handle a scenario in which directory has both file and directory
         if obj_key.endswith("/"):
             yield {"prefix": obj_key}
@@ -240,12 +251,13 @@ def list_object_keys(object_keys_iterator, max_index_size, s3_client_lib):
     if object_keys:
         yield {"object_keys": object_keys}
 
+
 @exception
-def get(s3_client,**kwargs):
+def get(s3_client, **kwargs):
     params = kwargs["params"]
     status_queue = kwargs["status_queue"]
     logger = kwargs["logger"]
-    dest_path = params.get("dest_path","")
+    dest_path = params.get("dest_path", "")
     user_id = params["user_id"]
 
     s3config = params["s3config"]
@@ -257,39 +269,48 @@ def get(s3_client,**kwargs):
     file_hash_map = kwargs.get("file_hash_map", {})
     success = 0
     object_keys = params["data"]
+    failed_files = []
+
     if s3_client:
         # Create directory if not exist
         ret = 0
         dest_dir = dest_path + "/" + object_keys["dir"]
         try:
-          if not os.path.exists(dest_dir):
-            command = "mkdir -p {}".format(dest_dir)
-            ret, console = exec_cmd(command, True, True, user_id)
-            if ret:
-              logger.error("Local Prefix directory {} creation FAILED\n\t{}".format(dest_dir, console))
+            if not os.path.exists(dest_dir):
+                command = "mkdir -p {}".format(dest_dir)
+                ret, console = exec_cmd(command, True, True, user_id)
+                if ret:
+                    logger.error("Local Prefix directory {} creation FAILED\n\t{}".format(dest_dir, console))
+                    if 'No space left' in console:
+                        logger.fatal('No space left on the file system')
         except Exception as e:
-          logger.excep("Prefix-{}\n{}".format(object_keys["dir"], e))
+            logger.excep("Prefix-{}\n{}".format(object_keys["dir"], e))
 
         if ret == 0:
             for object_key in object_keys["files"]:
                 if dryrun:  # Dry run
                     success += 1
-                else: # Actual operation
+                else:  # Actual operation
                     dest_file_path = dest_dir + "/" + object_key
                     object_key = object_keys["dir"] + object_key
                     # logger.debug("Obj_Key:{}, Dest_Path:{}".format(object_key,dest_file_path))
-                    if s3_client.getObject(minio_bucket, object_key, dest_file_path ):
-                        if data_integrity:
-                            hash_key = get_hash_key(type='file', data=dest_file_path, logger=logger)
-                            file_name = object_key.split("/")[-1]
-                            if file_hash_map[file_name] == hash_key:
-                                success +=1
+                    try:
+                        if s3_client.getObject(minio_bucket, object_key, dest_file_path):
+                            if data_integrity:
+                                hash_key = get_hash_key(type='file', data=dest_file_path, logger=logger)
+                                file_name = object_key.split("/")[-1]
+                                if file_hash_map[file_name] == hash_key:
+                                    success += 1
+                                else:
+                                    logger.error("Failed DataIntegrity for Object Key - {}".format(object_key))
                             else:
-                                logger.error("Failed DataIntegrity for Object Key - {}".format(object_key))
+                                success += 1
                         else:
-                            success += 1
-                    else:
-                        logger.error("Failed to download object - {}".format(object_key))
+                            logger.error("Failed to download object - {}".format(object_key))
+                            failed_files.append(object_key)
+                    except Exception as e:
+                        if 'No space left on device' in str(e):
+                            break
     else:
         logger.error("Unable to connect to S3 ObjectStorage for download")
 
@@ -297,11 +318,13 @@ def get(s3_client,**kwargs):
     prefix_dir = object_keys["dir"]
     if data_integrity:
         prefix_dir = "/" + prefix_dir[:-1]
-    status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": prefix_dir}
+    status_message = {"success": success, "failure": (len(object_keys["files"]) - success),
+                      "failed_files": failed_files, "dir": prefix_dir}
     status_queue.put(status_message)
 
+
 @exception
-def delete(s3_client,**kwargs):
+def delete(s3_client, **kwargs):
     params = kwargs["params"]
     status_queue = kwargs["status_queue"]
     logger = kwargs["logger"]
@@ -311,28 +334,29 @@ def delete(s3_client,**kwargs):
 
     success = 0
     object_keys = params["data"]
-    prefix =  object_keys["dir"]
+    prefix = object_keys["dir"]
     if s3_client:
         for object_key in object_keys["files"]:
             object_key = prefix + object_key
-            #logger.debug("TASK: Going to removed object key {}".format(object_key))
+            # logger.debug("TASK: Going to removed object key {}".format(object_key))
             if params.get("dryrun", False):
                 # Dry run
-                success +=1
+                success += 1
             else:
                 # Actual operation
                 if s3_client.deleteObject(minio_bucket, object_key):
-                    #logger.debug("TASK: Removed object key {}".format(object_key))
+                    # logger.debug("TASK: Removed object key {}".format(object_key))
                     success += 1
     else:
-        logger.error("Unable to connect to Minio for upload with {}".format(minio_config))
+        logger.error("Unable to connect to Minio for upload with {}".format(s3config))
 
     # Update following section for upload status.
     status_message = {"success": success, "failure": (len(object_keys["files"]) - success), "dir": prefix}
     status_queue.put(status_message)
 
+
 @exception
-def data_integrity(s3_client,**kwargs):
+def data_integrity(s3_client, **kwargs):
     """
     - For each prefix for leaf node perform upload operation
       - Before upload for each file , get the md5sum of that and store it in a buffer as <file> => <md5sum>
@@ -357,23 +381,24 @@ def data_integrity(s3_client,**kwargs):
         logger.info("** DataIntegrity: Performing PUT operation - Prefix-{} **".format(data["dir"]))
 
     try:
-      for file_name in data["files"]:
-        file = os.path.abspath(data["dir"] + "/" + file_name)
-        if os.access(file, os.R_OK):
-            file_content_hash_key = get_hash_key(type="file", data=file, logger=logger)
-            file_hash_map[file_name] = file_content_hash_key
-            if not skip_upload:
-                # Create data structure reuired for upload
-                upload_data = {"dir": data["dir"], "files": [file_name]}
-                params["data"] = upload_data
-                put(s3_client, params=params, data_integrity=data_integrity, status_queue=status_queue, logger=logger)
-        else:
-            if not os.path.exists(file):
-                logger.error("File-{} doesn't exist".format(file))
+        for file_name in data["files"]:
+            file = os.path.abspath(data["dir"] + "/" + file_name)
+            if os.access(file, os.R_OK):
+                file_content_hash_key = get_hash_key(type="file", data=file, logger=logger)
+                file_hash_map[file_name] = file_content_hash_key
+                if not skip_upload:
+                    # Create datastructure reuired for upload
+                    upload_data = {"dir": data["dir"], "files": [file_name]}
+                    params["data"] = upload_data
+                    put(s3_client, params=params, data_integrity=data_integrity, status_queue=status_queue,
+                        logger=logger)
             else:
-                logger.error("Read access denied - {}".format(file))
+                if not os.path.exists(file):
+                    logger.error("File-{} doesn't exist".format(file))
+                else:
+                    logger.error("Read access denied - {}".format(file))
     except Exception as e:
-      logger.excep("DataIntegrity-PUT:{}".format(e))
+        logger.excep("DataIntegrity-PUT:{}".format(e))
     ## Download
     # - Fine tune the parameters for GET
     # Update data with object keys as expected by GET function
@@ -382,10 +407,10 @@ def data_integrity(s3_client,**kwargs):
     params["data"] = data
     logger.info("** DataIntegrity: Performing GET operation - Prefix-{} **".format(data["dir"]))
     get(s3_client, params=params,
-                   status_queue=status_queue,
-                   data_integrity=data_integrity,
-                   file_hash_map=file_hash_map,
-                   logger=logger)
+        status_queue=status_queue,
+        data_integrity=data_integrity,
+        file_hash_map=file_hash_map,
+        logger=logger)
 
     # Remove the local files
     try:
@@ -395,85 +420,88 @@ def data_integrity(s3_client,**kwargs):
             downloaded_file_path = os.path.abspath(download_path + "/" + file_name)
             if os.path.exists(downloaded_file_path):
                 command = "rm -rf {}".format(downloaded_file_path)
-                ret,console = exec_cmd(command, True, True, user_id)
+                ret, console = exec_cmd(command, True, True, user_id)
                 if ret:
-                    logger.error("Failed to remove file -{}\n {}".format(downloaded_file_path,console))
+                    logger.error("Failed to remove file -{}\n {}".format(downloaded_file_path, console))
             else:
                 logger.error("File \"{}\" doesn't exist ".format(downloaded_file_path))
     except Exception as e:
         logger.excep("DataIntegrity-Remove {}".format(e))
 
 
+class Task(object):
+    def __init__(self, **kwargs):
+        self.id = task_id.value
+        with task_id.get_lock():
+            task_id.value += 1
+        self.operation = kwargs["operation"].lower()
+        kwargs.pop("operation")
+        self.params = kwargs
 
-class Task:
-  def __init__(self,**kwargs):
-    self.id = task_id.value
-    with task_id.get_lock():
-        task_id.value +=1
-    self.operation = (kwargs["operation"]).lower()
-    kwargs.pop("operation")
-    self.params = kwargs
+    def start(self, **queue):
+        self.logger = queue["logger"]
+        self.task_queue = queue["task_queue"]
+        self.index_data_queue = queue["index_data_queue"]
 
-  def start(self, **queue):
-    self.logger = queue["logger"]
-    self.task_queue   = queue["task_queue"]
-    self.index_data_queue = queue["index_data_queue"]
-
-    s3_client = queue["s3_client"]
-    # self.logger.debug("Task: Operation-{}, Data-{}".format(self.operation, self.params["data"]))
-    try:
-      if self.operation == "put":
-        put(s3_client, params=self.params,
-                       status_queue=queue["status_queue"],
-                       operation_progress_status_counter=queue["operation_progress_status_counter"],
-                       logger=self.logger)
-      elif self.operation == "list":
-        list(s3_client, params=self.params,
-                        worker_id=queue["worker_id"],
-                        task_queue=queue["task_queue"],
-                        index_data_queue=queue["index_data_queue"] ,
-                        index_data_count=queue["index_data_count"],
-                        index_msg_count=queue["index_msg_count"],
-                        logger=self.logger,
-                        listing_progress=queue["listing_progress"],
-                        listing_progress_lock=queue["listing_progress_lock"],
-                        listing_status=queue["listing_status"],
-                        listing_only=queue["listing_only"],
-                        listing_objectkey_queue=queue["listing_objectkey_queue"])
-      elif self.operation == "del":
-        delete(s3_client, params=self.params,
-                          status_queue=queue["status_queue"],
-                          logger=self.logger)
-
-      elif self.operation == "get":
-        get(s3_client, params=self.params,
+        s3_client = queue["s3_client"]
+        # self.logger.debug("Task: Operation-{}, Data-{}".format(self.operation, self.params["data"]))
+        try:
+            if self.operation == "put":
+                put(s3_client, params=self.params,
+                    status_queue=queue["status_queue"],
+                    operation_progress_status_counter=queue["operation_progress_status_counter"],
+                    logger=self.logger)
+            elif self.operation == "list":
+                list(s3_client, params=self.params,
+                     worker_id=queue["worker_id"],
+                     task_queue=queue["task_queue"],
+                     index_data_queue=queue["index_data_queue"],
+                     index_data_count=queue["index_data_count"],
+                     index_msg_count=queue["index_msg_count"],
+                     logger=self.logger,
+                     listing_progress=queue["listing_progress"],
+                     listing_progress_lock=queue["listing_progress_lock"],
+                     listing_status=queue["listing_status"],
+                     listing_only=queue["listing_only"],
+                     listing_objectkey_queue=queue["listing_objectkey_queue"])
+            elif self.operation == "del":
+                delete(s3_client, params=self.params,
                        status_queue=queue["status_queue"],
                        logger=self.logger)
-      elif self.operation == "test":
-        data_integrity(s3_client, params=self.params,
-                status_queue=queue["status_queue"],
-                skip_upload=queue["skip_upload"],
-                logger=self.logger)
-      elif self.operation == "indexing":
-        indexing(data=self.params["data"],
-                 nfs_cluster=self.params["nfs_cluster"],
-                 nfs_share=self.params["nfs_share"],
-                 task_queue=queue["task_queue"],
-                 index_data_queue=queue["index_data_queue"],
-                 logger=self.logger,
-                 progress_of_indexing=queue["progress_of_indexing"],
-                 progress_of_indexing_lock=queue["progress_of_indexing_lock"],
-                 index_data_count=queue["index_data_count"],
-                 index_msg_count=queue["index_msg_count"],
-                 max_index_size=self.params.get("max_index_size", 10),
-                 indexing_started_flag=queue['indexing_started_flag']
-                 )
 
-    except Exception as e:
-        self.logger.excep("{}:Task: {}!".format(__file__,e))
+            elif self.operation == "get":
+                get(s3_client, params=self.params,
+                    status_queue=queue["status_queue"],
+                    logger=self.logger)
+            elif self.operation == "test":
+                data_integrity(s3_client, params=self.params,
+                               status_queue=queue["status_queue"],
+                               skip_upload=queue["skip_upload"],
+                               logger=self.logger)
+            elif self.operation == "indexing":
+                indexing(data=self.params["data"],
+                         nfs_cluster=self.params["nfs_cluster"],
+                         nfs_share=self.params["nfs_share"],
+                         task_queue=queue["task_queue"],
+                         index_data_queue=queue["index_data_queue"],
+                         logger=self.logger,
+                         progress_of_indexing=queue["progress_of_indexing"],
+                         progress_of_indexing_lock=queue["progress_of_indexing_lock"],
+                         index_data_count=queue["index_data_count"],
+                         index_msg_count=queue["index_msg_count"],
+                         max_index_size=self.params.get("max_index_size", 10),
+                         indexing_started_flag=queue["indexing_started_flag"],
+                         index_data_queue_size=queue["index_data_queue_size"],
+                         prefix_index_data=queue["prefix_index_data"],
+                         standalone=queue["standalone"],
+                         params=self.params
+                         )
 
-  def stop(self):
-    pass
+        except Exception as e:
+            self.logger.excep("{}:Task: {}!".format(__file__, e))
+
+    def stop(self):
+        pass
 
 
 def indexing(**kwargs):
@@ -495,51 +523,99 @@ def indexing(**kwargs):
     indexing_started_flag = kwargs["indexing_started_flag"]
     index_data_count = kwargs["index_data_count"]
     index_msg_count = kwargs["index_msg_count"]
-
+    index_data_queue_size = kwargs.get("index_data_queue_size", 10000)
     progress_of_indexing = kwargs["progress_of_indexing"]
-    # progress_of_indexing_lock = kwargs["progress_of_indexing_lock"]
-    #if dir not in progress_of_indexing:
-    #    logger.warn('Directory {} not present in index'.format(dir))
-    #elif progress_of_indexing[dir] != 'Pending':
-    #    logger.warn('Directory {} is not in pending state - {}'.format(dir, progress_of_indexing[dir]))
-
+    prefix_index_data = kwargs["prefix_index_data"]
+    standalone = kwargs.get("standalone", False)
+    params = kwargs["params"]
     progress_of_indexing[dir] = 'Progress'
     if indexing_started_flag.value == 0:
         indexing_started_flag.value = 1
         logger.info('Indexing on the shares started')
-    if os.access(dir, os.R_OK):
-        for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger,
-                                  max_index_size=max_index_size):
-            # If files a directory, then create a task
-            if "dir" in result and "files" in result:
-                msg = {"dir": result["dir"], "files": result["files"], "size": result["size"],
-                       "nfs_cluster": nfs_cluster,
-                       "nfs_share": nfs_share}
-                try:
-                  # Don't let index_data_queue grow more than 50K
-                  while index_data_queue.qsize() > 50000:
-                      time.sleep(0.1)
-                  index_data_queue.put(msg)
-                  with index_msg_count.get_lock():
-                      index_msg_count.value +=1
 
-                except Exception as e:
-                  logger.excep("Not able to enqueue index-msg : {}".format(e))
-                with index_data_count.get_lock():
-                    index_data_count.value += len(result["files"])
-                logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
-                    result["dir"], len(result["files"]), index_data_queue.qsize()))
-            elif "dir" in result:
-                subdir = result['dir']
-                if subdir in progress_of_indexing and progress_of_indexing[subdir] in ['Pending', 'Progress']:
-                    logger.warn('SKIPPING the dir {} already present'.format(subdir))
+    if not os.access(dir, os.R_OK):
+        logger.error('Read permission failed on dir - {}'.format(dir))
+        progress_of_indexing.pop(dir)
+        return
+
+    # Reset the counters as we are going to re-index on the directories that are not completely done in the
+    # previous run
+    prefix_dir = dir[1:] + '/'
+    if prefix_dir in prefix_index_data:
+        if "files" not in prefix_index_data[prefix_dir] or "succeeded" not in prefix_index_data[prefix_dir]:
+            prefix_index_data[prefix_dir] = {"files": 0, "succeeded": -1, "size": 0}
+
+    for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger, max_index_size=max_index_size):
+        if "dir" not in result:
+            logger.error("Something went wrong with the iterate_dir - {}".format(str(result)))
+            continue
+        # If no files in the directory, then create a task
+        # Otherwise push the files list to index data queue
+        if "files" in result:
+            if "size" in result and result["size"] == 0:
+                logger.info("No files in dir {}".format(result["dir"]))
+                continue
+
+            # Check whether the operation on the directory is already completed or not
+            prefix_dir = result["dir"][1:] + '/'
+            if prefix_dir in prefix_index_data:
+                data = prefix_index_data[prefix_dir]
+                if data["files"] == data["succeeded"]:
+                    # logger.info("Directory already uploaded - {}".format(prefix_dir))
                     continue
-                progress_of_indexing[subdir] = 'Pending'
-                task = Task(operation="indexing", data=subdir, nfs_cluster=nfs_cluster, nfs_share=nfs_share,
-                            max_index_size=max_index_size)
-                task_queue.put(task)
-    else:
-        logger.error("Read permission denied - {}".format(dir))
+                else:
+                    logger.info("Resume upload for the directory - {}".format(prefix_dir))
+            else:
+                prefix_index_data[prefix_dir] = dict()
+                prefix_index_data[prefix_dir] = {"files": 0, "succeeded": -1, "size": 0}
+
+            msg = {"dir": result["dir"], "files": result["files"], "size": result["size"],
+                   "nfs_cluster": nfs_cluster,
+                   "nfs_share": nfs_share}
+            try:
+                # Don't let index_data_queue grow more than given value or the default 5K
+                while index_data_queue.qsize() > index_data_queue_size:
+                    logger.info("Index data Q threshold crossed, Size = {}, Threshold = {}".format(index_data_queue.qsize(), index_data_queue_size))
+                    time.sleep(0.1)
+                if standalone:
+                    data = {"dir": msg["dir"], "files": msg["files"], "size": msg["size"]}
+                    logger.debug('Created Task for PUT for data-{}'.format(data))
+                    task = Task(operation='put',
+                                data=data,
+                                s3config=params['s3config'],
+                                dryrun=params['dryrun'])
+                    task_queue.put(task)
+                else:
+                    index_data_queue.put(msg)
+                    with index_msg_count.get_lock():
+                        index_msg_count.value += 1
+            except Exception as e:
+                logger.excep("Not able to enqueue index-msg : {}".format(e))
+
+            try:
+                with index_data_count.get_lock():
+                    file_count = len(result["files"])
+                    index_data_count.value += file_count
+                    data_dict = prefix_index_data[prefix_dir]
+                    data_dict["files"] += file_count
+                    data_dict["size"] += result["size"]
+                    prefix_index_data[prefix_dir] = data_dict
+            except Exception as e:
+                logger.error('Error in updating the prefix_index_data during indexing for dir {}'.format(
+                    result['dir']))
+
+            logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(
+                result["dir"], len(result["files"]), index_data_queue.qsize()))
+        else:
+            subdir = result['dir']
+            if subdir in progress_of_indexing and progress_of_indexing[subdir] in ['Pending', 'Progress']:
+                logger.warn('SKIPPING the dir {} already present'.format(subdir))
+                continue
+            progress_of_indexing[subdir] = 'Pending'
+            task = Task(operation="indexing", data=subdir, nfs_cluster=nfs_cluster, nfs_share=nfs_share,
+                        s3config=params['s3config'], dryrun=params['dryrun'],
+                        max_index_size=max_index_size)
+            task_queue.put(task)
 
     progress_of_indexing.pop(dir)
 
@@ -553,14 +629,14 @@ def indexing_with_file_counters(**kwargs):
 
     :return:
     """
-    #print("Actually at indexing function .... {}".format(kwargs))
+    # print("Actually at indexing function .... {}".format(kwargs))
     dir = kwargs["data"]
     task_queue = kwargs["task_queue"]
     logger = kwargs["logger"]
     index_data_queue = kwargs["index_data_queue"]
     nfs_cluster = kwargs["nfs_cluster"]
     nfs_share = kwargs["nfs_share"]
-    max_index_size= kwargs["max_index_size"]
+    max_index_size = kwargs["max_index_size"]
 
     progress_of_indexing = kwargs["progress_of_indexing"]
     progress_of_indexing_lock = kwargs["progress_of_indexing_lock"]
@@ -577,34 +653,36 @@ def indexing_with_file_counters(**kwargs):
 
         # If files a directory, then create a task
         if "dir" in result and "files" in result:
-            #print("Received Files: {}".format(result))
-            msg = {"dir": result["dir"], "files": result["files"] , "size": result["size"], "nfs_cluster": nfs_cluster, "nfs_share": nfs_share}
+            # print("Received Files: {}".format(result))
+            msg = {"dir": result["dir"], "files": result["files"], "size": result["size"], "nfs_cluster": nfs_cluster,
+                   "nfs_share": nfs_share}
             index_data_queue.put(msg)
-            logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format( result["dir"], len(result["files"]) , index_data_queue.qsize()))
+            logger.debug("Index-Data_Queue:MSG= Dir-{}, Files-{}, Size-{}".format(result["dir"], len(result["files"]),
+                                                                                  index_data_queue.qsize()))
             with index_data_count.get_lock():
                 index_data_count.value += len(result["files"])
 
         elif "dir" in result:
-            task = Task(operation="indexing", data=result["dir"], nfs_cluster=nfs_cluster, nfs_share=nfs_share, max_index_size=max_index_size )
+            task = Task(operation="indexing", data=result["dir"], nfs_cluster=nfs_cluster, nfs_share=nfs_share,
+                        max_index_size=max_index_size)
             task_queue.put(task)
             is_dir_only_consist_files = False
 
             progress_of_indexing_lock.acquire()
-            if dir  in progress_of_indexing:
-                progress_of_indexing[dir] +=1
+            if dir in progress_of_indexing:
+                progress_of_indexing[dir] += 1
             progress_of_indexing_lock.release()
 
-    #if is_dir_only_consist_files:
+    # if is_dir_only_consist_files:
     #    progress_of_indexing[dir] = 0
 
-
-    #print("####### Shared Dict: dir{}:{}".format(dir,progress_of_indexing))
+    # print("####### Shared Dict: dir{}:{}".format(dir,progress_of_indexing))
     if is_dir_only_consist_files:
-        check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock ,dir, nfs_share, logger)
-    #print("============ Shared Dict: dir{}:{}".format(dir, progress_of_indexing))
+        check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, dir, nfs_share, logger)
+    # print("============ Shared Dict: dir{}:{}".format(dir, progress_of_indexing))
 
 
-def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock,  dir, nfs_share, logger):
+def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, dir, nfs_share, logger):
     """
     This function helps to detect that indexing for hierarchical directory structure is completed.
         A               A=2
@@ -627,19 +705,20 @@ def check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, 
             key_remove_error = ""
             all_children_processed = False  # True for all parent with processed children, except root, that we don't want to delete.
             progress_of_indexing_lock.acquire()
-            if hash_key in progress_of_indexing and  progress_of_indexing[hash_key] > 0:
+            if hash_key in progress_of_indexing and progress_of_indexing[hash_key] > 0:
                 progress_of_indexing[hash_key] -= 1
 
             if progress_of_indexing[hash_key] == 0 and len(dir) > len(nfs_share):
                 all_children_processed = True
                 # Remove child directory under NFS share
-                key_remove_error = progress_of_indexing.pop(hash_key,"KEY_DOESNOT_EXIST")
+                key_remove_error = progress_of_indexing.pop(hash_key, "KEY_DOESNOT_EXIST")
 
             progress_of_indexing_lock.release()
             # To check if all the children processed for a prefix dir, Should stop when it reaches to NFS share root .
-            if all_children_processed  :
+            if all_children_processed:
                 parent_hash_key = "/".join(hierarchical_dirs[:-1])
-                check_progress_of_indexing(progress_of_indexing,progress_of_indexing_lock, parent_hash_key, nfs_share, logger)
+                check_progress_of_indexing(progress_of_indexing, progress_of_indexing_lock, parent_hash_key, nfs_share,
+                                           logger)
 
         except Exception as e:
             logger.excep("{}: {} : {}".format(__file__, e, key_remove_error))
@@ -654,6 +733,7 @@ def iterate_dir(**kwargs):
 
     file_set = []
     file_set_size = 0
+    file_count = 0
     dir = kwargs["data"]
     logger = kwargs["logger"]
     max_index_size = kwargs["max_index_size"]
@@ -669,13 +749,15 @@ def iterate_dir(**kwargs):
             if file_size == 0:
                 #logger.warn("Zero Byte File - {}".format(entry.name))
                 continue
-            if len(file_set) == max_index_size:
+            if file_count == max_index_size:
                 yield {"dir": dir, "files": file_set, "size": file_set_size}
                 file_set = [entry.name]
                 file_set_size = file_size
+                file_count = 1
             else:
                 file_set.append(entry.name)
                 file_set_size += file_size
+                file_count += 1
 
     # Remaining files to be added.
     if file_set:
