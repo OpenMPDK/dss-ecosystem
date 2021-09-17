@@ -31,17 +31,17 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-import os,sys
+import os, sys
 import json
 import argparse
 
-class Config:
+
+class Config(object):
 
     def __init__(self, params):
         self.config_file = self.get_config_file(params.get("config"))
         self.params = params
         self.config = self.process_config()
-
 
     def get_config(self):
         """
@@ -49,7 +49,6 @@ class Config:
         :return:<dict> complete configuration dictionary.
         """
         return self.config
-
 
     def process_config(self):
         config = {}
@@ -59,7 +58,6 @@ class Config:
             for param in self.params:
                 config[param] = self.params[param]
         return config
-
 
     def get_config_file(self, config_file):
         """
@@ -75,80 +73,81 @@ class Config:
 
 
 def commandLineArgumentParser():
-  parser = argparse.ArgumentParser(description='TESS Copy a NFS data mover tool!')
-  subparser=parser.add_subparsers(help="Supported Operations ... ")
+    parser = argparse.ArgumentParser(description='TESS Copy a NFS data mover tool!')
+    subparser = parser.add_subparsers(help="Supported Operations ... ")
 
-  put_parser=subparser.add_parser("PUT", help="Upload the files to S3 storage")
-  list_parser = subparser.add_parser("LIST", help="List the buckets/objects from S3 storage!")
-  get_parser = subparser.add_parser("GET", help="Download the files from S3 storage bucket!")
-  del_parser = subparser.add_parser("DEL", help="Remove the objects from the S3 storage bucket!")
+    put_parser=subparser.add_parser("PUT", help="Upload the files to S3 storage")
+    list_parser = subparser.add_parser("LIST", help="List the buckets/objects from S3 storage!")
+    get_parser = subparser.add_parser("GET", help="Download the files from S3 storage bucket!")
+    del_parser = subparser.add_parser("DEL", help="Remove the objects from the S3 storage bucket!")
 
-  ## All arguments for PUT
-  put_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
+    ## All arguments for PUT
+    put_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
                       help='Specify number of Jobs to be used for parallel processing. ')
-  put_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-  put_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
+    put_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
+    put_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
                       help='Specify cluster name  ...')
-  put_parser.add_argument("--prefix", "-p", type=str, required=False,
+    put_parser.add_argument("--prefix", "-p", type=str, required=False,
                       help='Specify operation type such as read=r write=w , wr...')
-  put_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+    put_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
-  ## All arguments for LIST
-  list_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
+    ## All arguments for LIST
+    list_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
                           help='Specify number of Jobs to be used for parallel processing. ')
-  list_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-  list_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
+    list_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
+    list_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
                           help='Specify cluster name  ...')
-  list_parser.add_argument("--prefix", "-p", type=str, required=False,
+    list_parser.add_argument("--prefix", "-p", type=str, required=False,
                           help='Specify operation type such as read=r write=w , wr...')
-  list_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+    list_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
-  ## All arguments for GET
-  get_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
+    ## All arguments for GET
+    get_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
                           help='Specify number of Jobs to be used for parallel processing. ')
-  get_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-  get_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
+    get_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
+    get_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
                           help='Specify cluster name  ...')
-  get_parser.add_argument("--prefix", "-p", type=str, required=False,
+    get_parser.add_argument("--prefix", "-p", type=str, required=False,
                           help='Specify operation type such as read=r write=w , wr...')
-  get_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+    get_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
-  ## All arguments for DEL
-  del_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
+    ## All arguments for DEL
+    del_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
                           help='Specify number of Jobs to be used for parallel processing. ')
-  del_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-  del_parser.add_argument("--cluster", "-c", type=str, nargs=  "+", default="10.1.51.2", required=True,
+    del_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
+    del_parser.add_argument("--cluster", "-c", type=str, nargs=  "+", default="10.1.51.2", required=True,
                           help='Specify cluster name  ...')
-  del_parser.add_argument("--prefix", "-p", type=str, required=False,
+    del_parser.add_argument("--prefix", "-p", type=str, required=False,
                           help='Specify operation type such as read=r write=w , wr...')
-  del_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+    del_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
 
-  options = parser.parse_args()
+    options = parser.parse_args()
 
-  return ( sys.argv[1:2][0], vars(options) )
+    return ( sys.argv[1:2][0], vars(options) )
 
 
 def ClientApplicationArgumentParser():
     parser = argparse.ArgumentParser(description='TESS Copy a NFS data mover tool!')
     parser.add_argument("--client_id", "-id", type=int, default=1, required=True,
-                            help='Specify client node IP address ')
-    parser.add_argument("--operation", "-op", type=str, required=True, help='Specify operation such as PUT,LIST,DEL,GET')
+                        help='Specify client node IP address ')
+    parser.add_argument("--operation", "-op", type=str, required=True,
+                        help='Specify operation such as PUT,LIST,DEL,GET')
     parser.add_argument("--ip_address", "-ip", type=str, required=True,
                         help='Specify Client Node IP address')
     parser.add_argument("--master_node", "-mn", required=False, action='store_true',
                         help='Is client running on same node of master?')
     parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
     parser.add_argument("--dryrun", "-dr", required=False, action='store_true',
-                           help='Dry run - Just check operation is working , but does not actual upload')
+                        help='Dry run - Just check operation is working , but does not actual upload')
     parser.add_argument("--port_index", "-pi", type=str, required=True, help='Specify index port')
     parser.add_argument("--port_status", "-ps", type=str, required=True, help='Specify status port')
-    parser.add_argument("--dest_path", "-dp", type=str, required=False, help='Specify Destination Directory for GET operation only')
+    parser.add_argument("--dest_path", "-dp", type=str, required=False,
+                        help='Specify Destination Directory for GET operation only')
     parser.add_argument("--debug", "-d", required=False, action='store_true',
                         help='Run DataMover in debug mode')
     parser.add_argument("--skip_upload", "-su", required=False, action='store_true',
-                           help='Skip data upload operation for DataIntegrity')
-
+                        help='Skip data upload operation for DataIntegrity')
 
     options = vars(parser.parse_args())
     return options
@@ -163,15 +162,12 @@ class CommandLineArgument:
         del_parser = subparsers.add_parser("DEL", help="Remove the objects from the S3 storage bucket!")
         test_parser = subparsers.add_parser("TEST", help="Perform DataMover testing.")
 
-        if not  sys.argv[1:2]:
+        if not sys.argv[1:2]:
             parser.print_help()
             sys.exit()
 
         self.operation = sys.argv[1:2][0]
 
-        #if not hasattr(self, self.operation):
-        #    self.parser.print_help()
-        #    sys.exit()
 
         if self.operation.upper() == "PUT":
             self.put(put_parser)
@@ -184,33 +180,35 @@ class CommandLineArgument:
         elif self.operation.upper() == "TEST":
             self.test(test_parser)
         else:
-            self.parser.print_help()
+            parser.print_help()
             sys.exit()
 
         self.options = vars(parser.parse_args())
 
-
     def put(self, subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
-                                help='Specify number of Jobs to be used for parallel processing. ')
+                               help='Specify number of Jobs to be used for parallel processing. ')
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
+                               help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
-        subparser.add_argument("--compaction", "-com", required=False, action='store_true', help='Enable target compaction')
+        subparser.add_argument("--compaction", "-com", required=False, action='store_true',
+                               help='Enable target compaction')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual upload')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of PUT operation (Not Implemented)')
+        subparser.add_argument("--standalone", "-sa", required=False, action='store_true',
+                               help='Run in standalone mode')
 
-    def get(self,subparser):
+    def get(self, subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
-                                help='Specify number of Jobs to be used for parallel processing. ')
+                               help='Specify number of Jobs to be used for parallel processing. ')
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
+                               help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--dest_path", "-dp", type=str, required=True, help='Specify destination file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
@@ -220,26 +218,28 @@ class CommandLineArgument:
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of GET operation (Not Implemented)')
 
-    def list(self,subparser):
+    def list(self, subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
-                                 help='Specify number of Jobs to be used for parallel processing. ')
+                               help='Specify number of Jobs to be used for parallel processing. ')
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                 help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
+                               help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual listing')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
-        subparser.add_argument("--dest_path", "-dp", type=str, required=False, help='Path to store object keys in a file.')
+        subparser.add_argument("--dest_path", "-dp", type=str, required=False,
+                               help='Path to store object keys in a file.')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of LIST operation (Not Implemented)')
-    def delete(self,subparser):
+
+    def delete(self, subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
-                                help='Specify number of Jobs to be used for parallel processing. ')
+                               help='Specify number of Jobs to be used for parallel processing. ')
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
+                               help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--compaction", "-com", required=False, action='store_true',
                                help='Enable target compaction')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
@@ -250,13 +250,13 @@ class CommandLineArgument:
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of DEL operation (Not Implemented)')
 
-    def test(self,subparser):
+    def test(self, subparser):
         subparser.add_argument("--data_integrity", "-di", required=True, action='store_true',
                                help='Run DataMover data integrity test')
         subparser.add_argument("--skip_upload", "-su", required=False, action='store_true',
                                help='Skip data upload operation')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
-                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
+                               help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
