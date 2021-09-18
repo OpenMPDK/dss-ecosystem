@@ -191,6 +191,7 @@ class Monitor(object):
         message_count = 0
         object_count = 0
         debug_message_timer = datetime.now()
+        client_count = len(self.clients)
 
         while True:
             # Forcefully stop the process
@@ -200,6 +201,36 @@ class Monitor(object):
 
             previous_client_operation_status = 1
             data = {}
+
+            if previous_client_operation_status:
+                if self.index_data_queue.qsize() > 0:
+                    data = self.index_data_queue.get()
+
+            client_index  = self.received_index_msg_count.value % client_count
+            client = self.clients[client_index]
+                # Send data to ClientApplication running on a  Client-Physical Node
+            if data:
+                object_count_under_prefix = len(data["files"])
+                if self.send_index_data(client, data):
+                    previous_client_operation_status = 1
+                    # Just for OPERATION stats collection
+                    if first_index_distribution == 0:
+                        index_distribution_start_time = datetime.now()
+                        first_index_distribution = 1
+                else:  # Re-send once again
+                    previous_client_operation_status = 0
+                    self.logger.error("Failed to send message to Client-{} ".format(client.id))
+
+                    # Debug message , for success
+                if previous_client_operation_status == 1:
+                    message_count += 1
+                    with self.received_index_msg_count.get_lock():
+                        self.received_index_msg_count.value += 1
+
+                    object_count += object_count_under_prefix
+
+
+            """
             # Send index data to each client in round-robin fashion
             for client in self.clients:
                 # Skip sending message if a client is not connected via socket.
@@ -232,6 +263,7 @@ class Monitor(object):
                             self.received_index_msg_count.value += 1
 
                         object_count += object_count_under_prefix
+            """
 
             # Debug message
             if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
