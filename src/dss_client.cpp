@@ -69,6 +69,7 @@ static const char* DSS_ALLOC_TAG = "DSS";
 
 DSSInit dss_init;
 
+
 Endpoint::Endpoint(Aws::Auth::AWSCredentials& cred, const std::string& url, Config& cfg) 
 {
 	cfg.endpointOverride = url.c_str();
@@ -334,14 +335,20 @@ Endpoint::ListObjects(const Aws::String& bn, Objects *os)
             if (os->NeedCommPrefix()) {
             	Aws::Vector<Aws::S3::Model::CommonPrefix> cps =
                                         std::move(out.GetResult().GetCommonPrefixes());
-            	for (auto cp : cps) {
-            	    os->GetPage().insert(cp.GetPrefix().c_str());
-            	}
+            	
+                for (auto cp : cps) {
+			        if ((os->GetCPre().find(cp.GetPrefix().c_str())) == os->GetCPre().end()){
+                    	os->GetPage().insert(cp.GetPrefix().c_str());
+                        os->GetCPre().insert(cp.GetPrefix().c_str());
+                    }
+			        else
+                        continue;
+		        }            	
             }
-        } else {
-			return Result(false, out.GetError());
+	    } 
+	    else {
+		    return Result(false, out.GetError());
         }
-
         if (out.GetResult().GetIsTruncated()) {
 			if (os->PageSizeSet()) {
 				os->SetToken(out.GetResult().GetNextContinuationToken());

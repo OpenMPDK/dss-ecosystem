@@ -144,6 +144,7 @@ public:
     bool NeedCommPrefix() { return m_comm_prefix; }
     bool PageSizeSet() { return m_pagesize != 0; }
     std::set<std::string>& GetPage() { return m_page; }
+    std::set<std::string>& GetCPre() { return m_cps;}
 
 private:
 	int m_cur_id;
@@ -155,7 +156,7 @@ private:
 	bool m_comm_prefix;
 	uint32_t m_pagesize;
     std::set<std::string> m_page;
-
+    std::set<std::string> m_cps;
 public:
     decltype(m_page.cbegin()) begin() const { return m_page.cbegin(); }
     decltype(m_page.cend()) end() const { return m_page.cend(); }
