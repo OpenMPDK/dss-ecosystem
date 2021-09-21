@@ -374,7 +374,7 @@ int
 ClusterMap::AcquireClusterConf()
 {
 	//TODO: redo this function
-	Result r; 
+	Result r;
 	std::fstream file;
 
 	if (!GetClusterConfFromLocal()) {
@@ -383,8 +383,8 @@ ClusterMap::AcquireClusterConf()
 			auto err = r.GetErrorType();
 			if (err == Aws::S3::S3Errors::NETWORK_CONNECTION)
 				throw NetworkError(r.GetErrorMsg().c_str());
- 
-			throw DiscoverError("Failed to download conf.json: " + r.GetErrorMsg()); 	
+
+			throw DiscoverError("Failed to download conf.json: " + r.GetErrorMsg());
 			return -1;
 		}
 	} else {
@@ -406,6 +406,10 @@ ClusterMap::AcquireClusterConf()
     		conf = json::parse(file);
 		else
 			conf = json::parse(r.GetIOStream());
+
+		try {
+			m_wait_time = conf.at("init_time").get<unsigned>();
+		} catch (std::exception&) {}
 
 		for (auto &c : conf["clusters"]) {
 			Cluster* cluster = InsertCluster(c["id"]);
@@ -438,7 +442,7 @@ ClusterMap::DetectClusterBuckets(bool force)
 	if (!std::equal(empty.begin() + 1, empty.end(), empty.begin())) {
 		uint32_t i = 0;
 		std::string err_str;
-	
+
 		for (auto it : empty) {
 			if (force) {
 				snprintf(err_buf, err_len, "cluster %u : %s\n",
@@ -478,7 +482,7 @@ ClusterMap::VerifyClusterConf()
 
                	snprintf(err_buf, err_len, "Failed to create bucket on cluster %u (msg=%s)\n",
 						 c->GetID(), r.GetErrorMsg().c_str());
-				
+
 				throw NewClientError(err_buf);
 				st = State::EXIT;
 				return -1;
@@ -486,9 +490,9 @@ ClusterMap::VerifyClusterConf()
 			st = State::TEST;
 			break;
 		case State::TEST:
-			//TODO: Wait minio to propagate buckets to other endpoints 
+			//TODO: Wait minio to propagate buckets to other endpoints
 			// ask Som
-			usleep(10 * (1ULL << 20));
+			usleep(m_wait_time * (1ULL << 20));
 			s = DetectClusterBuckets(true);
 			st = State::EXIT;
 			break;
@@ -529,7 +533,7 @@ Cluster::InsertEndpoint(Client* c, const std::string& ip, uint32_t port)
 	m_endpoints.push_back(ep);
 
 	pr_debug("Insert endpoint %s\n", (ip + ":" + std::to_string(port)).c_str());
-	
+
 	return 0;
 }
 

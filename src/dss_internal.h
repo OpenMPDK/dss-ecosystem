@@ -157,14 +157,12 @@ public:
     		m_options.loggingOptions.logLevel = (Aws::Utils::Logging::LogLevel) l;
 		}
 
-		if ((s = getenv("DSS_AWS_LOG_FILENAME"))) {
+		if ((s = getenv("DSS_AWS_LOG_FILENAME")))
 			m_options.loggingOptions.defaultLogPrefix = s;
-		}
 
-		if ((s = getenv("DSS_CONFIG_FILE"))) {
+		if ((s = getenv("DSS_CONFIG_FILE")))
 			m_local_config = s;
-		}
-	
+
 		s = (char*) "AWS_EC2_METADATA_DISABLED=true";
 		if (putenv(s))
 			pr_err("Failed to set AWS_EC2_METADATA_DISABLED\n");
@@ -172,7 +170,7 @@ public:
     	Aws::InitAPI(m_options);
 	}
 
-	~DSSInit() 
+	~DSSInit()
 	{
 		Aws::ShutdownAPI(m_options);
 	}
@@ -191,7 +189,7 @@ private:
 	enum class Status : int {
 		EMPTY,
 		ALL_GOOD,
-		PARTIAL	
+		PARTIAL
 	};
 	enum class State : int {
 		CREATE,
@@ -201,7 +199,7 @@ private:
 
 public:
 	ClusterMap(Client *c, DSSInit& i) :
-		m_client(c), m_init(i) {}
+		m_wait_time(3), m_client(c), m_init(i) {}
 
 	~ClusterMap()
 	{
@@ -240,13 +238,14 @@ public:
 	}
 
 	unsigned GetEPWeight(unsigned i);
-	
+
 private:
+	unsigned m_wait_time;
 	Client* m_client;
 	DSSInit& m_init;
 	std::hash<std::string> m_hash;
 	std::vector<Cluster*> m_clusters;
-}; 
+};
 }
 
 #endif // DSS_INTERNAL_H
