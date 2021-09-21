@@ -509,8 +509,8 @@ class Monitor(object):
                             except Exception as e:
                                 self.logger.fatal("Exception in persisting index data - {}".format(str(e)))
                                 # TODO: BAIL OUT
-                else:
-                    self.logger.error('Dir {} not present in prefix_index_data'.format(prefix))
+                #else:
+                #    self.logger.error('Dir {} not present in prefix_index_data'.format(prefix))
 
                 file_index_count = operation_success_count + operation_failure_count
                 # Debug message

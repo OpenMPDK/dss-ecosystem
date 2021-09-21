@@ -563,8 +563,8 @@ def indexing(**kwargs):
                 if data["files"] == data["succeeded"]:
                     # logger.info("Directory already uploaded - {}".format(prefix_dir))
                     continue
-                else:
-                    logger.info("Resume upload for the directory - {}".format(prefix_dir))
+                #else:
+                #    logger.info("Resume upload for the directory - {}".format(prefix_dir))
             else:
                 prefix_index_data[prefix_dir] = dict()
                 prefix_index_data[prefix_dir] = {"files": 0, "succeeded": -1, "size": 0}
