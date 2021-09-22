@@ -140,13 +140,13 @@ class Worker(object):
         :return: None
         """
         try:
-            self.create_s3_client()
-            if not self.s3_client.status:
-                self.status.value = 0
-                self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
-                return
+            #self.create_s3_client()
+            #if not self.s3_client.status:
+            #    self.status.value = 0
+            #    self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
+            #    return
 
-            self.process = Process(target=self.run, args=(self.s3_client, ))
+            self.process = Process(target=self.run, args=( ))
             self.process.name = "Worker-{}".format(self.id)
             self.process.start()
         except Exception as e:
@@ -214,11 +214,17 @@ class Worker(object):
             self.logger.excep("Hung Detection - {}".format(e))
         return False
 
-    def run(self, s3_client):
+    def run(self):
         """
         Run the actual process
         :return:
         """
+        self.create_s3_client()
+        if not self.s3_client.status:
+            self.status.value = 0
+            self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
+            return
+        
         self.status.value = 1
         self.worker_pid.value = current_process().pid
         while True:
@@ -248,7 +254,7 @@ class Worker(object):
                                index_msg_count=self.index_msg_count,
                                listing_progress=self.listing_progress,
                                listing_progress_lock=self.listing_progress_lock,
-                               s3_client=s3_client,
+                               s3_client=self.s3_client,
                                indexing_started_flag=self.indexing_started_flag,
                                listing_status=self.listing_status,
                                listing_only=self.listing_only,
