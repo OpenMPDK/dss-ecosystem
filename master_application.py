@@ -246,10 +246,18 @@ class Master(object):
             index += 1
         # Check atleast one worker is RUNNING
         workers_started = False
-        for w in self.workers:
-            if w.status.value == 1:
-                workers_started = True
-                break
+        while True:
+            s3_connection_failed = True
+            for w in self.workers:
+                if w.status.value == 1:
+                    workers_started = True
+                    break
+                elif w.status.value != -1:
+                    s3_connection_failed = False
+                # self.logger.info("DEBUG: worker-{}, status-{}".format(w.id, w.status.value))
+            if s3_connection_failed or workers_started:
+                break 
+                 
         if not workers_started:
             self.logger.fatal("Workers were not started exit application!")
         return workers_started

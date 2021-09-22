@@ -65,7 +65,7 @@ class Worker(object):
         self.s3_config = kwargs.get("s3_config", None)
         self.aws_log_debug_val = kwargs.get("aws_log_debug_val", None)
 
-        self.status = Value('i', 0)  # [0,1,2] => ["READY","RUNNING","HUNG"]
+        self.status = Value('i', 0)  # [0,1,2,-1] => ["READY","RUNNING","HUNG","S3ConnectionIssue"]
         self.operation_progress_status_counter = Value('i', 0)  #
         self.operation_progress_counter_previous_value = 0
         self.process = None
@@ -153,9 +153,9 @@ class Worker(object):
             self.logger.excep("{}".format(e))
             return
 
-        while self.status.value == 0:
-          time.sleep(0.1)
-        self.logger.info("Worker-{}, PID-{} started ... ".format(self.id, self.worker_pid.value))
+        # while self.status.value == 0:
+        #    time.sleep(0.1)
+        # self.logger.info("Worker-{}, PID-{} started ... ".format(self.id, self.worker_pid.value))
 
     def stop(self):
         """
@@ -221,12 +221,14 @@ class Worker(object):
         """
         self.create_s3_client()
         if not self.s3_client.status:
-            self.status.value = 0
+            self.status.value = -1
             self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
             return
         
         self.status.value = 1
         self.worker_pid.value = current_process().pid
+        self.logger.info("Worker-{}, PID-{} started ... ".format(self.id, self.worker_pid.value))
+
         while True:
             # Get the status of worker from a shared flag.
             if not self.status.value:
