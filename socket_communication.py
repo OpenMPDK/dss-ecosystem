@@ -83,13 +83,13 @@ class ClientSocket:
                 is_connection_refused = True
             except ConnectionError as e:
                 self.logger.excep("ConnectionError -- {}".format(e))
-            except Exception as e:
+            except socket.error as e:
                 self.logger.excep("GenericException - {}".format(e))
             # Add a delay in increasing order of 2 sec.
             time.sleep(time_to_sleep)
             time_to_sleep += CONNECTION_DELAY_INTERVAL
             if (datetime.now() - connection_time_start).seconds > CONNECTION_TIME_THRESHOLD:
-                raise TimeoutError("Socket connection timeout=300sec !")
+                raise socket.timeout("Socket connection timeout=300sec !")
 
     def send_json(self,message={}):
         """
@@ -97,14 +97,13 @@ class ClientSocket:
         :param message: JSON/DICT
         :return: Success/Failure = Tue/False
         """
-        if message:
+        if message and self.socket:
             msg_body = json.dumps(message)
             msg_len = (str(len(msg_body))).zfill(10)
             msg = msg_len + msg_body
             try:
                 # sendall on success return None.
                 if self.socket.sendall(msg.encode("ascii") ) is None:
-                    #self.logger.info("SENT MSG Len:{}, Size:{}".format(msg_len,len(msg_body)))
                     return True
                 else:
                     self.logger.error("Failed to send msg - {}".format(msg))
@@ -112,7 +111,11 @@ class ClientSocket:
                 self.logger.excep("BrokenPipeError - {}".format(e))
             except ConnectionError as e:
                 self.logger.error("ConnectionError- {}".format(e))
-            except Exception as e:
+            except MemoryError as e:
+                self.logger.error("MemoryError- The mesage size is more than supported on this system. {}".format(e))
+            except socket.timeout as e:
+                raise socket.timeout()
+            except socket.error as e:
                 self.logger.excep("Message Send Failed - {}".format(e))
         return False
 
@@ -123,37 +126,49 @@ class ClientSocket:
         """
         msg_len = None
         msg = "{}"
-        msg_body =None
         try:
             msg_len = self.socket.recv(10)
             if msg_len != b'':
                 msg_len = int(msg_len)
-        except Exception as e:
-            print("Exception: {}".format(e))
+        except socket.error as e:
+            self.logger.error("ClientSocket: Incorrect message length - {}".format(e))
 
         if msg_len:
             msg_body = b''
-            try:
-                # Iterate till we receive desired number of bytes.
-                received_data_size = 0
-                while received_data_size < msg_len:
-                    data_size = msg_len - received_data_size
+            # Iterate till we receive desired number of bytes.
+            received_data_size = 0
+            while received_data_size < msg_len:
+                data_size = msg_len - received_data_size
+                try:
                     received_data = self.socket.recv(data_size)
                     received_data_size += len(received_data)
                     msg_body += received_data
-                if msg_body == b'':
-                    raise RuntimeError("ClientSocket: Empty message for message length -{}".format(msg_len))
-            except Exception as e:
-                self.logger.excep("ClientSocket receive bytes -  {}".format(e))
-            if msg_body :
-                msg = msg_body.decode("ascii")
-            if format.upper() == "JSON":
-                return json.loads(msg)
-            else:
-                return msg
+                except socket.error as e:
+                    self.logger.error("ClientSocket: {}".format(e))
+                except socket.timeout as e:
+                    self.logger.error("ClientSocket: Timeout-{}".format(e))
+                    break
+            if msg_body == b'':
+                raise RuntimeError("ClientSocket: Empty message for message length -{}".format(msg_len))
+
+            if msg_body:
+                if len(msg_body) == msg_len:
+                    msg = msg_body.decode("ascii")
+                else:
+                    self.logger.error("ClientSocket: Received incomplete message.")
+
+        if format.upper() == "JSON":
+            return json.loads(msg)
+        else:
+            return msg
+
     def close(self):
+        """
+        Close client socket
+        :return:
+        """
         try:
-            #self.socket.shutdown(SHUT_RDWR)
+            # self.socket.shutdown()
             self.socket.close()
         except Exception as e:
             self.logger.excep("Close socket {}".format(e))
@@ -163,6 +178,7 @@ class ServerSocket:
     def __init__(self, logger=None, ip_address_family="IPv4"):
         self.socket = None
         self.logger = logger
+        self.client_socket = None
         if ip_address_family.upper() == "IPV4":
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         elif ip_address_family.upper() == "IPV6":
@@ -173,6 +189,12 @@ class ServerSocket:
 
 
     def bind(self,host,port):
+        """
+        Bind server socket
+        :param host:
+        :param port:
+        :return:
+        """
         if not host:
             self.logger.error("ERROR: Host not specified")
         if not port:
@@ -188,8 +210,11 @@ class ServerSocket:
             self.logger.error("Not able to bind to host={}:{}, {}".format(host,port, e))
 
     def accept(self):
-        client_sock, address = self.socket.accept()
-        self.client_socket = client_sock
+        """
+        Accept client request.
+        :return:
+        """
+        self.client_socket, address = self.socket.accept()
         self.logger.info("Connected to {}".format(str(address)))
 
     def send_json(self,message=None,format="JSON"):
@@ -197,9 +222,9 @@ class ServerSocket:
         Send data to a client
         :param message: STRING|DICT|JSON ,
         :param format: require to specify the format. By default JSON.
-        :return:
+        :return: Success/failure (True/False)
         """
-        if message:
+        if message and self.client_socket:
             msg_body = message
             if format.upper() == "JSON":
                 msg_body = json.dumps(message)
@@ -217,9 +242,11 @@ class ServerSocket:
                 self.logger.error("BrokenPipeError- Socket connection closed by the peer! {}".format(e))
             except ConnectionError as e:
                 self.logger.error("ConnectionError- {}".format(e))
+            except MemoryError as e:
+                self.logger.error("MemoryError- The mesage size is more than supported on this system. {}".format(e))
             except RuntimeError as e:
                 self.logger.error("RuntimeError - {}".format(e))
-            except Exception as e:
+            except socket.error as e:
                 self.logger.error("Message Send Failed - {}".fromat(e))
         return False
 
@@ -234,35 +261,39 @@ class ServerSocket:
             msg_len = self.client_socket.recv(10)
             if msg_len != b'':
                 msg_len = int(msg_len)
-        except Exception as e:
+        except socket.error as e:
             self.logger.error("ServerSocket: Determine msg length - {}".format(e))
         if msg_len:
             msg_body = b''
-            try:
-                # Iterate till we receive desired number of bytes.
-                received_data_size = 0
-                while received_data_size < msg_len:
-                    data_size = msg_len - received_data_size
+            received_data_size = 0
+            # Iterate till we receive desired number of bytes.
+            while received_data_size < msg_len:
+                data_size = msg_len - received_data_size
+                try:
                     received_data = self.client_socket.recv(data_size)
                     received_data_size += len(received_data)
                     msg_body += received_data
+                except socket.error as e:
+                    self.logger.excep("ServerSocket receive bytes -  {}".format(e))
+                except socket.timeout as e:
+                    self.logger.error("ServerSocket: Timeout - {}".format(e))
+            if msg_body == b'':
+                raise RuntimeError("Empty message for message length -{}".format(msg_len))
 
-
-                if msg_body == b'':
-                    raise RuntimeError("Empty message for message length -{}".format(msg_len))
-            except Exception as e:
-                self.logger.excep("ServerSocket receive bytes -  {}".format(e))
             if msg_body :
-                msg = msg_body.decode("ascii")
-            if format.upper() == "JSON":
-                return json.loads(msg)
-            else:
-                return msg
+                if len(msg_body) == msg_len:
+                    msg = msg_body.decode("ascii")
+                else:
+                    self.logger.error("ServerSocket: Received incomplete message.")
+        if format.upper() == "JSON":
+            return json.loads(msg)
+        else:
+            return msg
 
     def close(self):
         """
         Close server side socket.
-        :return:
+        :return: None
         """
         try:
             self.socket.close()
