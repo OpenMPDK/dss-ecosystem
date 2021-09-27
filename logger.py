@@ -32,6 +32,7 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import os,sys
+import prctl
 import time
 from utils.utility import  exception, is_queue_empty
 from multiprocessing import Process, Queue, Value, Lock
@@ -138,6 +139,10 @@ class MultiprocessingLogger(object):
         :param stop_logging: A atomic shared variable to stop the loop.
         :return: None
         """
+        name = "DM_logger"
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
+
         try:
             print("Log file:{}".format(self.logfile))
             fh = None

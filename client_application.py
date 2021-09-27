@@ -46,6 +46,7 @@ import socket
 import sys
 from zmq.error import ZMQError
 from socket_communication import ServerSocket, ClientSocket
+import prctl
 
 mgr = Manager()
 index_buffer = mgr.dict()
@@ -284,6 +285,10 @@ class ClientApplication(object):
         - Forcefully: process gets terminated on receiving termination signal. Need to add signal handler.
         :return:
         """
+        name = "DM_client_message_server_index"
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
+
         try:
             socket =  ServerSocket(self.logger, self.ip_address_family)
             socket_index_address = "{}:{}".format(self.ip_address, self.port_index)
@@ -406,6 +411,10 @@ class ClientApplication(object):
             - If things get HUNG, it wait for 20 mins and if doesn't receive any status message then exit.
         :return:
         """
+        name = "DM_client_message_server_status"
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
+
         try:
             socket_address = "tcp://{}:{}".format(self.ip_address, self.port_status)
             socket = ServerSocket(self.logger, self.ip_address_family)

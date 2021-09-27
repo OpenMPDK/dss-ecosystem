@@ -5,3 +5,4 @@ boto==2.49.0
 boto3==1.17.7
 botocore==1.20.7
 ntplib==0.3.4
+python-prctl==1.8.1

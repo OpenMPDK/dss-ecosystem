@@ -41,6 +41,7 @@ import json
 import uuid
 from logger import MultiprocessingLogger
 from socket_communication import ClientSocket, ServerSocket
+import prctl
 
 """
 Monitor the progress of operation.
@@ -172,6 +173,10 @@ class Monitor(object):
               and stop all other processes to shutdown DM.
         :return: None
         """
+        name = "DM_monitor_message_handler_index"
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
+
         successful_socket_connection = 0
         for client in self.clients:
             try:
@@ -355,6 +360,10 @@ class Monitor(object):
         Collect the status from all the clients and add status to status_queue
         :return:
         """
+        name = "DM_monitor_message_handler_poller"
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
+
         successful_socket_connection = 0
         for client in self.clients:
             try:
@@ -442,6 +451,10 @@ class Monitor(object):
 
         :return:
         """
+        name = "DM_monitor_operation_progress"
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
+
         file_index_count = 0
         operation_success_count = 0  # S3 operation success count
         operation_failure_count = 0  # S3 operation failure count
@@ -600,6 +613,9 @@ class Monitor(object):
         self.logger.info("Monitor-Operation-Progress terminated! ")
 
     def object_keys_aggregator(self):
+        name = "DM_monitor_obj_keys_aggregator"
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
 
         listing_path = self.logger.path
         if self.config["dest_path"]:
