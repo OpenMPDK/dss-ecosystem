@@ -38,6 +38,7 @@ from multiprocessing import Process, Value, Queue, current_process
 from minio_client import MinioClient
 from s3_client import S3
 from logger import MultiprocessingLogger
+import prctl
 import time
 
 WORKER_OPERATION_STATUS = {
@@ -219,6 +220,10 @@ class Worker(object):
         Run the actual process
         :return:
         """
+        name = "DM_worker_" + str(self.id)
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
+
         self.create_s3_client()
         if not self.s3_client.status:
             self.status.value = -1
