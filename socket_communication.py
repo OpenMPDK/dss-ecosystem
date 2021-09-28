@@ -243,7 +243,7 @@ class ServerSocket:
             except ConnectionError as e:
                 self.logger.error("ConnectionError- {}".format(e))
             except MemoryError as e:
-                self.logger.error("MemoryError- The mesage size is more than supported on this system. {}".format(e))
+                self.logger.error("MemoryError- The message size is more than supported on this system. {}".format(e))
             except RuntimeError as e:
                 self.logger.error("RuntimeError - {}".format(e))
             except socket.error as e:

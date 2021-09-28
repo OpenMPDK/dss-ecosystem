@@ -233,43 +233,6 @@ class Monitor(object):
                         self.received_index_msg_count.value += 1
 
                     object_count += object_count_under_prefix
-
-
-            """
-            # Send index data to each client in round-robin fashion
-            for client in self.clients:
-                # Skip sending message if a client is not connected via socket.
-                if client.socket_index is None:
-                    continue
-                # Get data from shared index queue, if the previous client processed data successfully
-                if previous_client_operation_status:
-                    data = {}
-                    object_count_under_prefix = 0
-                    if self.index_data_queue.qsize() > 0:
-                        data = self.index_data_queue.get()
-
-                # Send data to ClientApplication running on a  Client-Physical Node
-                if data:
-                    object_count_under_prefix = len(data["files"])
-                    if self.send_index_data(client, data):
-                        previous_client_operation_status = 1
-                        # Just for OPERATION stats collection
-                        if first_index_distribution == 0:
-                            index_distribution_start_time = datetime.now()
-                            first_index_distribution = 1
-                    else:  # Re-send once again
-                        previous_client_operation_status = 0
-                        self.logger.error("Failed to send message to Client-{} ".format(client.id))
-
-                    # Debug message , for success
-                    if previous_client_operation_status == 1:
-                        message_count += 1
-                        with self.received_index_msg_count.get_lock():
-                            self.received_index_msg_count.value += 1
-
-                        object_count += object_count_under_prefix
-            """
-
             # Debug message
             if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
                 self.logger.info("Messages distributed to clients-{}, Objects Count: {}".format(message_count,
@@ -296,13 +259,13 @@ class Monitor(object):
                             client.ip_address, client.port_index, data))
                 # Intimidated all the clients, exit the loop.
                 break
-        # Closing all socket connection
-        try:
-            # Close all sockets associated with clients.
-            for client in self.clients:
+
+        # Close all sockets associated with clients.
+        for client in self.clients:
+            try:
                 client.socket_index.close()
-        except Exception as e:
-            self.logger.excep("Monitor-index Closing Socket {}".format(e))
+            except Exception as e:
+                self.logger.excep("Monitor-index Closing Socket {}".format(e))
 
         self.monitor_index_data_sender.value = 1
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
@@ -464,6 +427,7 @@ class Monitor(object):
         debug_message_timer = datetime.now()
         last_flush_timer = time.time()
         original_file_size_in_byte = 0
+        prefix_dir_deleted = []  # Contains all prefix dir erased from S3 during DEL operation.
 
         while True:
 
@@ -522,8 +486,9 @@ class Monitor(object):
                             except Exception as e:
                                 self.logger.fatal("Exception in persisting index data - {}".format(str(e)))
                                 # TODO: BAIL OUT
-                #else:
-                #    self.logger.error('Dir {} not present in prefix_index_data'.format(prefix))
+                elif  self.operation.upper() in ["DEL"]:
+                    if self.prefix_index_data[prefix]["files"] == self.prefix_index_data[prefix]["succeeded"]:
+                        prefix_dir_deleted.append(prefix)
 
                 file_index_count = operation_success_count + operation_failure_count
                 # Debug message
@@ -565,7 +530,6 @@ class Monitor(object):
                 self.logger.error("Persistent index data - {}".format(e))
 
         # Calculate total operation(PUT/GET/DEL) size
-        original_file_size_in_byte = 0
         if self.prefix:
             for prefix, value in prefix_index_data.items():
                 if self.operation.upper() == "PUT":
@@ -578,6 +542,23 @@ class Monitor(object):
             for prefix, value in prefix_index_data.items():
                 if prefix in processed_prefix:
                     original_file_size_in_byte += value["size"]
+
+        #  Update or Remove metadata-persistent-index file.
+        if self.operation.upper() == "DEL" and self.prefix_index_data_persist:
+            for prefix in prefix_dir_deleted:
+                if prefix in self.prefix_index_data_persist:
+                    del self.prefix_index_data_persist[prefix]
+
+            if self.prefix_index_data_persist:
+                try:
+                    self.persist_index_data()
+                except Exception as e:
+                    self.logger.fatal("Exception in persisting final index data - {}".format(str(e)))
+            else:
+                # Remove persistent index file.
+                os.remove(prefix_index_data_file)
+                self.logger.warn("All the objects removed from S3. Removed persistent index file - {}".format(
+                                prefix_index_data_file))
 
         success_operation_size_in_byte = original_file_size_in_byte
 

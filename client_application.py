@@ -308,8 +308,8 @@ class ClientApplication(object):
             if self.stop_messaging.value == 0:
                 break
             try:
-                if True:
-                    message = socket.recv_json()
+                message = socket.recv_json()
+                if message:
                     # Check the end message arrived, exit loop
                     if "indexing_done" in message and message["indexing_done"]:
                         self.logger.info("Receiving Index-data completed. Closing Monitor-Index-Receiver! ")

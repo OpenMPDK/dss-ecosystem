@@ -205,8 +205,8 @@ def list(s3_client, **kwargs):
                     task = Task(operation="list", data={"prefix": object_key_prefix}, s3config=params["s3config"],
                                 max_index_size=max_index_size)
                     task_queue.put(task)
-                else:
-                    logger.error("Worker-{}: ObjectPrefix:{} was not uploaded through latest DM run".format(worker_id, object_key_prefix))
+                #else:
+                #    logger.error("Worker-{}: ObjectPrefix:{} was not uploaded through latest DM run".format(worker_id, object_key_prefix))
                 listing_progress_lock.release()
         else:
             logger.error("No object keys belongs to the prefix-{}".format(prefix))
