@@ -457,25 +457,20 @@ class Monitor(object):
                         prefix = status["dir"][1:]
                     if not status["dir"].endswith("/"):
                         prefix += "/"
-                if status["dir"] in processed_prefix:
-                    processed_prefix[prefix] += status.get("success", 0) + status.get("failure", 0)
+                if prefix in processed_prefix:
+                    processed_prefix[prefix]["success"] += status.get("success", 0)
+                    processed_prefix[prefix]["failure"] += status.get("failure", 0)
                 else:
-                    processed_prefix[prefix] = status.get("success", 0) + status.get("failure", 0)
+                    processed_prefix[prefix] = {"success" : status.get("success", 0) , "failure" : status.get("failure", 0) }
 
-                if self.operation.upper() == "PUT" and prefix in self.prefix_index_data:
-                    try:
+                if self.operation.upper() == "PUT" and prefix in processed_prefix:
+                    processed_files_count = processed_prefix[prefix]["success"] + processed_prefix[prefix]["failure"]
+                    if self.prefix_index_data[prefix]["files"] == processed_files_count:
+                        prefix_data = self.prefix_index_data[prefix]
+                        prefix_data["succeeded"] = processed_prefix[prefix]["success"]
+
                         with self.index_data_count.get_lock():
-                            data = self.prefix_index_data[prefix]
-                            if data["succeeded"] == -1:
-                                data["succeeded"] = 0
-                            data["succeeded"] += status.get("success", 0)
-                            self.prefix_index_data[prefix] = data
-                    except Exception as e:
-                        self.logger.error('Exception in acquiring lock for updating prefix_index_data - {}'.format(
-                            str(e)))
-                    if self.prefix_index_data[prefix]["files"] == self.prefix_index_data[prefix]["succeeded"]:
-                        with self.index_data_count.get_lock():
-                            self.prefix_index_data_persist[prefix] = self.prefix_index_data[prefix]
+                            self.prefix_index_data_persist[prefix] = prefix_data
                         self.logger.debug('Index data - Dir {} with file count {} fully uploaded'.format(
                             prefix, self.prefix_index_data[prefix]["files"]))
                         if int(time.time() - last_flush_timer) > PERSIST_FLUSH_INTERVAL:
@@ -487,7 +482,7 @@ class Monitor(object):
                                 self.logger.fatal("Exception in persisting index data - {}".format(str(e)))
                                 # TODO: BAIL OUT
                 elif  self.operation.upper() in ["DEL"]:
-                    if self.prefix_index_data[prefix]["files"] == self.prefix_index_data[prefix]["succeeded"]:
+                    if self.prefix_index_data[prefix]["files"] == processed_prefix[prefix]["success"]:
                         prefix_dir_deleted.append(prefix)
 
                 file_index_count = operation_success_count + operation_failure_count
@@ -521,17 +516,9 @@ class Monitor(object):
         total_operation_time = (datetime.now() - self.operation_start_time).seconds
 
         # Calculate operation BandWidth
-        prefix_index_data_file = "/var/log/prefix_index_data.json"
-        prefix_index_data = {}
-        with open(prefix_index_data_file, "r") as prefix_index_data_handler:
-            try:
-                prefix_index_data = json.load(prefix_index_data_handler)
-            except json.JSONDecodeError as e:
-                self.logger.error("Persistent index data - {}".format(e))
-
         # Calculate total operation(PUT/GET/DEL) size
         if self.prefix:
-            for prefix, value in prefix_index_data.items():
+            for prefix, value in self.prefix_index_data_persist.items():
                 if self.operation.upper() == "PUT":
                     fields = prefix.split("/")[1:]
                     prefix = "/".join(fields)
@@ -539,7 +526,7 @@ class Monitor(object):
                 if prefix.startswith(self.prefix):
                     original_file_size_in_byte += value["size"]
         else:
-            for prefix, value in prefix_index_data.items():
+            for prefix, value in self.prefix_index_data_persist.items():
                 if prefix in processed_prefix:
                     original_file_size_in_byte += value["size"]
 
@@ -556,9 +543,9 @@ class Monitor(object):
                     self.logger.fatal("Exception in persisting final index data - {}".format(str(e)))
             else:
                 # Remove persistent index file.
-                os.remove(prefix_index_data_file)
+                os.remove(self.index_data_json_file)
                 self.logger.warn("All the objects removed from S3. Removed persistent index file - {}".format(
-                                prefix_index_data_file))
+                    self.index_data_json_file))
 
         success_operation_size_in_byte = original_file_size_in_byte
 
