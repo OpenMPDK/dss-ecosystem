@@ -33,7 +33,6 @@
 """
 import os, sys
 import time
-import zmq
 from multiprocessing import Process, Queue, Value, Lock, Manager
 from utils.utility import exception, exec_cmd, progress_bar, get_ip_address, is_queue_empty
 from datetime import datetime

@@ -41,10 +41,8 @@ from task import Task
 from nfs_cluster import NFSCluster
 from datetime import datetime
 import time
-import zmq
 import socket
 import sys
-from zmq.error import ZMQError
 from socket_communication import ServerSocket, ClientSocket
 import prctl
 
