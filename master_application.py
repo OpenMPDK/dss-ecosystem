@@ -45,7 +45,6 @@ from monitor import Monitor
 from nfs_cluster import NFSCluster
 from task import Task, iterate_dir
 import time
-import zmq
 import signal
 from datetime import datetime
 import json
