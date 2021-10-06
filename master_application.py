@@ -406,6 +406,47 @@ class Master(object):
         bad_prefix_no_listing = True
         if self.operation.upper() == "LIST":
             self.listing_only.value = True
+
+
+        prefix_index_data_file = "/var/log/prefix_index_data.json"
+        prefix_index_data = {}
+        listing_based_on_indexing = False
+        if os.path.exists(prefix_index_data_file):
+            listing_based_on_indexing = True
+            with open(prefix_index_data_file, "r") as prefix_index_data_handler:
+                try:
+                    prefix_index_data = json.load(prefix_index_data_handler)
+                except json.JSONDecodeError as e:
+                    self.logger.error("Persistent index data - {}".format(e))
+                except MemoryError as e:
+                    self.logger.error("Unable to load prefix_index_data - {}".format(e))
+
+        if prefix_index_data:
+            self.logger.info("Using {} file for LISTing".format(prefix_index_data_file))
+            for prefix, value in prefix_index_data.items():
+                bad_prefix_no_listing = False
+                with self.listing_progress.get_lock():
+                    self.listing_progress.value +=1
+                task = Task(operation="list",
+                            data={"prefix": prefix},
+                            s3config=self.config["s3_storage"],
+                            max_index_size=self.config["master"].get("max_index_size", 10),
+                            listing_based_on_indexing=listing_based_on_indexing
+                            )
+                self.task_queue.put(task)
+        else:
+            for prefix in get_s3_prefix(self.logger, self.config.get("nfs_config", {}), self.prefix):
+                bad_prefix_no_listing = False
+                with self.listing_progress.get_lock():
+                    self.listing_progress.value += 1
+                task = Task(operation="list",
+                            data={"prefix": prefix},
+                            s3config=self.config["s3_storage"],
+                            max_index_size=self.config["master"].get("max_index_size", 10),
+                            listing_based_on_indexing=listing_based_on_indexing
+                            )
+                self.task_queue.put(task)
+        """
         # Create a Task based on prefix
         if self.prefix:
             self.logger.debug("Creating LIST task for prefix - {}".format(self.prefix))
@@ -426,6 +467,7 @@ class Master(object):
                             max_index_size=self.config["master"].get("max_index_size", 10)
                             )
                 self.task_queue.put(task)
+        """
 
         if bad_prefix_no_listing:
             self.logger.error("LISTING failure!")

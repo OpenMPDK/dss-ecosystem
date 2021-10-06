@@ -140,7 +140,8 @@ def list(s3_client, **kwargs):
     listing_status = kwargs["listing_status"]
     listing_only = kwargs["listing_only"]
     listing_objectkey_queue = kwargs["listing_objectkey_queue"]
-
+    #logger.info("Params:{}".format(params))
+    listing_based_on_indexing = params["listing_based_on_indexing"]
     max_index_size = params["max_index_size"]
 
     prefix = None
@@ -167,11 +168,12 @@ def list(s3_client, **kwargs):
                     with index_msg_count.get_lock():
                         index_msg_count.value += 1
             else:
-                with listing_progress.get_lock():
-                    listing_progress.value += 1
-                task = Task(operation="list", data=result, s3config=params["s3config"],
-                            max_index_size=max_index_size)
-                task_queue.put(task)
+                if not listing_based_on_indexing:
+                    with listing_progress.get_lock():
+                        listing_progress.value += 1
+                    task = Task(operation="list", data=result, s3config=params["s3config"],
+                            max_index_size=max_index_size, listing_based_on_indexing=listing_based_on_indexing)
+                    task_queue.put(task)
 
         with index_data_count.get_lock():
             index_data_count.value += object_keys_count
