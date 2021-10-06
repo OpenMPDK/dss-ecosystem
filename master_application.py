@@ -407,13 +407,11 @@ class Master(object):
         if self.operation.upper() == "LIST":
             self.listing_only.value = True
 
-
-        prefix_index_data_file = "/var/log/prefix_index_data.json"
         prefix_index_data = {}
         listing_based_on_indexing = False
-        if os.path.exists(prefix_index_data_file):
+        if os.path.exists(self.index_data_json_file):
             listing_based_on_indexing = True
-            with open(prefix_index_data_file, "r") as prefix_index_data_handler:
+            with open(self.index_data_json_file, "r") as prefix_index_data_handler:
                 try:
                     prefix_index_data = json.load(prefix_index_data_handler)
                 except json.JSONDecodeError as e:
@@ -422,9 +420,9 @@ class Master(object):
                     self.logger.error("Unable to load prefix_index_data - {}".format(e))
 
         if prefix_index_data:
-            self.logger.info("Using {} file for LISTing".format(prefix_index_data_file))
-            for prefix, value in prefix_index_data.items():
-                if not prefix.startswith(self.prefix):
+            self.logger.info("Using {} file for LISTing".format(self.index_data_json_file))
+            for prefix in prefix_index_data.keys():
+                if self.prefix and not prefix.startswith(self.prefix):
                     continue
                 bad_prefix_no_listing = False
                 with self.listing_progress.get_lock():
