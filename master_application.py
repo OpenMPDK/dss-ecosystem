@@ -424,6 +424,8 @@ class Master(object):
         if prefix_index_data:
             self.logger.info("Using {} file for LISTing".format(prefix_index_data_file))
             for prefix, value in prefix_index_data.items():
+                if not prefix.startswith(self.prefix):
+                    continue
                 bad_prefix_no_listing = False
                 with self.listing_progress.get_lock():
                     self.listing_progress.value +=1
@@ -446,29 +448,6 @@ class Master(object):
                             listing_based_on_indexing=listing_based_on_indexing
                             )
                 self.task_queue.put(task)
-        """
-        # Create a Task based on prefix
-        if self.prefix:
-            self.logger.debug("Creating LIST task for prefix - {}".format(self.prefix))
-            for prefix in get_s3_prefix(self.logger, self.config.get("nfs_config", {}), self.prefix):
-                bad_prefix_no_listing = False
-                task = Task(operation="list",
-                            data={"prefix": prefix},
-                            s3config=self.config["s3_storage"],
-                            max_index_size=self.config["master"].get("max_index_size", 10)
-                            )
-                self.task_queue.put(task)
-        else:
-            for prefix in get_s3_prefix(self.logger, self.nfs_config):
-                bad_prefix_no_listing = False
-                task = Task(operation="list",
-                            data={"prefix": prefix},
-                            s3config=self.config["s3_storage"],
-                            max_index_size=self.config["master"].get("max_index_size", 10)
-                            )
-                self.task_queue.put(task)
-        """
-
         if bad_prefix_no_listing:
             self.logger.error("LISTING failure!")
             self.listing_status.value = 1
