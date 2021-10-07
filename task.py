@@ -126,8 +126,7 @@ def list(s3_client, **kwargs):
     :param task_queue: Holds the task
     :param index_data_queue:  Holds the list index message to be distributed among the client nodes.
     :param logger: A logger with shared queue used among the running processes
-    :param listing_progress: it holds the
-    :param listing_progress_lock:
+    :param listing_progress: it holds the value of outstanding prefix
     :return:
     """
     worker_id = kwargs["worker_id"]
@@ -138,16 +137,12 @@ def list(s3_client, **kwargs):
     index_data_count = kwargs["index_data_count"]
     index_msg_count = kwargs["index_msg_count"]
     listing_progress = kwargs["listing_progress"]  # The shared memory is used to hold progress status.
-    listing_progress_lock = kwargs["listing_progress_lock"]
     listing_status = kwargs["listing_status"]
     listing_only = kwargs["listing_only"]
     listing_objectkey_queue = kwargs["listing_objectkey_queue"]
-
+    #logger.info("Params:{}".format(params))
+    listing_based_on_indexing = params["listing_based_on_indexing"]
     max_index_size = params["max_index_size"]
-
-    prefix_index_data_file = "/var/log/prefix_index_data.json"
-    with open(prefix_index_data_file, "r") as prefix_index_data_handler:
-        prefix_index_data = json.load(prefix_index_data_handler)
 
     prefix = None
     if params.get("data", {}) and params["data"].get("prefix", None):
@@ -158,66 +153,39 @@ def list(s3_client, **kwargs):
     minio_bucket = s3config.get("bucket", "bucket")
     s3_client_library = s3config.get("client_lib", "minio_client")
 
-    if prefix in prefix_index_data:
-        object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
-        if object_keys_iterator:
-            object_keys_count = 0
-            for result in list_object_keys(object_keys_iterator, max_index_size, s3_client_library):
-                if "object_keys" in result:
-                    index_data_message = {"dir": prefix, "files": result["object_keys"]}
-                    object_keys_count += len(result["object_keys"])
-                    if listing_only.value:
-                        result.update({"prefix": prefix})
-                        listing_objectkey_queue.put(result)
-                    else:
-                        index_data_queue.put(index_data_message)
-                        with index_msg_count.get_lock():
-                            index_msg_count.value += 1
+    object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
+    if object_keys_iterator:
+        object_keys_count = 0
+        for result in list_object_keys(object_keys_iterator, max_index_size, s3_client_library):
+            if "object_keys" in result:
+                index_data_message = {"dir": prefix, "files": result["object_keys"]}
+                object_keys_count += len(result["object_keys"])
+                if listing_only.value:
+                    result.update({"prefix": prefix})
+                    listing_objectkey_queue.put(result)
                 else:
-                    listing_progress_lock.acquire()
-                    if result["prefix"] not in listing_progress:
-                        listing_progress[result["prefix"]] = 1
-                        task = Task(operation="list", data=result, s3config=params["s3config"],
-                                    max_index_size=max_index_size)
-                        task_queue.put(task)
-                    else:
-                        logger.error(
-                            "Worker-{}, ObjectPrefix:{} was not uploaded through latest DM run".format(worker_id,
-                                                                                                       result["prefix"]))
-                    listing_progress_lock.release()
-            with index_data_count.get_lock():
-                index_data_count.value += object_keys_count
-        else:
-            logger.error("No object keys belongs to the prefix-{}".format(prefix))
-    else:
-        object_keys = s3_client.listObjects(minio_bucket, prefix)
-        if object_keys:
-            for obj_key in object_keys:
-                if s3_client_library.lower() == "minio":
-                    object_key_prefix = obj_key.object_name
-                elif s3_client_library.lower() == "dss_client":
-                    object_key_prefix = obj_key
-                else:
-                    object_key_prefix = None
-                listing_progress_lock.acquire()
-                if object_key_prefix not in listing_progress:
-                    listing_progress[object_key_prefix] = 1
-                    task = Task(operation="list", data={"prefix": object_key_prefix}, s3config=params["s3config"],
-                                max_index_size=max_index_size)
+                    index_data_queue.put(index_data_message)
+                    with index_msg_count.get_lock():
+                        index_msg_count.value += 1
+            else:
+                if not listing_based_on_indexing:
+                    with listing_progress.get_lock():
+                        listing_progress.value += 1
+                    task = Task(operation="list", data=result, s3config=params["s3config"],
+                            max_index_size=max_index_size, listing_based_on_indexing=listing_based_on_indexing)
                     task_queue.put(task)
-                #else:
-                #    logger.error("Worker-{}: ObjectPrefix:{} was not uploaded through latest DM run".format(worker_id, object_key_prefix))
-                listing_progress_lock.release()
-        else:
-            logger.error("No object keys belongs to the prefix-{}".format(prefix))
+
+        with index_data_count.get_lock():
+            index_data_count.value += object_keys_count
+    else:
+        logger.error("No object keys belongs to the prefix-{}".format(prefix))
 
     if listing_status.value != 1:
         listing_status.value = 1
-    # listing_progress[prefix] = 0
-    listing_progress_lock.acquire()
-    if prefix in listing_progress:
-        del listing_progress[prefix]
-    listing_progress_lock.release()
+
+    with listing_progress.get_lock():
+        if listing_progress.value:
+            listing_progress.value -= 1
 
 
 def list_object_keys(object_keys_iterator, max_index_size, s3_client_lib):
@@ -460,7 +428,6 @@ class Task(object):
                      index_msg_count=queue["index_msg_count"],
                      logger=self.logger,
                      listing_progress=queue["listing_progress"],
-                     listing_progress_lock=queue["listing_progress_lock"],
                      listing_status=queue["listing_status"],
                      listing_only=queue["listing_only"],
                      listing_objectkey_queue=queue["listing_objectkey_queue"])

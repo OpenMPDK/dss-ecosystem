@@ -107,8 +107,7 @@ class Master(object):
 
         # Operation LIST
         self.prefix = config.get("prefix", None)
-        self.listing_progress = manager.dict()
-        self.listing_progress_lock = manager.Lock()
+        self.listing_progress = Value('i', 0)
         self.listing_status = Value('i', 0) # [0,1,2] => ['NOT STARTED', 'STARTED', 'COMPLETED']
         self.listing_only = Value('b', False)
         self.listing_aggregation_status = Value('i', 0)
@@ -230,7 +229,6 @@ class Master(object):
                        index_data_count=self.index_data_count,
                        index_msg_count=self.index_msg_count,
                        listing_progress=self.listing_progress,
-                       listing_progress_lock=self.listing_progress_lock,
                        s3_config=self.s3_config,
                        indexing_started_flag=self.indexing_started_flag,
                        listing_status=self.listing_status,
@@ -406,27 +404,48 @@ class Master(object):
     def start_listing(self):
         self.logger.info("Started Listing operation!")
         bad_prefix_no_listing = True
-        # Create a Task based on prefix
-        if self.prefix:
-            self.logger.debug("Creating LIST task for prefix - {}".format(self.prefix))
-            for prefix in get_s3_prefix(self.logger, self.config.get("nfs_config", {}), self.prefix):
+        if self.operation.upper() == "LIST":
+            self.listing_only.value = True
+
+        prefix_index_data = {}
+        listing_based_on_indexing = False
+        if os.path.exists(self.index_data_json_file):
+            listing_based_on_indexing = True
+            with open(self.index_data_json_file, "r") as prefix_index_data_handler:
+                try:
+                    prefix_index_data = json.load(prefix_index_data_handler)
+                except json.JSONDecodeError as e:
+                    self.logger.error("Persistent index data - {}".format(e))
+                except MemoryError as e:
+                    self.logger.error("Unable to load prefix_index_data - {}".format(e))
+
+        if prefix_index_data:
+            self.logger.info("Using {} file for LISTing".format(self.index_data_json_file))
+            for prefix in prefix_index_data.keys():
+                if self.prefix and not prefix.startswith(self.prefix):
+                    continue
                 bad_prefix_no_listing = False
+                with self.listing_progress.get_lock():
+                    self.listing_progress.value +=1
                 task = Task(operation="list",
                             data={"prefix": prefix},
                             s3config=self.config["s3_storage"],
-                            max_index_size=self.config["master"].get("max_index_size", 10)
+                            max_index_size=self.config["master"].get("max_index_size", 10),
+                            listing_based_on_indexing=listing_based_on_indexing
                             )
                 self.task_queue.put(task)
         else:
-            for prefix in get_s3_prefix(self.logger, self.nfs_config):
+            for prefix in get_s3_prefix(self.logger, self.config.get("nfs_config", {}), self.prefix):
                 bad_prefix_no_listing = False
+                with self.listing_progress.get_lock():
+                    self.listing_progress.value += 1
                 task = Task(operation="list",
                             data={"prefix": prefix},
                             s3config=self.config["s3_storage"],
-                            max_index_size=self.config["master"].get("max_index_size", 10)
+                            max_index_size=self.config["master"].get("max_index_size", 10),
+                            listing_based_on_indexing=listing_based_on_indexing
                             )
                 self.task_queue.put(task)
-
         if bad_prefix_no_listing:
             self.logger.error("LISTING failure!")
             self.listing_status.value = 1
@@ -756,19 +775,16 @@ def process_list_operation(master):
     :param master: Master object
     :return: None
     """
-    # with master.listing_only.get_lock():
-    master.listing_only.value = True
     while True:
         progress_bar("Listed Object Keys - {}".format(master.index_data_count.value))
         try:
             # Check for completion of listing
-            master.listing_progress_lock.acquire()
-            if master.listing_status.value == 1 and len(master.listing_progress) == 0:
+            #master.logger.info("Listing Status:{} , Listing Progress:{}".format(master.listing_status.value, master.listing_progress1.value))
+            if master.listing_status.value == 1 and master.listing_progress.value == 0:
                 listing_time = (datetime.now() - master.operation_start_time).seconds
                 master.logger.info("LISTing is completed in {} seconds".format(listing_time))
                 master.logger.info("Total Object-Keys listed - {}".format(master.index_data_count.value))
                 master.listing_status.value = 2
-            master.listing_progress_lock.release()
 
             if master.listing_aggregation_status and master.listing_aggregation_status.value == 1:
                 master.stop_workers()
@@ -786,11 +802,9 @@ def process_del_operation(master):
         progress_bar("Operation DEL in Progress!")
         # Check for completion of listing, Shutdown workers
         listing_done = False
-        master.listing_progress_lock.acquire()
         # Determine listing is done.
-        if master.listing_status.value == 1 and len(master.listing_progress) == 0:
+        if master.listing_status.value == 1 and master.listing_progress.value == 0:
             listing_done = True
-        master.listing_progress_lock.release()
 
         if not workers_stopped:
             if listing_done and master.index_data_generation_complete.value == 0:
@@ -850,11 +864,9 @@ def process_get_operation(master):
         progress_bar("Operation GET in progress!")
         # Check for completion of indexing, Shutdown workers
         listing_done = False
-        master.listing_progress_lock.acquire()
         # Determine listing is done.
-        if master.listing_status.value == 1 and len(master.listing_progress) == 0:
+        if master.listing_status.value == 1 and master.listing_progress.value == 0:
             listing_done = True
-        master.listing_progress_lock.release()
 
         if not workers_stopped:
             if listing_done and master.index_data_generation_complete.value == 0:

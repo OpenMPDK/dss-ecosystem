@@ -80,7 +80,6 @@ class Worker(object):
 
         # Listing variables
         self.listing_progress = kwargs.get("listing_progress", None)
-        self.listing_progress_lock = kwargs.get("listing_progress_lock", None)
         self.listing_status = kwargs.get("listing_status", None)
         self.listing_only = kwargs.get("listing_only", None)
         self.listing_objectkey_queue = kwargs.get("listing_objectkey_queue", None)
@@ -260,7 +259,6 @@ class Worker(object):
                                index_data_count=self.index_data_count,
                                index_msg_count=self.index_msg_count,
                                listing_progress=self.listing_progress,
-                               listing_progress_lock=self.listing_progress_lock,
                                s3_client=self.s3_client,
                                indexing_started_flag=self.indexing_started_flag,
                                listing_status=self.listing_status,
