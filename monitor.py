@@ -215,6 +215,15 @@ class Monitor(object):
                 # Send data to ClientApplication running on a  Client-Physical Node
             if data:
                 object_count_under_prefix = len(data["files"])
+                # Buffer prefix_index_data for persistent storage only to be used during PUT
+                if self.operation.upper() == "PUT":
+                    prefix_dir = data["dir"][1:] + "/"
+                    if prefix_dir in self.prefix_index_data_persist:
+                        self.prefix_index_data_persist[prefix_dir]["files"] += object_count_under_prefix
+                        self.prefix_index_data_persist[prefix_dir]["size"] += data["size"]
+                    else:
+                        self.prefix_index_data_persist[prefix_dir] = {"files": len(data["files"]), "size": data["size"]}
+
                 if self.send_index_data(client, data):
                     previous_client_operation_status = 1
                     # Just for OPERATION stats collection
@@ -267,6 +276,16 @@ class Monitor(object):
                 self.logger.excep("Monitor-index Closing Socket {}".format(e))
 
         self.monitor_index_data_sender.value = 1
+        # Storing prefix index data to persistent storage
+        if self.operation.upper() == "PUT":
+            self.logger.info("Storing prefix_index_data to persistent storage - {}".format(self.index_data_json_file))
+            try:
+                with open(self.index_data_json_file, "w") as persistent_storage:
+                    json.dump(self.prefix_index_data_persist, persistent_storage)
+                self.logger.info("Stored file index data to {}".format(self.index_data_json_file))
+            except Exception as e:
+                self.logger.error("Dump Persistent Data - {}".format(e))
+
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
 
     def persist_index_data(self):
@@ -424,7 +443,7 @@ class Monitor(object):
         failure_file_size_in_byte = 0
         processed_prefix = {}  # A hash which store the prefixes those have been exercised from S3
         debug_message_timer = datetime.now()
-        last_flush_timer = time.time()
+        # last_flush_timer = time.time()
         original_file_size_in_byte = 0
         prefix_dir_deleted = []  # Contains all prefix dir erased from S3 during DEL operation.
 
@@ -472,16 +491,9 @@ class Monitor(object):
                             self.prefix_index_data_persist[prefix] = prefix_data
                         self.logger.debug('Index data - Dir {} with file count {} fully uploaded'.format(
                             prefix, self.prefix_index_data[prefix]["files"]))
-                        if int(time.time() - last_flush_timer) > PERSIST_FLUSH_INTERVAL:
-                            try:
-                                self.persist_index_data()
-                                self.logger.info('Persisting the index data')
-                                last_flush_timer = time.time()
-                            except Exception as e:
-                                self.logger.fatal("Exception in persisting index data - {}".format(str(e)))
-                                # TODO: BAIL OUT
+
                 elif  self.operation.upper() in ["DEL"]:
-                    if self.prefix_index_data[prefix]["files"] == processed_prefix[prefix]["success"]:
+                    if self.prefix_index_data_persist[prefix]["files"] == processed_prefix[prefix]["success"]:
                         prefix_dir_deleted.append(prefix)
 
                 file_index_count = operation_success_count + operation_failure_count
@@ -504,17 +516,22 @@ class Monitor(object):
             if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
                 self.stop_status_poller.value = 1   # This will stop Monitor-Poller
                 self.logger.info("Monitor-Operation-Progress received status of all objects = {}".format(file_index_count))
-        
-        if self.operation.upper() == "PUT" and self.prefix_index_data:
-            try:
-                self.persist_index_data()
-                self.logger.info('Persisting the final index data')
-            except Exception as e:
-                self.logger.fatal("Exception in persisting final index data - {}".format(str(e)))
 
         total_operation_time = (datetime.now() - self.operation_start_time).seconds
 
         # Calculate operation BandWidth
+        # If operation == PUT , then only open the updated prefix_index_data.json file.
+        if self.operation.upper() == "PUT":
+            with open(self.index_data_json_file, "r") as prefix_index_data_handler:
+                try:
+                    self.prefix_index_data_persist = json.load(prefix_index_data_handler)
+                except json.JSONDecodeError as e:
+                    self.logger.error("Persistent index data - {}".format(e))
+                except MemoryError as e:
+                    self.logger.error("Unable to load prefix_index_data from {}, {}".format(self.index_data_json_file, e))
+                except Exception as e:
+                    self.logger.error("Prefix index-metadata loading error - {}".format(e))
+
         # Calculate total operation(PUT/GET/DEL) size
         if self.prefix:
             for prefix, value in self.prefix_index_data_persist.items():
