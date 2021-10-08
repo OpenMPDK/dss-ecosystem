@@ -41,6 +41,7 @@ import uuid
 from logger import MultiprocessingLogger
 from socket_communication import ClientSocket, ServerSocket
 import prctl
+import ast
 
 """
 Monitor the progress of operation.
@@ -82,6 +83,14 @@ class Monitor(object):
         self.stop_status_poller = Value('i', 0)
         self.prefix_index_data = kwargs["prefix_index_data"]
         self.prefix_index_data_persist = dict(self.prefix_index_data.copy())
+
+        self.resume_prefix_dir_keys_file = kwargs['resume_prefix_dir_keys_file']
+        try:
+            self.resume_prefix_dir_keys_file_handle = open(self.resume_prefix_dir_keys_file, 'a+')
+        except Exception as e:
+            self.logger.excep("Exception in opening the file {} for updating the keys".format(
+                self.resume_prefix_dir_keys_file))
+            raise
 
         self.all_index_data_distributed = Value('i', 0)
 
@@ -443,7 +452,6 @@ class Monitor(object):
         failure_file_size_in_byte = 0
         processed_prefix = {}  # A hash which store the prefixes those have been exercised from S3
         debug_message_timer = datetime.now()
-        # last_flush_timer = time.time()
         original_file_size_in_byte = 0
         prefix_dir_deleted = []  # Contains all prefix dir erased from S3 during DEL operation.
 
@@ -484,15 +492,11 @@ class Monitor(object):
                 if self.operation.upper() == "PUT" and prefix in processed_prefix:
                     processed_files_count = processed_prefix[prefix]["success"] + processed_prefix[prefix]["failure"]
                     if self.prefix_index_data[prefix]["files"] == processed_files_count:
-                        prefix_data = self.prefix_index_data[prefix]
-                        prefix_data["succeeded"] = processed_prefix[prefix]["success"]
-
-                        with self.index_data_count.get_lock():
-                            self.prefix_index_data_persist[prefix] = prefix_data
                         self.logger.debug('Index data - Dir {} with file count {} fully uploaded'.format(
                             prefix, self.prefix_index_data[prefix]["files"]))
-
-                elif  self.operation.upper() in ["DEL"]:
+                        self.resume_prefix_dir_keys_file_handle.writelines([prefix, '\n'])
+                        self.resume_prefix_dir_keys_file_handle.flush()
+                elif self.operation.upper() in ["DEL"]:
                     if self.prefix_index_data_persist[prefix]["files"] == processed_prefix[prefix]["success"]:
                         prefix_dir_deleted.append(prefix)
 
@@ -516,6 +520,13 @@ class Monitor(object):
             if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
                 self.stop_status_poller.value = 1   # This will stop Monitor-Poller
                 self.logger.info("Monitor-Operation-Progress received status of all objects = {}".format(file_index_count))
+        
+        if self.operation.upper() == "PUT" and self.prefix_index_data:
+            try:
+                # Remove the resume dir keys file as it is already part of prefix_index_data
+                self.resume_prefix_dir_keys_file_handle.close()
+            except Exception as e:
+                self.logger.fatal("Exception in persisting final index data - {}".format(str(e)))
 
         total_operation_time = (datetime.now() - self.operation_start_time).seconds
 
