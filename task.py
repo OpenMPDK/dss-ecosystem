@@ -594,7 +594,7 @@ def indexing(**kwargs):
     """
     logger = kwargs["logger"]
     params = kwargs["params"]
-    dir_prefixes_to_resume = params["dir_prefixes_to_resume"]
+    dir_prefixes_to_resume = params.get("dir_prefixes_to_resume", None)
     resume_flag = params["resume_flag"]
 
     if resume_flag:
