@@ -287,13 +287,7 @@ class Monitor(object):
         self.monitor_index_data_sender.value = 1
         # Storing prefix index data to persistent storage
         if self.operation.upper() == "PUT":
-            self.logger.info("Storing prefix_index_data to persistent storage - {}".format(self.index_data_json_file))
-            try:
-                with open(self.index_data_json_file, "w") as persistent_storage:
-                    json.dump(self.prefix_index_data_persist, persistent_storage)
-                self.logger.info("Stored file index data to {}".format(self.index_data_json_file))
-            except Exception as e:
-                self.logger.error("Dump Persistent Data - {}".format(e))
+            self.persist_index_data()
 
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
 
