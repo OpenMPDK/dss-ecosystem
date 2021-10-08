@@ -471,7 +471,7 @@ class Task(object):
         pass
 
 
-def indexing(**kwargs):
+def indexing_dir(**kwargs):
     """
     Create a metadata index during PUT operation only.
     First Phase:
@@ -495,7 +495,9 @@ def indexing(**kwargs):
     prefix_index_data = kwargs["prefix_index_data"]
     standalone = kwargs.get("standalone", False)
     params = kwargs["params"]
+    resume_flag = params["resume_flag"]
     progress_of_indexing[dir] = 'Progress'
+
     if indexing_started_flag.value == 0:
         indexing_started_flag.value = 1
         logger.info('Indexing on the shares started')
@@ -509,10 +511,11 @@ def indexing(**kwargs):
     # previous run
     prefix_dir = dir[1:] + '/'
     if prefix_dir in prefix_index_data:
-        if "files" not in prefix_index_data[prefix_dir] or "succeeded" not in prefix_index_data[prefix_dir]:
-            prefix_index_data[prefix_dir] = {"files": 0, "succeeded": -1, "size": 0}
+        if "files" not in prefix_index_data[prefix_dir]:
+            prefix_index_data[prefix_dir] = {"files": 0, "size": 0}
 
-    for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger, max_index_size=max_index_size):
+    for result in iterate_dir(data=dir, task_queue=task_queue, logger=logger, max_index_size=max_index_size,
+                              resume_flag=resume_flag):
         if "dir" not in result:
             logger.error("Something went wrong with the iterate_dir - {}".format(str(result)))
             continue
@@ -525,16 +528,9 @@ def indexing(**kwargs):
 
             # Check whether the operation on the directory is already completed or not
             prefix_dir = result["dir"][1:] + '/'
-            if prefix_dir in prefix_index_data:
-                data = prefix_index_data[prefix_dir]
-                if data["files"] == data["succeeded"]:
-                    # logger.info("Directory already uploaded - {}".format(prefix_dir))
-                    continue
-                #else:
-                #    logger.info("Resume upload for the directory - {}".format(prefix_dir))
-            else:
+            if prefix_dir not in prefix_index_data:
                 prefix_index_data[prefix_dir] = dict()
-                prefix_index_data[prefix_dir] = {"files": 0, "succeeded": -1, "size": 0}
+                prefix_index_data[prefix_dir] = {"files": 0, "size": 0}
 
             msg = {"dir": result["dir"], "files": result["files"], "size": result["size"],
                    "nfs_cluster": nfs_cluster,
@@ -581,10 +577,39 @@ def indexing(**kwargs):
             progress_of_indexing[subdir] = 'Pending'
             task = Task(operation="indexing", data=subdir, nfs_cluster=nfs_cluster, nfs_share=nfs_share,
                         s3config=params['s3config'], dryrun=params['dryrun'],
-                        max_index_size=max_index_size)
+                        max_index_size=max_index_size, resume_flag=resume_flag)
             task_queue.put(task)
 
     progress_of_indexing.pop(dir)
+
+
+def indexing(**kwargs):
+    """
+    Create a metadata index during PUT operation only.
+    First Phase:
+    - Create a JOSN structure for each NFS share with a NFS share name.
+      Required information - directory name, file name, counts, total size of directory.
+
+    :return:
+    """
+    logger = kwargs["logger"]
+    params = kwargs["params"]
+    dir_prefixes_to_resume = params["dir_prefixes_to_resume"]
+    resume_flag = params["resume_flag"]
+
+    if resume_flag:
+        logger.info('Indexing in RESUME mode')
+        logger.debug('Indexing the data using the resume directories {}'.format(dir_prefixes_to_resume))
+        for prefix in dir_prefixes_to_resume:
+            if prefix[0] != '/':
+                dir_name = '/' + prefix
+            else:
+                dir_name = prefix
+            kwargs['data'] = dir_name
+            indexing_dir(**kwargs)
+    else:
+        logger.debug('Indexing the directory {}'.format(kwargs['data']))
+        indexing_dir(**kwargs)
 
 
 def indexing_with_file_counters(**kwargs):
@@ -704,12 +729,14 @@ def iterate_dir(**kwargs):
     dir = kwargs["data"]
     logger = kwargs["logger"]
     max_index_size = kwargs["max_index_size"]
+    dm_resume = kwargs["resume_flag"]
 
     for entry in os.scandir(dir):
         # Check if the file a directory, then create a task
         path = entry.path
         if entry.is_dir():
-            yield {"dir": path}
+            if not dm_resume:
+                yield {"dir": path}
         else:
             file_size = entry.stat().st_size
             # Eliminate zero size file.

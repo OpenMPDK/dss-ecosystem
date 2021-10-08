@@ -71,6 +71,7 @@ class Master(object):
         self.dryrun = config.get("dryrun", False)
 
         self.index_data_json_file = '/var/log/prefix_index_data.json'
+        self.resume_prefix_dir_keys_file = '/var/log/dss/dm_resume_prefix_dir_keys.txt'
 
         if "environment" in config:
             self.dir_path = config["environment"].get("target_dir", "/usr/dss/nkv-datamover")
@@ -156,6 +157,29 @@ class Master(object):
         except Exception as e:
             print("Exception in loading prefix_index_data.json file", e)
 
+        # Get the directory prefix keys that are yet to be resumed for PUT operation
+        self.dir_prefixes_to_resume = list()
+        self.resume_flag = False
+
+        if self.operation.upper() == 'PUT' and self.prefix_index_data:
+            try:
+                if os.path.exists(self.resume_prefix_dir_keys_file):
+                    print("Reading existing prefix dirs for DM resume - {}".format(time.time()))
+                    with open(self.resume_prefix_dir_keys_file) as f:
+                        lines = f.read()
+                        print("Loaded the prefix dirs for DM resume - {}".format(time.time()))
+                        keys_already_uploaded = lines.split('\n')
+                        self.dir_prefixes_to_resume = list(set(self.prefix_index_data.keys()) - set(keys_already_uploaded))
+                        if self.dir_prefixes_to_resume:
+                            print("Datamover in resume mode")
+                            self.resume_flag = True
+                        else:
+                            print("All the directories are up to date. Exiting")
+                            sys.exit(0)
+
+            except Exception as e:
+                print("Exception in loading prefix dirs file for DM resume", e)
+
     def __del__(self):
         # Stop workers
         # self.stop_workers()
@@ -193,7 +217,10 @@ class Master(object):
         if self.operation.upper() == "LIST" or self.operation.upper() == "DEL" or self.operation.upper() == "GET":
             self.start_listing()
 
-        self.start_monitor()
+        try:
+            self.start_monitor()
+        except Exception as e:
+            self.logger.excep("Exception in starting monitor {}".format(e))
 
         self.logger.info("DataMover running with \"{}\"  S3 client".format(self.s3_config["client_lib"]))
 
@@ -320,6 +347,7 @@ class Master(object):
                                listing_objectkey_queue=self.listing_objectkey_queue,
                                testcase=self.testcase_passed,
                                prefix_index_data=self.prefix_index_data,
+                               resume_prefix_dir_keys_file=self.resume_prefix_dir_keys_file,
                                status_queue=self.operation_status_queue,
                                standalone=self.standalone
                                )
@@ -370,7 +398,7 @@ class Master(object):
         # First Mount all NFS share locally
         self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), "root", "", self.logger)
         self.nfs_cluster_obj.mount_all()
-        if self.nfs_cluster_obj.mounted == False:
+        if not self.nfs_cluster_obj.mounted:
             self.logger.fatal("Mounting failed, EXIT indexing!")
             self.indexing_started_flag.value = -1
             return
@@ -397,7 +425,9 @@ class Master(object):
                             prefix=self.prefix,
                             max_index_size=self.max_index_size,
                             s3config=self.config["s3_storage"],
-                            dryrun=self.dryrun
+                            dryrun=self.dryrun,
+                            dir_prefixes_to_resume=self.dir_prefixes_to_resume,
+                            resume_flag=self.resume_flag
                             )
                 self.task_queue.put(task)
 
