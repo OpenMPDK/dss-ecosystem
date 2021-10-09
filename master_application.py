@@ -161,24 +161,29 @@ class Master(object):
         self.dir_prefixes_to_resume = list()
         self.resume_flag = False
 
-        if self.operation.upper() == 'PUT' and self.prefix_index_data:
-            try:
-                if os.path.exists(self.resume_prefix_dir_keys_file):
-                    print("Reading existing prefix dirs for DM resume - {}".format(time.time()))
-                    with open(self.resume_prefix_dir_keys_file) as f:
-                        lines = f.read()
-                        print("Loaded the prefix dirs for DM resume - {}".format(time.time()))
-                        keys_already_uploaded = lines.split('\n')
-                        self.dir_prefixes_to_resume = list(set(self.prefix_index_data.keys()) - set(keys_already_uploaded))
-                        if self.dir_prefixes_to_resume:
-                            print("Datamover in resume mode")
-                            self.resume_flag = True
-                        else:
-                            print("All the directories are up to date. Exiting")
-                            sys.exit(0)
-
-            except Exception as e:
-                print("Exception in loading prefix dirs file for DM resume", e)
+        if self.operation.upper() == 'PUT':
+            if self.prefix_index_data:
+                try:
+                    if os.path.exists(self.resume_prefix_dir_keys_file):
+                        print("Reading existing prefix dirs for DM resume - {}".format(time.time()))
+                        with open(self.resume_prefix_dir_keys_file) as f:
+                            lines = f.read()
+                            print("Loaded the prefix dirs for DM resume - {}".format(time.time()))
+                            keys_already_uploaded = lines.split('\n')
+                            self.dir_prefixes_to_resume = list(set(self.prefix_index_data.keys()) - set(keys_already_uploaded))
+                            if self.dir_prefixes_to_resume:
+                                print("Datamover in resume mode")
+                                self.resume_flag = True
+                            else:
+                                print("All the directories are up to date. Exiting")
+                                sys.exit(0)
+                except Exception as e:
+                    print("Exception in loading prefix dirs file for DM resume", e)
+            else:
+                try:
+                    os.unlink(self.resume_prefix_dir_keys_file)
+                except FileNotFoundError:
+                    pass
 
     def __del__(self):
         # Stop workers

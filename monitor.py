@@ -484,8 +484,7 @@ class Monitor(object):
                     processed_prefix[prefix] = {"success" : status.get("success", 0) , "failure" : status.get("failure", 0) }
 
                 if self.operation.upper() == "PUT" and prefix in processed_prefix:
-                    processed_files_count = processed_prefix[prefix]["success"] + processed_prefix[prefix]["failure"]
-                    if self.prefix_index_data[prefix]["files"] == processed_files_count:
+                    if self.prefix_index_data[prefix]["files"] == processed_prefix[prefix]["success"]:
                         self.logger.debug('Index data - Dir {} with file count {} fully uploaded'.format(
                             prefix, self.prefix_index_data[prefix]["files"]))
                         self.resume_prefix_dir_keys_file_handle.writelines([prefix, '\n'])
