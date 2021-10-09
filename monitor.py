@@ -113,6 +113,9 @@ class Monitor(object):
         # Index data queue tracking
         self.tracking_index_queue = Queue()
 
+        # Resume Operation
+        self.resume_flag = kwargs.get("resume_flag", False)
+
     def start(self):
 
         if self.operation.upper() == "LIST":
@@ -225,7 +228,7 @@ class Monitor(object):
             if data:
                 object_count_under_prefix = len(data["files"])
                 # Buffer prefix_index_data for persistent storage only to be used during PUT
-                if self.operation.upper() == "PUT":
+                if self.operation.upper() == "PUT" and not self.resume_flag:
                     prefix_dir = data["dir"][1:] + "/"
                     if prefix_dir in self.prefix_index_data_persist:
                         self.prefix_index_data_persist[prefix_dir]["files"] += object_count_under_prefix
@@ -286,7 +289,7 @@ class Monitor(object):
 
         self.monitor_index_data_sender.value = 1
         # Storing prefix index data to persistent storage
-        if self.operation.upper() == "PUT":
+        if self.operation.upper() == "PUT" and not self.resume_flag:
             self.persist_index_data()
 
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
