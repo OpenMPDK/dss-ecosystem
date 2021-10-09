@@ -601,10 +601,7 @@ def indexing(**kwargs):
         logger.info('Indexing in RESUME mode')
         logger.debug('Indexing the data using the resume directories {}'.format(dir_prefixes_to_resume))
         for prefix in dir_prefixes_to_resume:
-            if prefix[0] != '/':
-                dir_name = '/' + prefix
-            else:
-                dir_name = prefix
+            dir_name = os.path.abspath('/' + prefix)
             kwargs['data'] = dir_name
             indexing_dir(**kwargs)
     else:
