@@ -559,10 +559,11 @@ def indexing_dir(**kwargs):
                 with index_data_count.get_lock():
                     file_count = len(result["files"])
                     index_data_count.value += file_count
-                    data_dict = prefix_index_data[prefix_dir]
-                    data_dict["files"] += file_count
-                    data_dict["size"] += result["size"]
-                    prefix_index_data[prefix_dir] = data_dict
+                    if not resume_flag:
+                        data_dict = prefix_index_data[prefix_dir]
+                        data_dict["files"] += file_count
+                        data_dict["size"] += result["size"]
+                        prefix_index_data[prefix_dir] = data_dict
             except Exception as e:
                 logger.error('Error in updating the prefix_index_data during indexing for dir {}'.format(
                     result['dir']))
