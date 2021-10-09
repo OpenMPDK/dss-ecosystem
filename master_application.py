@@ -354,7 +354,8 @@ class Master(object):
                                prefix_index_data=self.prefix_index_data,
                                resume_prefix_dir_keys_file=self.resume_prefix_dir_keys_file,
                                status_queue=self.operation_status_queue,
-                               standalone=self.standalone
+                               standalone=self.standalone,
+                               resume_flag=self.resume_flag
                                )
         self.monitor.start()
 
