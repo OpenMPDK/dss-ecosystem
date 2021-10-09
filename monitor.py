@@ -221,7 +221,7 @@ class Monitor(object):
 
             client_index  = self.received_index_msg_count.value % client_count
             client = self.clients[client_index]
-                # Send data to ClientApplication running on a  Client-Physical Node
+            # Send data to ClientApplication running on a  Client-Physical Node
             if data:
                 object_count_under_prefix = len(data["files"])
                 # Buffer prefix_index_data for persistent storage only to be used during PUT
