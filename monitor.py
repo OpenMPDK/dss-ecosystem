@@ -119,8 +119,9 @@ class Monitor(object):
     def start(self):
 
         if self.operation.upper() == "LIST":
-            self.process_listing_aggregator = Process(target=self.object_keys_aggregator)
-            self.process_listing_aggregator.start()
+            if self.config.get("dump_object_keys", False):
+                self.process_listing_aggregator = Process(target=self.object_keys_aggregator)
+                self.process_listing_aggregator.start()
         else:
             if not self.standalone:
                 # Start index process

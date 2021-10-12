@@ -815,12 +815,15 @@ def process_list_operation(master):
         progress_bar("Listed Object Keys - {}".format(master.index_data_count.value))
         try:
             # Check for completion of listing
-            #master.logger.info("Listing Status:{} , Listing Progress:{}".format(master.listing_status.value, master.listing_progress1.value))
             if master.listing_status.value == 1 and master.listing_progress.value == 0:
                 listing_time = (datetime.now() - master.operation_start_time).seconds
                 master.logger.info("LISTing is completed in {} seconds".format(listing_time))
                 master.logger.info("Total Object-Keys listed - {}".format(master.index_data_count.value))
-                master.listing_status.value = 2
+                if master.config.get("dump_object_keys", False):
+                    master.listing_status.value = 2
+                else:
+                    master.stop_workers()
+                    break
 
             if master.listing_aggregation_status and master.listing_aggregation_status.value == 1:
                 master.stop_workers()

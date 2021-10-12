@@ -231,6 +231,8 @@ class CommandLineArgument:
                                help='Run DataMover in debug mode')
         subparser.add_argument("--dest_path", "-dp", type=str, required=False,
                                help='Path to store object keys in a file.')
+        subparser.add_argument("--dump_object_keys", "-dump", required=False, action='store_true',
+                               help='Dump object keys into a file ...')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of LIST operation (Not Implemented)')
 
