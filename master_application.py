@@ -145,17 +145,16 @@ class Master(object):
             self.operation_status_queue = None
 
         self.prefix_index_data = manager.dict()
-
-        try:
-            if os.path.exists(self.index_data_json_file):
-                print("Reading existing index-meta-data - {}".format(time.time()))
-                with open(self.index_data_json_file) as f:
-                    index_data = json.load(f)
-                    print("Loaded the index-meta-data - {}".format(time.time()))
-                    self.prefix_index_data.update(index_data)
-                    # print("Loaded the index data to manager dict - {}".format(time.time()))
-        except Exception as e:
-            print("Exception in loading prefix_index_data.json file", e)
+        if os.path.exists(self.index_data_json_file):
+            with open(self.index_data_json_file, "r") as prefix_index_data_handler:
+                try:
+                    start_loading_existing_metadata = datetime.now()
+                    self.prefix_index_data = json.load(prefix_index_data_handler)
+                    print("INFO: Loaded the {} - {} seconds".format(self.index_data_json_file, (datetime.now() - start_loading_existing_metadata).seconds))
+                except json.JSONDecodeError as e:
+                    print("ERROR:JSONDecodeError - Persistent index data - {}".format(e))
+                except MemoryError as e:
+                    print("ERROR: MemoryError - Unable to load prefix_index_data - {}".format(e))
 
         # Get the directory prefix keys that are yet to be resumed for PUT operation
         self.dir_prefixes_to_resume = list()
@@ -165,17 +164,17 @@ class Master(object):
             if self.prefix_index_data:
                 try:
                     if os.path.exists(self.resume_prefix_dir_keys_file):
-                        print("Reading existing prefix dirs for DM resume - {}".format(time.time()))
+                        print("INFO:Reading existing prefix dirs for DM resume - {}".format(time.time()))
                         with open(self.resume_prefix_dir_keys_file) as f:
                             lines = f.read()
-                            print("Loaded the prefix dirs for DM resume - {}".format(time.time()))
+                            print("INFO: Loaded the prefix dirs for DM resume - {}".format(time.time()))
                             keys_already_uploaded = lines.split('\n')
                             self.dir_prefixes_to_resume = list(set(self.prefix_index_data.keys()) - set(keys_already_uploaded))
                             if self.dir_prefixes_to_resume:
-                                print("Datamover in resume mode")
+                                print("INFO: Datamover in resume mode")
                                 self.resume_flag = True
                             else:
-                                print("All the directories are up to date. Exiting")
+                                print("INFO: All the directories are up to date. Exiting")
                                 sys.exit(0)
                 except Exception as e:
                     print("Exception in loading prefix dirs file for DM resume", e)
@@ -440,24 +439,16 @@ class Master(object):
     def start_listing(self):
         self.logger.info("Started Listing operation!")
         bad_prefix_no_listing = True
+        dump_object_keys_path = None
         if self.operation.upper() == "LIST":
             self.listing_only.value = True
+            dump_object_keys_path = master.config.get("dest_path", None)
 
-        prefix_index_data = {}
         listing_based_on_indexing = False
-        if os.path.exists(self.index_data_json_file):
+        if self.prefix_index_data:
             listing_based_on_indexing = True
-            with open(self.index_data_json_file, "r") as prefix_index_data_handler:
-                try:
-                    prefix_index_data = json.load(prefix_index_data_handler)
-                except json.JSONDecodeError as e:
-                    self.logger.error("Persistent index data - {}".format(e))
-                except MemoryError as e:
-                    self.logger.error("Unable to load prefix_index_data - {}".format(e))
-
-        if prefix_index_data:
             self.logger.info("Using {} file for LISTing".format(self.index_data_json_file))
-            for prefix in prefix_index_data.keys():
+            for prefix in self.prefix_index_data.keys():
                 if self.prefix and not prefix.startswith(self.prefix):
                     continue
                 bad_prefix_no_listing = False
@@ -467,7 +458,8 @@ class Master(object):
                             data={"prefix": prefix},
                             s3config=self.config["s3_storage"],
                             max_index_size=self.config["master"].get("max_index_size", 10),
-                            listing_based_on_indexing=listing_based_on_indexing
+                            listing_based_on_indexing=listing_based_on_indexing,
+                            dest_path=dump_object_keys_path
                             )
                 self.task_queue.put(task)
         else:
@@ -479,7 +471,8 @@ class Master(object):
                             data={"prefix": prefix},
                             s3config=self.config["s3_storage"],
                             max_index_size=self.config["master"].get("max_index_size", 10),
-                            listing_based_on_indexing=listing_based_on_indexing
+                            listing_based_on_indexing=listing_based_on_indexing,
+                            dest_path=dump_object_keys_path
                             )
                 self.task_queue.put(task)
         if bad_prefix_no_listing:
@@ -819,7 +812,7 @@ def process_list_operation(master):
                 listing_time = (datetime.now() - master.operation_start_time).seconds
                 master.logger.info("LISTing is completed in {} seconds".format(listing_time))
                 master.logger.info("Total Object-Keys listed - {}".format(master.index_data_count.value))
-                if master.config.get("dump_object_keys", False):
+                if master.config.get("dest_path", None):
                     master.listing_status.value = 2
                 else:
                     master.stop_workers()

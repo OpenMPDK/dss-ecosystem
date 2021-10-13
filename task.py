@@ -142,6 +142,7 @@ def list(s3_client, **kwargs):
     listing_objectkey_queue = kwargs["listing_objectkey_queue"]
     #logger.info("Params:{}".format(params))
     listing_based_on_indexing = params["listing_based_on_indexing"]
+    dump_object_keys_path = params["dest_path"] # Dump object keys to the file on this specified path. 
     max_index_size = params["max_index_size"]
 
     prefix = None
@@ -160,7 +161,7 @@ def list(s3_client, **kwargs):
             if "object_keys" in result:
                 index_data_message = {"dir": prefix, "files": result["object_keys"]}
                 object_keys_count += len(result["object_keys"])
-                if listing_only.value:
+                if listing_only.value and dump_object_keys_path:
                     result.update({"prefix": prefix})
                     listing_objectkey_queue.put(result)
                 else:
@@ -172,7 +173,8 @@ def list(s3_client, **kwargs):
                     with listing_progress.get_lock():
                         listing_progress.value += 1
                     task = Task(operation="list", data=result, s3config=params["s3config"],
-                            max_index_size=max_index_size, listing_based_on_indexing=listing_based_on_indexing)
+                            max_index_size=max_index_size, listing_based_on_indexing=listing_based_on_indexing,
+                            dest_path=dump_object_keys_path)
                     task_queue.put(task)
 
         with index_data_count.get_lock():

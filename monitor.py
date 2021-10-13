@@ -119,7 +119,7 @@ class Monitor(object):
     def start(self):
 
         if self.operation.upper() == "LIST":
-            if self.config.get("dump_object_keys", False):
+            if self.config.get("dest_path", None):
                 self.process_listing_aggregator = Process(target=self.object_keys_aggregator)
                 self.process_listing_aggregator.start()
         else:
@@ -605,6 +605,10 @@ class Monitor(object):
         self.logger.info("Monitor-Operation-Progress terminated! ")
 
     def object_keys_aggregator(self):
+        """
+        Dump the LISTed object keys into a file on a specified path
+        :return: None
+        """
         name = "DM_monitor_obj_keys_aggregator"
         prctl.set_name(name)
         prctl.set_proctitle(name)
@@ -613,7 +617,7 @@ class Monitor(object):
         if self.config["dest_path"]:
             listing_path = self.config["dest_path"]
 
-        listing_file = listing_path + "/listing_object_keys"
+        listing_file = os.path.abspath(listing_path + "/listing_object_keys")
         fh = None
         try:
             if not os.path.isdir(listing_path):
@@ -627,11 +631,12 @@ class Monitor(object):
 
             if os.path.exists(listing_file):
                 os.remove(listing_file)
-            fh = open(listing_file, "w")
-            if not fh:
+            try:
+                fh = open(listing_file, "w")
+            except OSError as e:
                 self.logger.error("Failed to open file \"{}\" to dump listing object keys".format(listing_file))
                 return
-            self.logger.debug("ObjectKeys aggregation started!")
+            self.logger.info("ObjectKeys aggregation started!")
             while True:
                 if self.listing_status and self.listing_status.value == 2 and is_queue_empty(self.listing_objectkey_queue):
                     self.listing_aggregation_status.value = 1
@@ -641,9 +646,11 @@ class Monitor(object):
                     object_keys_data = self.listing_objectkey_queue.get()
                     prefix = object_keys_data["prefix"]
                     object_keys = object_keys_data["object_keys"]
+                    fh.write(prefix + ":")
+                    end_object_keys = "" # Concatenate all end object_keys into a string and dump in one shot.
                     for object_key in object_keys:
-                        fh.write(prefix + object_key + "\n")
-
+                        end_object_keys += " " + object_key + "\n" 
+                    fh.write(end_object_keys)
             self.logger.info("Listing ObjectKeys are dumped at - {}".format(listing_file))
         except Exception as e:
             self.logger.excep("ListingAggregation: {}".format(e))
