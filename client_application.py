@@ -339,6 +339,9 @@ class ClientApplication(object):
                     elif self.operation.upper() == "DEL" or self.operation.upper() == "GET":
                         self.add_task(message)  # Add message to task queue to be consumed by workers.
                         is_index_data_added = True
+                    elif self.operation.upper() == "LIST":
+                        self.add_task(message)
+                        continue
 
                     objects_count_under_prefix = len(message["files"])
                     objects_count += objects_count_under_prefix
@@ -386,14 +389,16 @@ class ClientApplication(object):
         :param message:
         :return:
         """
-        task_data = {"dir": message["dir"], "files": message["files"], "size": message.get("size", 0)}
+        task_data = {"dir": message["dir"], "files": message.get("files",[]), "size": message.get("size", 0)}
         task = Task(operation=self.operation,
                     data=task_data,
                     s3config=self.s3_config,
                     dryrun=self.dryrun,
                     user_id=self.user_id,
                     password=self.password,
-                    dest_path=self.config.get("dest_path", ""))
+                    dest_path=self.config.get("dest_path", None), # Used for GET and DataIntegrity test
+                    distributed=self.config.get("distributed", False))  # Used for Distributed LISTing
+
         self.task_queue.put(task)  # Enqueue task to TaskQ
 
     def message_server_status(self):
@@ -446,9 +451,9 @@ class ClientApplication(object):
                     self.logger.debug("PUSH - Sending message - {}".format(status_message))
                     socket.send_json(status_message)
                     received_status_message_count += 1
-
-                    processed_objects_success_count += status_message["success"]
-                    processed_objects_failure_count += status_message["failure"]
+                    if self.operation.upper() != "LIST":
+                        processed_objects_success_count += status_message["success"]
+                        processed_objects_failure_count += status_message["failure"]
                 else:
                     if start_time_not_receiving_status_message == 0:
                         start_time_not_receiving_status_message = datetime.now()
@@ -466,8 +471,6 @@ class ClientApplication(object):
                                      .format(received_status_message_count, processed_objects_success_count,
                                              processed_objects_failure_count))
                     debug_message_timer = datetime.now()
-            except ZMQError as e:
-                self.logger.excep("Monitor-StatusHandler ZMQError - {}".format(e))
             except Exception as e:
                 self.logger.excep("Monitor-StatusHandler {}".format(e))
 
@@ -490,8 +493,8 @@ class ClientApplication(object):
             time.sleep(1)
             socket.close()
             self.logger.info("Monitor-StatusHandler is terminated gracefully !")
-        except ZMQError as e:
-            self.logger.excep("MOnitor-StatusHandler ZMQError - {}".format(e))
+        except socket.error as e:
+            self.logger.excep("MOnitor-StatusHandler - {}".format(e))
         except Exception as e:
             self.logger.excep("Monitor-StatusHandler - {}".format(e))
 

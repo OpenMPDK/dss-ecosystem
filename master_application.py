@@ -145,44 +145,13 @@ class Master(object):
             self.operation_status_queue = None
 
         self.prefix_index_data = manager.dict()
-        if os.path.exists(self.index_data_json_file):
-            with open(self.index_data_json_file, "r") as prefix_index_data_handler:
-                try:
-                    start_loading_existing_metadata = datetime.now()
-                    self.prefix_index_data = json.load(prefix_index_data_handler)
-                    print("INFO: Loaded the {} - {} seconds".format(self.index_data_json_file, (datetime.now() - start_loading_existing_metadata).seconds))
-                except json.JSONDecodeError as e:
-                    print("ERROR:JSONDecodeError - Persistent index data - {}".format(e))
-                except MemoryError as e:
-                    print("ERROR: MemoryError - Unable to load prefix_index_data - {}".format(e))
+
 
         # Get the directory prefix keys that are yet to be resumed for PUT operation
         self.dir_prefixes_to_resume = list()
         self.resume_flag = False
 
-        if self.operation.upper() == 'PUT':
-            if self.prefix_index_data:
-                try:
-                    if os.path.exists(self.resume_prefix_dir_keys_file):
-                        print("INFO:Reading existing prefix dirs for DM resume - {}".format(time.time()))
-                        with open(self.resume_prefix_dir_keys_file) as f:
-                            lines = f.read()
-                            print("INFO: Loaded the prefix dirs for DM resume - {}".format(time.time()))
-                            keys_already_uploaded = lines.split('\n')
-                            self.dir_prefixes_to_resume = list(set(self.prefix_index_data.keys()) - set(keys_already_uploaded))
-                            if self.dir_prefixes_to_resume:
-                                print("INFO: Datamover in resume mode")
-                                self.resume_flag = True
-                            else:
-                                print("INFO: All the directories are up to date. Exiting")
-                                sys.exit(0)
-                except Exception as e:
-                    print("Exception in loading prefix dirs file for DM resume", e)
-            else:
-                try:
-                    os.unlink(self.resume_prefix_dir_keys_file)
-                except FileNotFoundError:
-                    pass
+
 
     def __del__(self):
         # Stop workers
@@ -210,10 +179,11 @@ class Master(object):
             self.logger.info("Exit DataMover!")
             self.stop_logging()
             sys.exit("Workers were not started. Shutting down DataMover application")
-
         self.operation_start_time = datetime.now()
+        self.load_prefix_index_data() # Load prefix metadata.
+
         if not self.standalone:
-            if not self.operation.upper() == "LIST":
+            if not (self.operation.upper() == "LIST" and not self.config.get("distributed", False)):
                 self.spawn_clients()
 
         if self.operation.upper() == "PUT" or self.operation.upper() == "TEST":
@@ -440,41 +410,57 @@ class Master(object):
         self.logger.info("Started Listing operation!")
         bad_prefix_no_listing = True
         dump_object_keys_path = None
+        listing_based_on_indexing = False
         if self.operation.upper() == "LIST":
             self.listing_only.value = True
             dump_object_keys_path = master.config.get("dest_path", None)
 
-        listing_based_on_indexing = False
-        if self.prefix_index_data:
-            listing_based_on_indexing = True
-            self.logger.info("Using {} file for LISTing".format(self.index_data_json_file))
-            for prefix in self.prefix_index_data.keys():
+        # Distributed LISTing
+        # TODO distributed prefix_dir from dm_resume_* file.
+        distributed_listing = self.config.get("distributed", False)
+        if distributed_listing:
+            self.logger.info("Performing distributed LISTing!")
+            for prefix in self.prefix_dirs:
+                bad_prefix_no_listing = False
                 if self.prefix and not prefix.startswith(self.prefix):
                     continue
-                bad_prefix_no_listing = False
-                with self.listing_progress.get_lock():
-                    self.listing_progress.value +=1
-                task = Task(operation="list",
-                            data={"prefix": prefix},
-                            s3config=self.config["s3_storage"],
-                            max_index_size=self.config["master"].get("max_index_size", 10),
-                            listing_based_on_indexing=listing_based_on_indexing,
-                            dest_path=dump_object_keys_path
-                            )
-                self.task_queue.put(task)
+                message = {"dir":prefix}
+                self.index_data_queue.put(message)
+                with self.index_msg_count.get_lock():
+                    self.index_msg_count.value +=1
+            self.index_data_generation_complete.value = 1
         else:
-            for prefix in get_s3_prefix(self.logger, self.config.get("nfs_config", {}), self.prefix):
-                bad_prefix_no_listing = False
-                with self.listing_progress.get_lock():
-                    self.listing_progress.value += 1
-                task = Task(operation="list",
-                            data={"prefix": prefix},
-                            s3config=self.config["s3_storage"],
-                            max_index_size=self.config["master"].get("max_index_size", 10),
-                            listing_based_on_indexing=listing_based_on_indexing,
-                            dest_path=dump_object_keys_path
-                            )
-                self.task_queue.put(task)
+            # Standalone LISTing on single node.
+            if self.prefix_index_data:
+                listing_based_on_indexing = True
+                self.logger.info("Using {} file for LISTing".format(self.index_data_json_file))
+                for prefix in self.prefix_index_data.keys():
+                    if self.prefix and not prefix.startswith(self.prefix):
+                        continue
+                    bad_prefix_no_listing = False
+                    with self.listing_progress.get_lock():
+                        self.listing_progress.value +=1
+                    task = Task(operation="list",
+                                data={"prefix": prefix},
+                                s3config=self.config["s3_storage"],
+                                max_index_size=self.config["master"].get("max_index_size", 10),
+                                listing_based_on_indexing=listing_based_on_indexing,
+                                dest_path=dump_object_keys_path
+                                )
+                    self.task_queue.put(task)
+            else:
+                for prefix in get_s3_prefix(self.logger, self.config.get("nfs_config", {}), self.prefix):
+                    bad_prefix_no_listing = False
+                    with self.listing_progress.get_lock():
+                        self.listing_progress.value += 1
+                    task = Task(operation="list",
+                                data={"prefix": prefix},
+                                s3config=self.config["s3_storage"],
+                                max_index_size=self.config["master"].get("max_index_size", 10),
+                                listing_based_on_indexing=listing_based_on_indexing,
+                                dest_path=dump_object_keys_path
+                                )
+                    self.task_queue.put(task)
         if bad_prefix_no_listing:
             self.logger.error("LISTING failure!")
             self.listing_status.value = 1
@@ -512,6 +498,50 @@ class Master(object):
 
         compaction_time = (datetime.now() - start_time).seconds
         self.logger.info("Total Compaction time - {} seconds".format(compaction_time))
+
+    def load_prefix_index_data(self):
+        if self.operation.upper() == "LIST":
+            if os.path.exists(self.resume_prefix_dir_keys_file):
+                self.prefix_dirs = []
+                with open(self.resume_prefix_dir_keys_file,"r") as FH:
+                    lines = FH.read()
+                    self.prefix_dirs = lines[:-1].split("\n")
+        else:
+            if os.path.exists(self.index_data_json_file):
+                with open(self.index_data_json_file, "r") as prefix_index_data_handler:
+                    try:
+                        start_loading_existing_metadata = datetime.now()
+                        self.prefix_index_data = json.load(prefix_index_data_handler)
+                        self.logger.info("Loaded the {} - {} seconds".format(self.index_data_json_file, (datetime.now() - start_loading_existing_metadata).seconds))
+                    except json.JSONDecodeError as e:
+                        self.logger.error("JSONDecodeError - Persistent index data - {}".format(e))
+                    except MemoryError as e:
+                        self.logger.error("MemoryError - Unable to load prefix_index_data - {}".format(e))
+
+    def resume_operation(self):
+        if self.operation.upper() == 'PUT':
+            if self.prefix_index_data:
+                try:
+                    if os.path.exists(self.resume_prefix_dir_keys_file):
+                        self.logger.info("Reading existing prefix dirs for DM resume - {}".format(time.time()))
+                        with open(self.resume_prefix_dir_keys_file) as f:
+                            lines = f.read()
+                            self.logger.info("Loaded the prefix dirs for DM resume - {}".format(time.time()))
+                            keys_already_uploaded = lines.split('\n')
+                            self.dir_prefixes_to_resume = list(set(self.prefix_index_data.keys()) - set(keys_already_uploaded))
+                            if self.dir_prefixes_to_resume:
+                                self.logger.info("Datamover in resume mode")
+                                self.resume_flag = True
+                            else:
+                                self.logger.info("All the directories are up to date. Exiting")
+                                sys.exit(0)
+                except Exception as e:
+                    self.logger.excep("Exception in loading prefix dirs file for DM resume - {}", e)
+            else:
+                try:
+                    os.unlink(self.resume_prefix_dir_keys_file)
+                except FileNotFoundError:
+                    pass
 
 
 class Client(object):
@@ -603,6 +633,8 @@ class Client(object):
 
         if self.operation.upper() == "GET" or self.operation.upper() == "TEST":
             command += " --dest_path {} ".format(self.destination_path)
+        if self.operation.upper() == "LIST":
+            command += " --distributed "
         if self.operation.upper() == "TEST" and self.config.get("skip_upload", False):
             command += " --skip_upload "
         if self.master_host_or_ip_address == self.host_or_ip_address:
@@ -804,15 +836,34 @@ def process_list_operation(master):
     :param master: Master object
     :return: None
     """
+    distributed_listing = master.config.get("distributed", False)
+    dump_object_keys_path = master.config.get("dest_path", None)
     while True:
         progress_bar("Listed Object Keys - {}".format(master.index_data_count.value))
-        try:
-            # Check for completion of listing
+
+        if distributed_listing:
+            # Check all the ClientApplications once they are finished
+            all_clients_completed = 1
+            for client in master.clients:
+                # print("Client Status:{}, Client_id-{}".format(client.remote_client_status(),client.id))
+                if not client.status.value:
+                    if client.remote_client_status():
+                        client.remote_client_exit_status()
+                    else:
+                        all_clients_completed = 0
+            if all_clients_completed and master.monitor.monitor_status_poller.value == 1:
+                listing_time = (datetime.now() - master.operation_start_time).seconds
+                master.logger.info("Distributed LISTing is completed {} seconds".format(listing_time))
+                if dump_object_keys_path:
+                    master.listing_status.value = 2
+                master.stop_workers()
+                break
+        else:
+            # Standalone LIST: Check for completion of listing
             if master.listing_status.value == 1 and master.listing_progress.value == 0:
                 listing_time = (datetime.now() - master.operation_start_time).seconds
                 master.logger.info("LISTing is completed in {} seconds".format(listing_time))
-                master.logger.info("Total Object-Keys listed - {}".format(master.index_data_count.value))
-                if master.config.get("dest_path", None):
+                if dump_object_keys_path:
                     master.listing_status.value = 2
                 else:
                     master.stop_workers()
@@ -821,9 +872,9 @@ def process_list_operation(master):
             if master.listing_aggregation_status and master.listing_aggregation_status.value == 1:
                 master.stop_workers()
                 break
-        except Exception as e:
-            master.logger.excep("Listing - {}".format(e))
         time.sleep(1)
+
+    master.logger.info("Total Object-Keys listed - {}".format(master.index_data_count.value))
 
 
 def process_del_operation(master):

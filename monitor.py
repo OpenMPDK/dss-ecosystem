@@ -122,6 +122,13 @@ class Monitor(object):
             if self.config.get("dest_path", None):
                 self.process_listing_aggregator = Process(target=self.object_keys_aggregator)
                 self.process_listing_aggregator.start()
+            if self.config.get("distributed", False):
+                # Start LISTing prefix distributor
+                self.process_index = Process(target=self.message_handler_index)
+                self.process_index.start()
+                # Start status_poller  process
+                self.process_status = Process(target=self.message_handler_poller)
+                self.process_status.start()
         else:
             if not self.standalone:
                 # Start index process
@@ -146,7 +153,7 @@ class Monitor(object):
         #self.status_lock.release()
         time.sleep(2)
 
-        while self.process_listing_aggregator and self.process_listing_aggregator.is_alive():
+        if self.process_listing_aggregator and self.process_listing_aggregator.is_alive():
             time.sleep(1)
             try:
                 self.process_listing_aggregator.terminate()
@@ -154,14 +161,14 @@ class Monitor(object):
                 self.logger.excep("Unable to terminate Listing Aggregator {}".format(e))
 
         if not self.standalone:
-            while self.process_index and self.process_index.is_alive():
+            if self.process_index and self.process_index.is_alive():
                 time.sleep(1)
                 try:
                     self.process_index.terminate()
                 except Exception as e:
                     self.logger.excep("Unable to terminate MessageHandler - IndexSender {}".format(e))
 
-            while self.process_status.is_alive():
+            if self.process_status and self.process_status.is_alive():
                 time.sleep(1)
                 try:
                     self.process_status.terminate()
@@ -227,6 +234,13 @@ class Monitor(object):
             client = self.clients[client_index]
             # Send data to ClientApplication running on a  Client-Physical Node
             if data:
+                if self.operation.upper() == "LIST":
+                    #self.logger.info("Index-Distributor:Prefix-Dir-{}".format(data["dir"]))
+                    self.send_index_data(client,data)
+                    message_count +=1
+                    with self.received_index_msg_count.get_lock():
+                        self.received_index_msg_count.value += 1
+                    continue
                 object_count_under_prefix = len(data["files"])
                 # Buffer prefix_index_data for persistent storage only to be used during PUT
                 if self.operation.upper() == "PUT" and not self.resume_flag:
@@ -247,7 +261,7 @@ class Monitor(object):
                     previous_client_operation_status = 0
                     self.logger.error("Failed to send message to Client-{} ".format(client.id))
 
-                    # Debug message , for success
+                # Debug message , for success
                 if previous_client_operation_status == 1:
                     message_count += 1
                     with self.received_index_msg_count.get_lock():
@@ -404,7 +418,13 @@ class Monitor(object):
                             client.socket_status = None
                             client_application_exit_count += 1
                         else:
-                            self.status_queue.put(status)
+                            if self.operation.upper() == "LIST" and self.config.get("distributed", False):
+                                if self.config.get("dest_path", None):
+                                    self.listing_objectkey_queue.put(status)
+                                with self.index_data_count.get_lock():
+                                    self.index_data_count.value += len(status["object_keys"])
+                            else:
+                                self.status_queue.put(status)
                             received_status_msg_count +=1
                 except Exception as e:
                     self.logger.excep("Monitor-Status-Poller {} ".format(e))
@@ -612,7 +632,6 @@ class Monitor(object):
         name = "DM_monitor_obj_keys_aggregator"
         prctl.set_name(name)
         prctl.set_proctitle(name)
-
         listing_path = self.logger.path
         if self.config["dest_path"]:
             listing_path = self.config["dest_path"]
@@ -628,7 +647,6 @@ class Monitor(object):
                         "Failed to create listing path {} \n ret-{}, {}".format(listing_path, ret, console))
                     self.listing_aggregation_status.value = 1
                     sys.exit()
-
             if os.path.exists(listing_file):
                 os.remove(listing_file)
             try:
