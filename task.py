@@ -116,7 +116,6 @@ def put(s3_client, **kwargs):
                           "size" : failure_files_size}
         status_queue.put(status_message)
 
-
 @exception
 def list(s3_client, **kwargs):
     """
@@ -140,7 +139,6 @@ def list(s3_client, **kwargs):
     listing_status = kwargs["listing_status"]
     listing_only = kwargs["listing_only"]
     listing_objectkey_queue = kwargs["listing_objectkey_queue"]
-    #logger.info("Params:{}".format(params))
     listing_based_on_indexing = params["listing_based_on_indexing"]
     dump_object_keys_path = params["dest_path"] # Dump object keys to the file on this specified path. 
     max_index_size = params["max_index_size"]
@@ -189,6 +187,37 @@ def list(s3_client, **kwargs):
         if listing_progress.value:
             listing_progress.value -= 1
 
+def distributed_list(s3_client, **kwargs):
+    """
+    Perform S3 LISTing from multiple nodes. Distribute the prefix_dir among the clients
+    :param s3_client:
+    :param kwargs:
+    :return:
+    """
+    params = kwargs["params"]
+    logger = kwargs["logger"]
+    status_queue = kwargs["status_queue"]
+
+    prefix = None
+    if params.get("data", {}) and params["data"].get("dir", None):
+        prefix = (params["data"]["dir"]).strip()
+
+    # That mean lowest level of directory.
+    s3config = params["s3config"]
+    minio_bucket = s3config.get("bucket", "bucket")
+    s3_client_library = s3config.get("client_lib", "minio_client")
+
+    object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
+    object_keys_count =0
+    max_index_size = sys.maxsize
+    for result in list_object_keys(object_keys_iterator, max_index_size, s3_client_library):
+        if "object_keys" in result:
+            object_keys_count += len(result["object_keys"])
+            result.update({"prefix": prefix})
+            status_queue.put(result)
+    if object_keys_count == 0:
+        result = {"prefix": prefix, "object_keys": []}
+        status_queue.put(result)
 
 def list_object_keys(object_keys_iterator, max_index_size, s3_client_lib):
     """
@@ -422,17 +451,21 @@ class Task(object):
                     operation_progress_status_counter=queue["operation_progress_status_counter"],
                     logger=self.logger)
             elif self.operation == "list":
-                list(s3_client, params=self.params,
-                     worker_id=queue["worker_id"],
-                     task_queue=queue["task_queue"],
-                     index_data_queue=queue["index_data_queue"],
-                     index_data_count=queue["index_data_count"],
-                     index_msg_count=queue["index_msg_count"],
-                     logger=self.logger,
-                     listing_progress=queue["listing_progress"],
-                     listing_status=queue["listing_status"],
-                     listing_only=queue["listing_only"],
-                     listing_objectkey_queue=queue["listing_objectkey_queue"])
+                if self.params.get("distributed", False):
+                    distributed_list(s3_client, params=self.params, status_queue=queue["status_queue"],
+                                     logger=self.logger)
+                else:
+                    list(s3_client, params=self.params,
+                         worker_id=queue["worker_id"],
+                         task_queue=queue["task_queue"],
+                         index_data_queue=queue["index_data_queue"],
+                         index_data_count=queue["index_data_count"],
+                         index_msg_count=queue["index_msg_count"],
+                         logger=self.logger,
+                         listing_progress=queue["listing_progress"],
+                         listing_status=queue["listing_status"],
+                         listing_only=queue["listing_only"],
+                         listing_objectkey_queue=queue["listing_objectkey_queue"])
             elif self.operation == "del":
                 delete(s3_client, params=self.params,
                        status_queue=queue["status_queue"],

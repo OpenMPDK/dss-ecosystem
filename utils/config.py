@@ -148,6 +148,8 @@ def ClientApplicationArgumentParser():
                         help='Run DataMover in debug mode')
     parser.add_argument("--skip_upload", "-su", required=False, action='store_true',
                         help='Skip data upload operation for DataIntegrity')
+    parser.add_argument("--distributed", "-dist", required=False, action='store_true',
+                        help='Enable distributed LISTing')
 
     options = vars(parser.parse_args())
     return options
@@ -231,6 +233,8 @@ class CommandLineArgument:
                                help='Run DataMover in debug mode')
         subparser.add_argument("--dest_path", "-dp", type=str, required=False,
                                help='Path to store object keys in a file.')
+        subparser.add_argument("--distributed", "-dist", required=False, action='store_true',
+                               help='Perform LISTing in distributed mode')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of LIST operation (Not Implemented)')
 
