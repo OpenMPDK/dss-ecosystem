@@ -176,7 +176,7 @@ class Master(object):
         self.start_logging()
         self.logger.info("Performing {} operation".format(self.operation))
         self.load_prefix_index_data() # Load prefix metadata.
-        self.resume_operation() # Check if resume operation required.
+        self.load_prefix_keys_for_resume_operation() # Check if resume operation required.
         if not self.start_workers():
             self.logger.info("Exit DataMover!")
             self.stop_logging()
@@ -519,7 +519,7 @@ class Master(object):
                     except MemoryError as e:
                         self.logger.error("MemoryError - Unable to load prefix_index_data - {}".format(e))
 
-    def resume_operation(self):
+    def load_prefix_keys_for_resume_operation(self):
         if self.operation.upper() == 'PUT':
             if self.prefix_index_data:
                 try:
