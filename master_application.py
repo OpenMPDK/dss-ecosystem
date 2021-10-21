@@ -175,12 +175,13 @@ class Master(object):
         """
         self.start_logging()
         self.logger.info("Performing {} operation".format(self.operation))
+        self.load_prefix_index_data() # Load prefix metadata.
+        self.resume_operation() # Check if resume operation required.
         if not self.start_workers():
             self.logger.info("Exit DataMover!")
             self.stop_logging()
             sys.exit("Workers were not started. Shutting down DataMover application")
         self.operation_start_time = datetime.now()
-        self.load_prefix_index_data() # Load prefix metadata.
 
         if not self.standalone:
             if not (self.operation.upper() == "LIST" and not self.config.get("distributed", False)):
@@ -530,10 +531,11 @@ class Master(object):
                             keys_already_uploaded = lines.split('\n')
                             self.dir_prefixes_to_resume = list(set(self.prefix_index_data.keys()) - set(keys_already_uploaded))
                             if self.dir_prefixes_to_resume:
-                                self.logger.info("Datamover in resume mode")
+                                self.logger.info("Datamover running in RESUME mode")
                                 self.resume_flag = True
                             else:
                                 self.logger.info("All the directories are up to date. Exiting")
+                                self.stop_logging()
                                 sys.exit(0)
                 except Exception as e:
                     self.logger.excep("Exception in loading prefix dirs file for DM resume - {}", e)
