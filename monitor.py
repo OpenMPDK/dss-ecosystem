@@ -276,7 +276,6 @@ class Monitor(object):
 
             if self.index_data_generation_complete.value == 1 and (self.index_msg_count.value == message_count):
                 self.logger.info("Indexed data distribution is completed!")
-                self.all_index_data_distributed.value = 1
                 self.logger.info("Index Distribution FINISHED, time - {} Sec".format(
                     (datetime.now() - index_distribution_start_time).seconds))
                 self.logger.info(
@@ -302,11 +301,11 @@ class Monitor(object):
             except Exception as e:
                 self.logger.excep("Monitor-index Closing Socket {}".format(e))
 
-        self.monitor_index_data_sender.value = 1
         # Storing prefix index data to persistent storage
         if self.operation.upper() == "PUT" and not self.resume_flag:
             self.persist_index_data()
-
+        self.all_index_data_distributed.value = 1
+        self.monitor_index_data_sender.value = 1
         self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
 
     def persist_index_data(self):
@@ -426,17 +425,18 @@ class Monitor(object):
                             else:
                                 self.status_queue.put(status)
                             received_status_msg_count +=1
+                            # Exit monitor-status-poller if all messages received back from client-app.
+                            if self.all_index_data_distributed.value and ( self.index_msg_count.value == received_status_msg_count ):
+                                self.logger.info("Monitor-Status-Poller received all the status messages = {} , Exit!".format(received_status_msg_count))
+                                self.stop_status_poller.value = 1
+                                break
+
                 except Exception as e:
-                    self.logger.excep("Monitor-Status-Poller {} ".format(e))
+                    self.logger.excep("Monitor-Status-Poller- client-{}, Status - {} ".format(client.id, e))
 
             # Check if all client_applications terminated?
             if all_client_applications_terminated:
                 self.logger.debug("Monitor-Status-Poller: All ClientApplications Terminated, Exit!")
-                self.stop_status_poller.value = 1
-                break
-            # Exit monitor-status-poller if all messages received back from client-app.
-            if self.all_index_data_distributed.value and ( self.index_msg_count.value == received_status_msg_count ):
-                self.logger.info("Monitor-Status-Poller received all the status messages = {} , Exit!".format(received_status_msg_count))
                 self.stop_status_poller.value = 1
                 break
 

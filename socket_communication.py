@@ -100,10 +100,13 @@ class ClientSocket:
         if message and self.socket:
             msg_body = json.dumps(message)
             msg_len = (str(len(msg_body))).zfill(10)
+            if not msg_body.startswith('{') or not msg_body.endswith('}'):
+                self.logger.error("ClientSocket: BAD MSG - {}".format(msg_body))
             msg = msg_len + msg_body
+
             try:
                 # sendall on success return None.
-                if self.socket.sendall(msg.encode("ascii") ) is None:
+                if self.socket.sendall(msg.encode("utf8", "ignore") ) is None:
                     return True
                 else:
                     self.logger.error("Failed to send msg - {}".format(msg))
@@ -119,19 +122,40 @@ class ClientSocket:
                 self.logger.excep("Message Send Failed - {}".format(e))
         return False
 
-    def recv_json(self, format="JSON"):
+    def recv_json(self, format="JSON", timeout=30):
         """
         Receive the data from socket based on data length. and return data in JSON format.
+        This is blocking call and wait for data from socket end utill received desired
+        number of bytes.
+        The message contains 10 bytes header and body. Read header untill received 10 bytes or timeout.
+        Iterate to receive desired number of bytes from socket. 
+        :format: JSON/String 
+        :timeout: default 30 seconds
         :return: Return received data in json format.
         """
         msg_len = None
         msg = "{}"
+        
         try:
-            msg_len = self.socket.recv(10)
-            if msg_len != b'':
-                msg_len = int(msg_len)
+            msg_len_in_bytes = b''
+            received_msg_len_size = 0
+            time_started = datetime.now()
+            # Iterate till we receive 10 bytes or timeout.
+            while received_msg_len_size < 10:
+                received_msg_len_in_bytes = self.socket.recv(10 - received_msg_len_size)
+                received_msg_len_size += len(received_msg_len_in_bytes)
+                msg_len_in_bytes += received_msg_len_in_bytes
+                time_spent_in_seconds = (datetime.now() - time_started).seconds
+                if time_spent_in_seconds >= timeout:
+                    raise socket.timeout("ClientSocket: Timeout ({} seconds) from recv function".format(time_spent_in_seconds))
+            if msg_len_in_bytes != b'':
+                msg_len = int(msg_len_in_bytes)
+        except socket.timeout as e:
+            raise e
         except socket.error as e:
-            self.logger.error("ClientSocket: Incorrect message length - {}".format(e))
+            raise socket.error("ClientSocket: Incorrect message length - {}".format(e))
+        except ValueError as e:
+            raise ValueError("ClientSocket: ValueError - {}".format(e))
 
         if msg_len:
             msg_body = b''
@@ -153,12 +177,19 @@ class ClientSocket:
 
             if msg_body:
                 if len(msg_body) == msg_len:
-                    msg = msg_body.decode("ascii")
+                    msg = msg_body.decode("utf8", "ignore")
                 else:
                     self.logger.error("ClientSocket: Received incomplete message.")
-
         if format.upper() == "JSON":
-            return json.loads(msg)
+            json_data = {}
+            try:
+                json_data = json.loads(msg)
+            except JSONDecodeError as e:
+                self.logger.error("ClientSocket: Bad JSON data - {},{}, {}".format(msg_len, msg,e))
+            except Exception as e:
+                raise Exception("Bad formed message - {}{}, error- {}".format(msg_len,msg, e))
+
+            return json_data
         else:
             return msg
 
@@ -228,13 +259,14 @@ class ServerSocket:
             msg_body = message
             if format.upper() == "JSON":
                 msg_body = json.dumps(message)
+            if not msg_body.startswith('{') or not msg_body.endswith('}'):
+                self.logger.error("ServerSocket: BAD MSG - {}".format(msg_body))
 
             msg_len = (str(len(msg_body))).zfill(10)
             msg = msg_len + msg_body
-
             try:
                 # sendall on success return None.
-                if self.client_socket.sendall(msg.encode("ascii") ) is None:
+                if self.client_socket.sendall(msg.encode("utf8", "ignore") ) is None:
                     return True
                 else:
                     self.logger.error("Failed to send msg - {}".format(msg_body))
@@ -250,19 +282,43 @@ class ServerSocket:
                 self.logger.error("Message Send Failed - {}".fromat(e))
         return False
 
-    def recv_json(self, format="JSON"):
+    def recv_json(self, format="JSON", timeout=30):
         """
         Receive the data from socket based on data length. and return data in JSON format.
+        This is blocking call and wait for data from socket end utill received desired
+        number of bytes.
+        The message contains 10 bytes header and body. Read header untill received 10 bytes or timeout.
+        Iterate to receive desired number of bytes from socket. 
+        :format: JSON/String 
+        :timeout: default 30 seconds
         :return: Return received data in json format.
         """
         msg_len = None
         msg = "{}"
         try:
-            msg_len = self.client_socket.recv(10)
-            if msg_len != b'':
-                msg_len = int(msg_len)
+            msg_len_in_bytes = b''
+            received_msg_len_size = 0
+            time_started = datetime.now()
+            # Iterate till we receive 10 bytes or timeout.
+            while received_msg_len_size < 10:
+                received_msg_len_in_bytes = self.client_socket.recv(10 - received_msg_len_size)
+                received_msg_len_size += len(received_msg_len_in_bytes)
+                msg_len_in_bytes += received_msg_len_in_bytes
+                time_spent_in_seconds = (datetime.now() - time_started).seconds
+                if time_spent_in_seconds >= timeout:
+                    raise socket.timeout("ServerSocket: Timeout ({} seconds) from recv function".format(time_spent_in_seconds))
+
+            if msg_len_in_bytes != b'':
+                msg_len = int(msg_len_in_bytes.decode('utf8'))
+        except socket.timeout as e:
+            raise e
         except socket.error as e:
             self.logger.error("ServerSocket: Determine msg length - {}".format(e))
+        except ValueError as e:
+            raise socket.error("ServerSocket: ValueError - {}".format(e))
+        except Exception as e:
+            self.logger.error("ServerSocket: {}".format(e))
+
         if msg_len:
             msg_body = b''
             received_data_size = 0
@@ -282,11 +338,21 @@ class ServerSocket:
 
             if msg_body :
                 if len(msg_body) == msg_len:
-                    msg = msg_body.decode("ascii")
+                    msg = msg_body.decode("utf8","ignore")
                 else:
                     self.logger.error("ServerSocket: Received incomplete message.")
         if format.upper() == "JSON":
-            return json.loads(msg)
+            json_data = {}
+            try:
+                json_data = json.loads(msg)
+            except JSONDecodeError as e:
+                raise JSONDecodeError("ClientSocket: Bad JSON data - {}".format(e))
+            except MemoryError as e:
+                raise MemoryError("MemoryError: JSON load failed - {}".format(e))
+            except Exception as e:
+                raise Exception("ClientSocket: Bad JSON data - {}, error- {}".format(msg, e))
+
+            return json_data
         else:
             return msg
 
@@ -296,10 +362,10 @@ class ServerSocket:
         :return: None
         """
         try:
+            self.client_socket.close()
+            time.sleep(1)
             self.socket.close()
         except Exception as e:
             self.logger.error("Closing Socket - {}".format(e))
-
-
 
 

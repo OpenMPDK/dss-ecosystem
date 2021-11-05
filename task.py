@@ -573,7 +573,7 @@ def indexing_dir(**kwargs):
             try:
                 # Don't let index_data_queue grow more than given value or the default 5K
                 while index_data_queue.qsize() > index_data_queue_size:
-                    logger.info("Index data Q threshold crossed, Size = {}, Threshold = {}".format(index_data_queue.qsize(), index_data_queue_size))
+                    # logger.info("Index data Q threshold crossed, Size = {}, Threshold = {}".format(index_data_queue.qsize(), index_data_queue_size))
                     time.sleep(0.1)
                 if standalone:
                     data = {"dir": msg["dir"], "files": msg["files"], "size": msg["size"]}

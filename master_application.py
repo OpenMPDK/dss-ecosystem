@@ -63,7 +63,7 @@ class Master(object):
         self.client_ip_list = config.get("tess_clients_hosts_or_ip_addresses", [])
         self.workers_count = config["master"]["workers"]
         self.max_index_size = config["master"]["max_index_size"]
-        self.index_data_queue_size = config["master"].get("index_data_queue_size", 10000)
+        self.index_data_queue_size = config["master"].get("index_data_queue_size", 100000)
         self.workers = []
         self.clients = []
         self.task_queue = Queue()
