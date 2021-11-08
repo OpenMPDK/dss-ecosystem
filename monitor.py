@@ -40,6 +40,7 @@ import json
 import uuid
 from logger import MultiprocessingLogger
 from socket_communication import ClientSocket, ServerSocket
+import socket
 import prctl
 import ast
 
@@ -430,7 +431,14 @@ class Monitor(object):
                                 self.logger.info("Monitor-Status-Poller received all the status messages = {} , Exit!".format(received_status_msg_count))
                                 self.stop_status_poller.value = 1
                                 break
-
+                except socket.timeout as e:
+                    # Actual clientApp is terminated and receiving socket doesn't have any data left.
+                    # Should close the receiving end socket.
+                    self.logger.error("Monitor-Status-Poller: client-{}, Status - {}".format(client.id, e))
+                    if client.status.value:
+                        self.logger.warn("Monitor-Status-Poller: client-{} terminated and reciving socket doesn't have any element, closing socket!".format(client.id, e))
+                        client.socket_status.close()
+                        client.socket_status = None   
                 except Exception as e:
                     self.logger.excep("Monitor-Status-Poller- client-{}, Status - {} ".format(client.id, e))
 
