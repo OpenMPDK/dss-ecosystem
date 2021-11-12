@@ -108,6 +108,7 @@ class Master(object):
 
         # Operation LIST
         self.prefix = config.get("prefix", None)
+        self.prefixes = [] # TODO need to take multiple prefix from command line and store into list.
         self.listing_progress = Value('i', 0)
         self.listing_status = Value('i', 0) # [0,1,2] => ['NOT STARTED', 'STARTED', 'COMPLETED']
         self.listing_only = Value('b', False)
@@ -366,46 +367,64 @@ class Master(object):
         :return:
         """
         # Validate S3 prefix
-        if self.prefix and not validate_s3_prefix(self.logger, self.prefix):
-            self.logger.fatal("Bad prefix specified, exit application.")
-            self.indexing_started_flag.value = -1
-            return
+        if self.prefix:
+            if  validate_s3_prefix(self.logger, self.prefix):
+                self.prefixes = [self.prefix]
+            else:
+                self.logger.fatal("Bad prefix specified, exit application.")
+                self.indexing_started_flag.value = -1
+                return
 
-        # First Mount all NFS share locally
+        # Create NFS cluster object
         self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), "root", "", self.logger)
-        self.nfs_cluster_obj.mount_all()
-        if not self.nfs_cluster_obj.mounted:
-            self.logger.fatal("Mounting failed, EXIT indexing!")
-            self.indexing_started_flag.value = -1
-            return
 
-        # Create first level task for each NFS share
-        local_mounts = self.nfs_cluster_obj.get_mounts()
-        for ip_address, nfs_shares in local_mounts.items():
-            self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
-            self.nfs_shares.extend(nfs_shares)
-            for nfs_share in nfs_shares:
-                if self.prefix:
-                    if is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address,
-                                                     prefix=self.prefix):
-                        nfs_share_mount = os.path.abspath("/" + self.prefix)
-                    else:
-                        continue
-                else:
+        if self.resume_flag:
+            self.prefixes = self.dir_prefixes_to_resume
+
+        if self.prefixes:
+            for prefix in self.prefixes:
+                self.logger.info("Processing prefix:{}".format(prefix))
+                (ip_address, nfs_share, ret) = self.nfs_cluster_obj.mount_based_on_prefix(prefix)
+                if ret == 0 and is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address,
+                                                 prefix=prefix):
+
+                    nfs_share_prefix_path  = os.path.abspath("/" + prefix)
+                    task = Task(operation="indexing",
+                                data=nfs_share_prefix_path,
+                                nfs_cluster=ip_address,
+                                nfs_share=nfs_share,
+                                max_index_size=self.max_index_size,
+                                s3config=self.config["s3_storage"],
+                                dryrun=self.dryrun,
+                                resume_flag=self.resume_flag
+                                )
+                    self.task_queue.put(task)
+        else:
+            self.nfs_cluster_obj.mount_all()
+            if not self.nfs_cluster_obj.mounted:
+                self.logger.fatal("Mounting failed, EXIT indexing!")
+                self.indexing_started_flag.value = -1
+                return
+
+            # Create first level task for each NFS share
+            local_mounts = self.nfs_cluster_obj.get_mounts()
+            for ip_address, nfs_shares in local_mounts.items():
+                self.logger.info("NFS Cluster:{}, NFS Shares:{}".format(ip_address, nfs_shares))
+                self.nfs_shares.extend(nfs_shares)
+                for nfs_share in nfs_shares:
                     # print("DEBUG: Creating task for {}".format(nfs_share))
                     nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share)
-                task = Task(operation="indexing",
-                            data=nfs_share_mount,
-                            nfs_cluster=ip_address,
-                            nfs_share=nfs_share,
-                            prefix=self.prefix,
-                            max_index_size=self.max_index_size,
-                            s3config=self.config["s3_storage"],
-                            dryrun=self.dryrun,
-                            dir_prefixes_to_resume=self.dir_prefixes_to_resume,
-                            resume_flag=self.resume_flag
-                            )
-                self.task_queue.put(task)
+                    task = Task(operation="indexing",
+                                data=nfs_share_mount,
+                                nfs_cluster=ip_address,
+                                nfs_share=nfs_share,
+                                prefix=self.prefix,
+                                max_index_size=self.max_index_size,
+                                s3config=self.config["s3_storage"],
+                                dryrun=self.dryrun,
+                                resume_flag=self.resume_flag
+                                )
+                    self.task_queue.put(task)
 
     def start_listing(self):
         self.logger.info("Started Listing operation!")
@@ -467,31 +486,45 @@ class Master(object):
             self.listing_status.value = 1
 
     def compaction(self):
+        """
+        Initiate the compaction process into remote target node.
+        :return:None
+        """
         # Spawn the process on target node and wait for response.
-        command = "python3 {}/target_compaction.py".format(self.dir_path)
+        target_compaction_source = "python3 {}/target_compaction.py".format(self.dir_path)
         compaction_status = {}
         start_time = datetime.now()
-        for client_ip in self.config["dss_targets"]:
-            self.logger.info("Started Compaction for target-ip:{}".format(client_ip))
-            ssh_client_handler, stdin, stdout, stderr = remoteExecution(client_ip, self.client_user_id,
+
+        for target_ip in self.config["dss_targets"]:
+            command = target_compaction_source + " --ip_address " + target_ip
+            command += " --logdir " + self.config["logging"]["path"]
+            command += " --user_id " + self.client_user_id
+            command += " --password " + self.client_password
+
+            if type(self.config["dss_targets"]) is dict:
+                subsystem_nqn_str = (",").join(self.config["dss_targets"][target_ip])
+                command += " --subsystem_nqn " + subsystem_nqn_str
+
+            self.logger.info("Started Compaction for target-ip:{}".format(target_ip))
+            ssh_client_handler, stdin, stdout, stderr = remoteExecution(target_ip, self.client_user_id,
                                                                         self.client_password, command)
-            compaction_status[client_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout": stdout,
+            compaction_status[target_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout": stdout,
                                             "stderr": stderr}
 
         while True:
             is_compaction_done = True
             progress_bar("Compaction in Progress")
-            for client_ip in compaction_status:
-                if "status" in compaction_status[client_ip] and compaction_status[client_ip]["status"]:
+            for target_ip in compaction_status:
+                if "status" in compaction_status[target_ip] and compaction_status[target_ip]["status"]:
                     continue
-                if "ssh_remote_client" in compaction_status[client_ip] and compaction_status[client_ip][
+                if "ssh_remote_client" in compaction_status[target_ip] and compaction_status[target_ip][
                     "ssh_remote_client"]:
-                    if "stdout" in compaction_status[client_ip] and compaction_status[client_ip]["stdout"]:
-                        status = compaction_status[client_ip]["stdout"].channel.exit_status_ready()
+                    if "stdout" in compaction_status[target_ip] and compaction_status[target_ip]["stdout"]:
+                        status = compaction_status[target_ip]["stdout"].channel.exit_status_ready()
                         if status:
-                            self.logger.info("Compaction is finished for - {}".format(client_ip))
-                            compaction_status[client_ip]["status"] = True
-                            compaction_status[client_ip]["ssh_remote_client"].close()
+                            self.logger.info("Compaction is finished for - {}".format(target_ip))
+                            compaction_status[target_ip]["status"] = True
+                            compaction_status[target_ip]["ssh_remote_client"].close()
                         else:
                             is_compaction_done = False
             if is_compaction_done:
