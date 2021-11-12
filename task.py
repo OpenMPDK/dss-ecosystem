@@ -506,7 +506,7 @@ class Task(object):
         pass
 
 
-def indexing_dir(**kwargs):
+def indexing(**kwargs):
     """
     Create a metadata index during PUT operation only.
     First Phase:
@@ -619,7 +619,7 @@ def indexing_dir(**kwargs):
     progress_of_indexing.pop(dir)
 
 
-def indexing(**kwargs):
+def indexing1(**kwargs):
     """
     Create a metadata index during PUT operation only.
     First Phase:

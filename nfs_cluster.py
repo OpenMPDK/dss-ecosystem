@@ -31,7 +31,7 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import os,sys
-from utils.utility import exception, exec_cmd
+from utils.utility import exception, exec_cmd, first_delimiter_index
 from multiprocessing import Manager
 
 
@@ -74,6 +74,31 @@ class NFSCluster:
                     self.nfs_cluster.append(cluster_ip)
 
     @exception
+    def mount_based_on_prefix(self,prefix):
+        """
+        Mount only the specified prefix and store cluster_ip into nfs_cluster list.
+        :param prefix:
+        :return: touple => ( cluster_ip, mounted_path , return code)
+        """
+        first_delimiter_pos =  first_delimiter_index(prefix, "/")
+        cluster_ip = prefix[0:first_delimiter_pos]
+        ret = -1
+        for nfs_share in self.config[cluster_ip]:
+            nfs_share_prefix = cluster_ip + nfs_share
+            if prefix.startswith(nfs_share_prefix):
+                if cluster_ip in self.local_mounts and nfs_share in self.local_mounts[cluster_ip]:
+                    self.logger.info("Prefix -{} is already mounted to {}".format(prefix, "/" + nfs_share_prefix))
+                    return (cluster_ip,nfs_share, 0)
+                else:
+                    ret, console = self.mount(cluster_ip, nfs_share)
+                break
+        if ret == 0:
+            self.logger.info("Mounted NFS shares {}:{}".format(cluster_ip, nfs_share))
+            self.nfs_cluster.append(cluster_ip)
+
+        return (cluster_ip,nfs_share, ret)
+
+    @exception
     def mount(self,cluster_ip, nfs_share):
         """
         Mount a NFS share from a cluster.
@@ -113,6 +138,7 @@ class NFSCluster:
             else:
                 self.local_mounts[cluster_ip].append(nfs_share)
             self.mounted = True
+            ret = 0
         return ret,console
 
     @exception

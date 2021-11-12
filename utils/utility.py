@@ -321,3 +321,153 @@ def is_queue_empty(mp_queue=None):
     else:
         print("Multi-processing Queue is not passed")
     return queue_empty
+
+def decode(bytes=None):
+    result = None
+    if bytes:
+        try:
+            result = bytes.decode('utf8', 'ignore')
+        except UnicodeDecodeError as e:
+            print("Decoding error - {}".format(e))
+    return result
+
+
+def encode(bytes=None):
+    result = None
+    if bytes:
+        try:
+            result = bytes.encode('utf8', 'ignore')
+        except UnicodeEncodeError as e:
+            print("Encoding error - {}".format(e))
+    return result
+
+
+def first_delimiter_index(data_str, delimiter):
+    """
+    Return first delimiter position in a string
+    :param data_str:
+    :param delimiter:
+    :return:
+    """
+    delimiter_index = -1
+    index = 0
+    data_str_len = len(data_str)
+    while index < data_str_len:
+        if data_str[index] == delimiter:
+            delimiter_index = index
+            break
+        index +=1
+
+    return delimiter_index
+
+
+def file_open(file_path, mode="r", logger=None):
+    FH = None
+    try:
+        FH = open(file_path, mode)
+    except OSError as e:
+        if logger:
+            logger.error(e)
+        else:
+            print("ERROR: {}".format(e))
+    return FH
+
+def file_close(file_handle, logger=None):
+    try:
+        if file_handle:
+            file_handle.close()
+    except OSError as e:
+        if logger:
+            logger.error(e)
+        else:
+            print("ERROR: {}".format(e))
+
+
+class File:
+    def __init__(self, **kwargs):
+        self.file = kwargs.get("path", None)
+        self.mode = (kwargs.get("mode","r")).lower()
+        self.handler = None
+        self.logger = kwargs.get("logger", None)
+        self.size = 0
+        self.flush = kwargs.get("flush", False)
+        
+    def __del__(self):
+        self.close()
+
+    def open(self):
+        """
+        Open a file with a specified mode
+        :return:
+        """
+        try:
+            self.handler = open(self.file, self.mode)
+        except OSError as e:
+            if self.logger:
+                self.logger.error(e)
+            else:
+                print("ERROR: {}".format(e))
+    def close(self):
+        """
+        Close a file
+        :return:
+        """
+        if self.handler:
+            try:
+                self.handler.close()
+            except OSError as e:
+                if self.logger:
+                    self.logger.error(e)
+                else:
+                    print("ERROR: {}".format(e))
+
+    def size(self):
+        """
+        Return file size in bytes
+        :return:
+        """
+        size = 0
+        if self.mode == "r":
+            if not self.stat:
+                self.stat = os.stat(self.file)
+            size = self.stat.st_size
+        elif self.mode == "a":
+            if not self.stat:
+                self.stat = os.stat(self.file)
+                self.size = self.stat.st_size
+            size = self.size
+        elif self.mode == "w":
+            size = self.size
+        return size
+            
+
+    def write(self, data=""):
+        """
+        Write to to a file in the specified mode.
+        :param data: byte of chars to write into file.
+        :return: None
+        """
+        if data and self.mode in ["w","a"]:
+            if type(data) is not str:
+                data = str(data)
+            self.size += self.handler.write(data)
+        if self.flush:
+            self.handler.flush()
+    def read(self):
+        """
+        Return bytes of char read from file.
+        :return:
+        """
+        pass
+
+    def readlines(self):
+        """
+        Read all the lines from 
+        :return:
+        """
+    
+    
+
+    
+
+
