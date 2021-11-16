@@ -210,8 +210,8 @@ class Master(object):
         :return:
         """
         self.stop_workers()
-        self.stop_clients()
         self.stop_monitor()
+        self.stop_clients()
         self.nfs_cluster_obj.umount_all()
         self.stop_logging()
 

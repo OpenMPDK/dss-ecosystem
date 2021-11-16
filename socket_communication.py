@@ -46,6 +46,8 @@ IP_ADDRESS_FAMILY = {
 
 CONNECTION_DELAY_INTERVAL = 2
 CONNECTION_TIME_THRESHOLD = 300 # 5 Minutes, maximum wait time for socket connection.
+MESSAGE_LENGTH = 10 # Message length 10 bytes
+RECV_TIMEOUT = 60 # Wait to receive data from socket for 60 seconds.
 
 class ClientSocket:
     def __init__(self, logger=None, ip_address_family="IPv4"):
@@ -99,7 +101,7 @@ class ClientSocket:
         """
         if message and self.socket:
             msg_body = json.dumps(message)
-            msg_len = (str(len(msg_body))).zfill(10)
+            msg_len = (str(len(msg_body))).zfill(MESSAGE_LENGTH)
             if not msg_body.startswith('{') or not msg_body.endswith('}'):
                 self.logger.error("ClientSocket: BAD MSG - {}".format(msg_body))
             msg = msg_len + msg_body
@@ -122,7 +124,7 @@ class ClientSocket:
                 self.logger.excep("Message Send Failed - {}".format(e))
         return False
 
-    def recv_json(self, format="JSON", timeout=30):
+    def recv_json(self, format="JSON", timeout=RECV_TIMEOUT):
         """
         Receive the data from socket based on data length. and return data in JSON format.
         This is blocking call and wait for data from socket end utill received desired
@@ -130,7 +132,7 @@ class ClientSocket:
         The message contains 10 bytes header and body. Read header untill received 10 bytes or timeout.
         Iterate to receive desired number of bytes from socket. 
         :format: JSON/String 
-        :timeout: default 30 seconds
+        :timeout: default 60 seconds
         :return: Return received data in json format.
         """
         msg_len = None
@@ -141,8 +143,8 @@ class ClientSocket:
             received_msg_len_size = 0
             time_started = datetime.now()
             # Iterate till we receive 10 bytes or timeout.
-            while received_msg_len_size < 10:
-                received_msg_len_in_bytes = self.socket.recv(10 - received_msg_len_size)
+            while received_msg_len_size < MESSAGE_LENGTH:
+                received_msg_len_in_bytes = self.socket.recv(MESSAGE_LENGTH - received_msg_len_size)
                 received_msg_len_size += len(received_msg_len_in_bytes)
                 msg_len_in_bytes += received_msg_len_in_bytes
                 time_spent_in_seconds = (datetime.now() - time_started).seconds
@@ -262,7 +264,7 @@ class ServerSocket:
             if not msg_body.startswith('{') or not msg_body.endswith('}'):
                 self.logger.error("ServerSocket: BAD MSG - {}".format(msg_body))
 
-            msg_len = (str(len(msg_body))).zfill(10)
+            msg_len = (str(len(msg_body))).zfill(MESSAGE_LENGTH)
             msg = msg_len + msg_body
             try:
                 # sendall on success return None.
@@ -282,7 +284,7 @@ class ServerSocket:
                 self.logger.error("Message Send Failed - {}".fromat(e))
         return False
 
-    def recv_json(self, format="JSON", timeout=30):
+    def recv_json(self, format="JSON", timeout=RECV_TIMEOUT):
         """
         Receive the data from socket based on data length. and return data in JSON format.
         This is blocking call and wait for data from socket end utill received desired
@@ -290,7 +292,7 @@ class ServerSocket:
         The message contains 10 bytes header and body. Read header untill received 10 bytes or timeout.
         Iterate to receive desired number of bytes from socket. 
         :format: JSON/String 
-        :timeout: default 30 seconds
+        :timeout: default 60 seconds
         :return: Return received data in json format.
         """
         msg_len = None
@@ -300,8 +302,8 @@ class ServerSocket:
             received_msg_len_size = 0
             time_started = datetime.now()
             # Iterate till we receive 10 bytes or timeout.
-            while received_msg_len_size < 10:
-                received_msg_len_in_bytes = self.client_socket.recv(10 - received_msg_len_size)
+            while received_msg_len_size < MESSAGE_LENGTH:
+                received_msg_len_in_bytes = self.client_socket.recv(MESSAGE_LENGTH - received_msg_len_size)
                 received_msg_len_size += len(received_msg_len_in_bytes)
                 msg_len_in_bytes += received_msg_len_in_bytes
                 time_spent_in_seconds = (datetime.now() - time_started).seconds
