@@ -352,11 +352,10 @@ class Monitor(object):
                     index +=1
                 if message_sent:
                     self.logger.info(
-                    "Notified ClientApplication {}:{} -> {}".format(client.ip_address,
-                    client.port_index, message))
+                    "Notified ClientApplication-{} -> {}".format(client.id, message))
                 else:
                     self.logger.error(
-                    "Unable to send message-{} to client-{}".format(client.id, message))
+                    "Unable to send message-{} to ClientApplication-{}".format(client.id, message))
         else:
             self.logger.error("Invalid message type - {}".format(message))
 
