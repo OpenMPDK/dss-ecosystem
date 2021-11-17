@@ -54,6 +54,7 @@ manager = Manager()
 MONITOR_INACTIVE_WAIT_TIME = 1800 # 30 Mins
 DEBUG_MESSAGE_INTERVAL = 120 # 10 Mins
 PERSIST_FLUSH_INTERVAL = 60
+MSG_SEND_RETRY_COUNT = 2  
 
 
 class Monitor(object):
@@ -222,6 +223,9 @@ class Monitor(object):
             # Forcefully stop the process
             if self.stop_status_poller.value :
                 self.logger.error("Forcefully shutting down Monitor-index!")
+                end_message = {"indexing_done": 1}
+                self.logger.warn("Sending Termination message to all ClientApp!")
+                self.send_message_to_all_clients(end_message)
                 break
 
             previous_client_operation_status = 1
@@ -283,15 +287,9 @@ class Monitor(object):
                     "Total distributed messages- {}, Objects Count-{}".format(message_count, object_count))
 
                 # Inform all the client applications running on different nodes
-                for client in self.clients:
-                    data = {"indexing_done": 1}
-                    if not self.send_index_data(client, data):
-                        if not self.send_index_data(client, data):
-                            self.logger.error(
-                                "Unable to send indexing completion message to client-{}".format(client.id))
-                    self.logger.info(
-                        "Indexed data distribution is completed, Notifying ClientApplication {}:{} -> {}".format(
-                            client.ip_address, client.port_index, data))
+                self.logger.info("Notifying all ClientApplication".format())
+                end_message = {"indexing_done": 1}
+                self.send_message_to_all_clients(end_message)
                 # Intimidated all the clients, exit the loop.
                 break
 
@@ -336,6 +334,30 @@ class Monitor(object):
                     str(e)))
                 raise
 
+    def send_message_to_all_clients(self, message):
+        """
+        Send a common message to all ClientApp running in different nodes.
+        Retry sending message if not delivered for MSG_SEND_RETRY_COUNT
+        :param data: message
+        :return: None
+        """
+        if message and type(message) ==  dict:
+            for client in self.clients:
+                index = 0
+                message_sent = False
+                while index < MSG_SEND_RETRY_COUNT:
+                    message_sent = self.send_index_data(client, message)
+                    if message_sent:
+                        break
+                    index +=1
+                if message_sent:
+                    self.logger.info(
+                    "Notified ClientApplication-{} -> {}".format(client.id, message))
+                else:
+                    self.logger.error(
+                    "Unable to send message-{} to ClientApplication-{}".format(client.id, message))
+        else:
+            self.logger.error("Invalid message type - {}".format(message))
 
     def send_index_data(self, client, data):
         """
