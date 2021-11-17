@@ -131,7 +131,7 @@ cd dss_client
 Use test/example.py to verify and test the build also it can serves as
 an example for the client APIs (refer to client lib API documentation). It uploads, lists then downloads example.py
 as a test file against S3 store. In this case, the S3 store can be a stock minio
-or TESS cluster.
+or DSS cluster.
 
 Note: Before the run, you need to config S3 endpoint in the header section of the file,
 
@@ -141,7 +141,7 @@ access_secret = "minioadmin"
 discover_endpoint = 'http://127.0.0.1:9001'
 ```
 
-If you are working with a new TESS clusters, you need to prime one of the cluster
+If you are working with a new DSS clusters, you need to prime one of the cluster
 to contain a cluster config file for client library to discover cluster topology. In order
 to do it, pick a cluster to create a bucket named "dss" and upload a file named "conf.json"
 to it. See conf.json example in the source tree.
