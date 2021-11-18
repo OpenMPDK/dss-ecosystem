@@ -73,7 +73,7 @@ class Config(object):
 
 
 def commandLineArgumentParser():
-    parser = argparse.ArgumentParser(description='TESS Copy a NFS data mover tool!')
+    parser = argparse.ArgumentParser(description='Distributed version of S3 CLI to perform PUT,LIST,GET,DEL operations')
     subparser = parser.add_subparsers(help="Supported Operations ... ")
 
     put_parser=subparser.add_parser("PUT", help="Upload the files to S3 storage")
@@ -128,7 +128,7 @@ def commandLineArgumentParser():
 
 
 def ClientApplicationArgumentParser():
-    parser = argparse.ArgumentParser(description='TESS Copy a NFS data mover tool!')
+    parser = argparse.ArgumentParser(description='Distributed version of S3 CLI to perform PUT,LIST,GET,DEL operations')
     parser.add_argument("--client_id", "-id", type=int, default=1, required=True,
                         help='Specify client node IP address ')
     parser.add_argument("--operation", "-op", type=str, required=True,
@@ -156,12 +156,12 @@ def ClientApplicationArgumentParser():
 
 class CommandLineArgument:
     def __init__(self):
-        parser = argparse.ArgumentParser(description='TESS Copy!')
+        parser = argparse.ArgumentParser(description='Distributed version of S3 CLI to perform PUT,LIST,GET,DEL operations!')
         subparsers = parser.add_subparsers(help="Supported Operations ... ")
         put_parser = subparsers.add_parser("PUT", help="Upload the files to S3 storage")
-        list_parser = subparsers.add_parser("LIST", help="List the buckets/objects from S3 storage!")
-        get_parser = subparsers.add_parser("GET", help="Download the files from S3 storage bucket!")
-        del_parser = subparsers.add_parser("DEL", help="Remove the objects from the S3 storage bucket!")
+        list_parser = subparsers.add_parser("LIST", help="List the objects from S3 storage!")
+        get_parser = subparsers.add_parser("GET", help="Download the files from S3 storage!")
+        del_parser = subparsers.add_parser("DEL", help="Remove the objects from the S3 storage!")
         test_parser = subparsers.add_parser("TEST", help="Perform DataMover data_integrity test.")
 
         if not sys.argv[1:2]:

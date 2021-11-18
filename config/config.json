@@ -1,5 +1,5 @@
 {
- "tess_clients_hosts_or_ip_addresses":[ "202.0.0.135","202.0.0.136"],
+ "clients_hosts_or_ip_addresses":[ "202.0.0.135","202.0.0.136"],
   "master": {
     "host_or_ip_address": "202.0.0.135",
     "workers": 1,

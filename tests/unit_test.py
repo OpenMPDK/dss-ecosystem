@@ -8,7 +8,7 @@ print(sys.path)
 from master_application import Master, process_put_operation, process_list_operation, process_get_operation, process_del_operation
 
 class DataMover(unittest.TestCase):
-    config = {'tess_clients_ip': ['202.0.0.135'],
+    config = {'clients_hosts_or_ip_addresses': ['202.0.0.135'],
               'master': {'ip_address': '202.0.0.135', 'workers': 5, 'max_index_size': 500, 'size': '1GB'},
               'client': {'workers': 5, 'max_index_size': 500, 'user_id': 'ansible', 'password': 'ansible'},
               'message': {'port_index': 6000, 'port_status': 6001},
