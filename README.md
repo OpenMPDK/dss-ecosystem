@@ -1,4 +1,4 @@
-# TESS Data Mover
+# DSS Data Mover
 
 ## (I) Datamover Deployment Using Ansible
 
@@ -71,13 +71,13 @@ ansible-playbook -i inv_file  playbooks/deploy_datamover.yml
 
 ### Start DataMover
 
-Start DataMover using start_start_datamover.yml playbook to move the data from NFS server and PUT it to TESS storage servers.
+Start DataMover using start_start_datamover.yml playbook to move the data from NFS server and PUT it to DSS storage servers.
 
 ```
 ansible-playbook -i inv_file  playbooks/start_datamover.yml 
 ```
 
-to test that the data is moved from NFS to TESS storage on client/storage server
+to test that the data is moved from NFS to DSS storage on client/storage server
 data is generally stored under dss<em>i</em> bucket which *i* specifies the cluster's index and *dss* bucket will keep the datamover configuration file.
 
 ```
@@ -105,7 +105,7 @@ To test DM uploaded the files into S3 storage can be checked as below.
 
 ### Dry Run
 
-Dry Run option is to exercises the data mover I/O operation without actually calling the s3 functions. Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance. Dry run in PUT operation access the data on the NFS server copy it to the buffer and then without writing the data to TESS Storage will skip the s3 call and delete the buffer content. Dry run GET/DEL is dependent on parallel listing operation. It performs listing and exercise all the part of code except calling S3 download / remove object.
+Dry Run option is to exercises the data mover I/O operation without actually calling the s3 functions. Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance. Dry run in PUT operation access the data on the NFS server copy it to the buffer and then without writing the data to DSS Storage will skip the s3 call and delete the buffer content. Dry run GET/DEL is dependent on parallel listing operation. It performs listing and exercise all the part of code except calling S3 download / remove object.
 
 ```
 ansible-playbook -i your_inventory playbooks/start_datamover.yml -e "datamover_dryrun=true"
@@ -113,7 +113,7 @@ ansible-playbook -i your_inventory playbooks/start_datamover.yml -e "datamover_d
 
 ### Data Integrity Test
 
-The Data Integrity test is to make sure the data uploaded on TESS is the same as the data on the NFS. When the option is enabled, data mover performs a checksum validation test of all objects on object store. It also performs data-integrity check for uploaded data when “—skip_upload” option is specified.
+The Data Integrity test is to make sure the data uploaded on DSS is the same as the data on the NFS. When the option is enabled, data mover performs a checksum validation test of all objects on object store. It also performs data-integrity check for uploaded data when “—skip_upload” option is specified.
 
 ```
 ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=TEST"
@@ -178,8 +178,8 @@ verify mounted shared directory
 ```df –kh```
 
 ### I/O Operations
-- Running PUT operation with compaction option, optimizes the performance for GET and LIST of objects on TESS.
-- LIST/GET/DEL operations can be performed either recursively for the whole data on TESS or only for a specific prefix. 
+- Running PUT operation with compaction option, optimizes the performance for GET and LIST of objects on DSS.
+- LIST/GET/DEL operations can be performed either recursively for the whole data on DSS or only for a specific prefix. 
 - In case of PUT failure, with warning ```WARNING: DataMover RESUME operation is required!```, please retry the put operation again.  
 - The default path for Data mover config file ```/usr/dss/nkv-datamover/config/config.json``` to specify the config path use --config option. 
  
