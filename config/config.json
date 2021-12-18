@@ -1,0 +1,21 @@
+{
+"framework": {"name": "TensorFlow",
+              "batch_size": 5,
+              "epochs": 1
+              },
+"computation": "CPU",
+"dataset" : {"type":  "image",
+             "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/",
+             "label": ["roses", "sunflowers", "tulips", "daisy", "dandelion"],
+             "image_dimension": [180,180]
+            },
+  "storage": {
+    "type" : "NFS",
+    "s3": { "name": "dss",
+            "aws": { "region_name": "us-east-2", "aws_access_key_id": "access_key", "aws_secret_access_key": "secret_key"},
+            "dss": { "url": "202.0.0.104:9000", "access_key": "minio", "secret_key": "minio123"},
+            "bucket": "bucket",
+            "client_lib": "dss_client"
+    }
+  }
+}
