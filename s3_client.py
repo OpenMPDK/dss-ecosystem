@@ -209,10 +209,7 @@ class S3:
 if __name__ =="__main__":
 
     config = { "name": "dss",
-            "aws": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
-            "dss": { "endpoint": "http://msl-ssg-vm21-tcp-0:9000", "access_key": "minio", "secret_key": "minio123"},
-            "bucket": "bucket",
-            "client_lib": "dss_client"
+            "credentials": { "endpoint": "http://msl-ssg-vm21-tcp-0:9000", "access_key": "minio", "secret_key": "minio123"}
     }
     start_time = datetime.now()
     s3=  S3(config)

@@ -1,7 +1,7 @@
 {
 "framework": {"name": "TensorFlow",
               "batch_size": 32,
-              "epochs": 2
+              "epochs": 1
               },
 "execution":{
   "sequential": true,
@@ -15,8 +15,8 @@
             },
   "storage": {
     "type" : "local",
-    "format": "fs",
-    "name": "aws",
+    "format": "s3",
+    "name": "dss",
     "cloud": {
       "aws": {
         "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
@@ -30,6 +30,7 @@
     "local": {
       "dss": {
         "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
+        "prefix": "flower_photos/",
         "bucket": "bucket",
         "client_lib": "dss_client"
         },
