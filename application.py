@@ -33,7 +33,7 @@ class Benchmarking(object):
         # Create a FrameWork
         if self.framework_name == "TensorFlow":
             self.dnn_framework =  TensorFlow(self.config)
-        elif self.framework_name == "TensorFlow":
+        elif self.framework_name == "PyTorch":
             self.dnn_framework = PyTorch(self.config)
         else:
             pass

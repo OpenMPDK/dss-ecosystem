@@ -25,10 +25,11 @@ class DNNFramework(object):
         self.framework_batch_size = self.framework["batch_size"]
 
         self.model = None
+        self.image_dimension = config["dataset"]["image_dimension"]
 
     def create_dataset(self):
         if self.dataset is None:
-            ds = DataSet(self.config.get("dataset",{}))
+            ds = DataSet(self.config)
             ds.create()
             ds.shuffle()  # Shuffle the dataset to have better accuracy
             self.dataset =  ds.dataset
@@ -43,8 +44,9 @@ class DNNFramework(object):
         for feature, label in self.dataset:
             self.features.append(feature)
             self.labels.append(label)
+        print("INFO:Features Size:{}, Labels:{}".format(len(self.features), len(self.labels)))
         # Convert np-array
-        self.features = np.array(self.features).reshape(-1, 180, 180, 1)
+        self.features = np.array(self.features).reshape(-1, self.image_dimension[0], self.image_dimension[1], 1)
         self.labels = np.array(self.labels)
 
 
