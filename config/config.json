@@ -1,5 +1,11 @@
 {
-"framework": {"name": "TensorFlow",
+"framework": {"name": "PyTorch",
+              "TensorFlow": {
+
+              },
+              "PyTorch": {
+
+              },
               "batch_size": 32,
               "epochs": 1
               },
@@ -9,34 +15,32 @@
 },
 "computation": "CPU",
 "dataset" : {"type":  "image",
-             "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/",
              "label": ["roses", "sunflowers", "tulips", "daisy", "dandelion"],
              "image_dimension": [180,180]
             },
   "storage": {
-    "type" : "local",
     "format": "s3",
     "name": "dss",
-    "cloud": {
-      "aws": {
+    "aws": {
         "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
         "s3": {
-          "bucket": "bucket_name"
+          "bucket": "bucket_name",
+          "prefix": "provide prefix"
         },
         "fs": {"data_dir": "File system path"}
-      },
-      "gcp": {}
     },
-    "local": {
-      "dss": {
+    "gcp": {},
+    "dss": {
         "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
         "prefix": "flower_photos/",
         "bucket": "bucket",
         "client_lib": "dss_client"
-        },
-      "fs": {
+    },
+    "nfs": {
         "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
-      }
+    },
+    "ramfs": {
+        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
     }
   }
 }

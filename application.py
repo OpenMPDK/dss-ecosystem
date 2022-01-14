@@ -41,6 +41,7 @@ class Benchmarking(object):
         print(f"INFO: Starting DNN benchmark with {self.framework_name} framework")
         self.dnn_framework.initialize()
         self.dnn_framework.training()
+        self.dnn_framework.inference()
 
     def stop(self):
         pass
