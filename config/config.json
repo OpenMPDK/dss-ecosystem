@@ -13,7 +13,7 @@
   "sequential": true,
   "parallel": {"workers": 5}
 },
-"computation": "CPU",
+"device": "CPU",
 "dataset" : {"type":  "image",
              "label": ["roses", "sunflowers", "tulips", "daisy", "dandelion"],
              "image_dimension": [180,180]
