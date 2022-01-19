@@ -13,6 +13,7 @@ from torch.utils.data import Dataset
 
 
 
+
 class DataSet(object):
     def __init__(self, config):
         self.config = config
@@ -185,7 +186,7 @@ class TorchImageClassificationDataset(Dataset):
     return size of the dataset and indexing
     """
 
-    def __init__(self, transform=True, config={}):
+    def __init__(self, transform=None, config={}):
 
         self.transform = transform
         self.config = config
@@ -207,6 +208,9 @@ class TorchImageClassificationDataset(Dataset):
         # Collect all the image names and corresponding label
         self.images = []
         self.get_image_names()  # [(image1,0),(image200,1)]
+
+        # Transform
+
 
 
 
@@ -230,9 +234,10 @@ class TorchImageClassificationDataset(Dataset):
         image_label =  image_name_label[1]
         image_ndarray = self.data_source(image_name_label) #  Already converted using cv2.imread
         image_ndarray = cv2.resize(image_ndarray, self.image_dimension)
-        #if self.transform:
-        #    image_ndarray = self.tansformation(image_ndarray)
-
+        #if self.transform is not None:
+        #    image_ndarray = self.tansform(image_ndarray)
+        #print(image_ndarray,image_label)
+        #image_ndarray = np.expand_dims(image_ndarray, 1)
         return image_ndarray, image_label
 
 
@@ -265,7 +270,6 @@ class TorchImageClassificationDataset(Dataset):
         category   = self.label[image[1]] # Find out category
         image_path = self.data_dir + "/" + category + "/" + image_name
         img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
-
         return img_ndarray
 
     def read_s3_object(self,image):
@@ -276,7 +280,7 @@ class TorchImageClassificationDataset(Dataset):
         """
         object_key = image[0]
         image_buffer = self.s3_client.getObject(Bucket=self.bucket, Key=object_key)
-        image_numpy_array = np.asarray(bytearray(image_buffer), dtype="uint8")
+        image_numpy_array = np.asarray(bytearray(image_buffer))
         # Converts to image format
         image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
         return image_2darray
@@ -310,7 +314,7 @@ class TorchImageClassificationDataset(Dataset):
             else:
                 print("INFO: Wrong format ")
         elif self.storage_name in ["nfs", "ramfs"]:
-            self.data_dir = storage_config[self.storage_format]["data_dir"]
+            self.data_dir = storage_config[self.storage_name]["data_dir"]
             self.data_source = self.read_file_system_data
         else:
             print("ERROR: Wrong storage name! {}".format(self.storage_name))

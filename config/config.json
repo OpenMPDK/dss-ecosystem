@@ -4,27 +4,43 @@
 
               },
               "PyTorch": {
+                "DataLoader": {
+                  "shuffle": true,
+                  "num_workers": 2,
+                  "persistent_workers": false,
+                  "prefetch_factor": 2,
+                  "pin_memory": false,
+                  "drop_last": false
+                }
 
               },
               "batch_size": 32,
               "epochs": 1
               },
+
 "execution":{
   "sequential": true,
-  "parallel": {"workers": 5}
+  "parallel": {"workers": 5},
+  "steps":{
+    "dataset": {},
+    "model": true,
+    "training": true,
+    "inference": false
+  }
 },
 "device": "CPU",
 "dataset" : {"type":  "image",
              "label": ["roses", "sunflowers", "tulips", "daisy", "dandelion"],
-             "image_dimension": [180,180]
+             "image_dimension": [224,224]
             },
   "storage": {
-    "format": "s3",
-    "name": "dss",
+    "format": "fs",
+    "name": "nfs",
     "aws": {
         "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
         "s3": {
           "bucket": "bucket_name",
+          "dev_null": false,
           "prefix": "provide prefix"
         },
         "fs": {"data_dir": "File system path"}
@@ -34,6 +50,7 @@
         "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
         "prefix": "flower_photos/",
         "bucket": "bucket",
+        "dev_null": false,
         "client_lib": "dss_client"
     },
     "nfs": {

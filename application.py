@@ -21,6 +21,7 @@ class Benchmarking(object):
         self.config = config
         self.computation = config.get("computation","CPU")
         self.framework = config.get("framework", {})
+        self.execution_config = config["execution"]
         self.framework_name = self.framework.get("name", None)
         # dnn framework instance
         self.dnn_framework = None
@@ -28,6 +29,10 @@ class Benchmarking(object):
     def start(self):
         """
         Start the DNN process with dataset creation, training and sample inference.
+        The above three steps can be controlled with switches.
+        "Initialization": Create dataset always. (default)
+        "Training": Optional. In future, we can load saved trained model
+        "Inference": Optional
         :return:
         """
         # Create a FrameWork
@@ -40,8 +45,13 @@ class Benchmarking(object):
 
         print(f"INFO: Starting DNN benchmark with {self.framework_name} framework")
         self.dnn_framework.initialize()
-        self.dnn_framework.training()
-        self.dnn_framework.inference()
+        if self.execution_config["steps"]["model"]:
+            self.dnn_framework.create_model()
+        if self.execution_config["steps"]["training"]:
+            self.dnn_framework.training()
+
+        if self.execution_config["steps"]["inference"]:
+            self.dnn_framework.inference()
 
     def stop(self):
         pass

@@ -5,6 +5,7 @@ from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D,
 
 # PyTorch library
 from torch.utils.data import DataLoader
+import torchvision.transforms as transforms
 import torch.optim as optimization
 from dataset import DataSet, TorchImageClassificationDataset
 from datetime import datetime
@@ -15,18 +16,17 @@ from models import NeuralNetwork, Net
 class DNNFramework(object):
     def __init__(self, config):
         self.config = config
-        self.name = config["framework"]["name"]
         self.features = []
         self.labels = []
         self.dataset = None
 
         self.framework = config.get("framework", {})
-        self.framework_name = self.framework.get("name", None)
+        self.name = self.framework.get("name", None)
         self.categories = config["dataset"].get("label", [])
 
         # DNN Parameters
-        self.framework_epochs = self.framework["epochs"]
-        self.framework_batch_size = self.framework["batch_size"]
+        self.epochs = self.framework["epochs"]
+        self.batch_size = self.framework["batch_size"]
 
         self.model = None
         self.image_dimension = config["dataset"]["image_dimension"]
@@ -82,7 +82,7 @@ class TensorFlow(DNNFramework):
         self.create_dataset()
         self.divide_feature_label()
 
-        self.create_model()
+        #self.create_model()
 
     def create_model(self):
         """
@@ -116,7 +116,7 @@ class TensorFlow(DNNFramework):
         :return:
         """
         # Train/fit model
-        self.model.fit(self.features, self.labels, batch_size=self.framework_batch_size, epochs=self.framework_epochs)
+        self.model.fit(self.features, self.labels, batch_size=self.batch_size, epochs=self.epochs)
         # Model
     def distributed_training(self):
         """
@@ -143,6 +143,7 @@ class PyTorch(DNNFramework):
 
     def __init__(self,config):
         DNNFramework.__init__(self,config)
+        self.data_loader_params = self.framework["PyTorch"]["DataLoader"]
 
 
     def initialize(self):
@@ -157,35 +158,55 @@ class PyTorch(DNNFramework):
         self.create_data_loader()
         #self.divide_feature_label()
 
-        self.create_model()
+        #self.create_model()
 
 
     def create_dataset(self):
-        self.dataset = TorchImageClassificationDataset(transform=True,
+        transform = transforms.Compose(
+                    [transforms.ToTensor(),
+                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        self.dataset = TorchImageClassificationDataset(transform=transform,
                                                         config=self.config)
-        #print(self.dataset[0])
 
     def create_data_loader(self):
         self.train_dataloader = DataLoader(self.dataset,
-                                           batch_size=self.framework_batch_size,
-                                           shuffle = True
+                                           batch_size=self.batch_size,
+                                           shuffle = self.data_loader_params["shuffle"],
+                                           prefetch_factor=self.data_loader_params["prefetch_factor"],
+                                           persistent_workers=self.data_loader_params["persistent_workers"],
+                                           pin_memory=self.data_loader_params["pin_memory"],
+                                           drop_last=self.data_loader_params["drop_last"]
         )
 
         dataiter = iter(self.train_dataloader)
         train_image , train_label = dataiter.next()
         print("Train Data:{},{}".format(train_image.size(),train_label.size()))
     def create_model(self):
-        print("Device:{}".format(self.device))
-        #self.model = NeuralNetwork().to(self.device)
-        self.model = Net()
+        """
+        Create NeuralNetwork model
+        :return:
+        """
+        print("INFO: Creating AI model! - device:{}".format(self.device))
+        self.model = NeuralNetwork(self.image_dimension).to(self.device)
+        #self.model = Net().to(self.device)
         print(self.model)
     def training(self):
+        """
+        Train a model
+        :return:
+        """
+        start_time = datetime.now()
+        print(f"INFO: Training started!{start_time}")
         criterion = self.model.loss_function()
         optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
-        for epoch in range(self.framework_epochs):
+        for epoch in range(self.epochs):
             running_loss = 0.0
-            for i, data in enumerate(self.train_dataloader, 0):
+            # Following line returns image, label tensor.
+            j = 0
+            for batch_index, data in enumerate(self.train_dataloader, 0):
                 images, labels = data
+                images = images.float() # Convert to float.
+                #print(images[0])
                 # Zero the parameter gradient
                 optimizer.zero_grad()
 
@@ -195,13 +216,14 @@ class PyTorch(DNNFramework):
                 loss.backward()
                 optimizer.step()
 
-                # Print train stats
+                # Add loss for 10 batches.
                 running_loss += loss.item()
-                if i % 2000 ==  1999:
-                    print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
+                if batch_index % 10 ==  0:
+                    #print("Batch Index:{}, ImageTensor:{}, LabelTensor:{}".format(batch_index, len(images), len(labels)))
+                    print(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / 10:.3f}')
                     running_loss = 0.0
 
-        print("INFO: Training is done")
+        print("INFO: Training is done : {} seconds".format( (datetime.now() - start_time ).seconds))
 
 
 
