@@ -15,6 +15,7 @@
 
               },
               "batch_size": 32,
+              "max_batch_size": 10,
               "epochs": 1
               },
 
@@ -25,11 +26,18 @@
     "dataset": {},
     "model": true,
     "training": true,
-    "inference": false
+    "inference": false,
+    "metrics": false
   }
 },
 "device": "CPU",
-"dataset" : {"type":  "image",
+"model":{
+  "name": "CNN",
+  "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
+},
+"dataset" : {
+             "name": "TorchImageClassificationDataset",
+             "type":  "image",
              "label": ["roses", "sunflowers", "tulips", "daisy", "dandelion"],
              "image_dimension": [224,224]
             },
@@ -54,10 +62,18 @@
         "client_lib": "dss_client"
     },
     "nfs": {
-        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
+        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/",
+        "read_function": "cv2_imread"
     },
     "ramfs": {
         "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
     }
+  },
+  "metrics": {
+    "format": "csv",
+    "field_name": [],
+    "place": [],
+    "graph": false,
+    "path": "<path to store data>"
   }
 }

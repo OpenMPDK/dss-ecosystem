@@ -11,7 +11,8 @@ from dataset import DataSet, TorchImageClassificationDataset
 from datetime import datetime
 import numpy as np
 
-from models import NeuralNetwork, Net
+#from models import NeuralNetwork, Net
+from models import pytorch
 
 class DNNFramework(object):
     def __init__(self, config):
@@ -187,7 +188,8 @@ class PyTorch(DNNFramework):
         :return:
         """
         print("INFO: Creating AI model! - device:{}".format(self.device))
-        self.model = NeuralNetwork(self.image_dimension).to(self.device)
+        #self.model = NeuralNetwork(self.image_dimension).to(self.device)
+        self.model = pytorch.CNN(self.image_dimension).to(self.device)
         #self.model = Net().to(self.device)
         print(self.model)
     def training(self):

@@ -268,8 +268,10 @@ class TorchImageClassificationDataset(Dataset):
     def read_file_system_data(self, image):
         image_name = image[0]  # (image1,0) => (<image_name>,<Category Index>)
         category   = self.label[image[1]] # Find out category
+        #  Start time
         image_path = self.data_dir + "/" + category + "/" + image_name
         img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
+        # end time
         return img_ndarray
 
     def read_s3_object(self,image):
