@@ -44,6 +44,10 @@
   "storage": {
     "format": "fs",
     "name": "nfs",
+    "read_function": {"cv2_imread": true,
+                      "python_read": false
+                     },
+
     "aws": {
         "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
         "s3": {
@@ -62,8 +66,7 @@
         "client_lib": "dss_client"
     },
     "nfs": {
-        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/",
-        "read_function": "cv2_imread"
+        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
     },
     "ramfs": {
         "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"

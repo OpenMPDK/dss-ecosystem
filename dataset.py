@@ -193,6 +193,7 @@ class TorchImageClassificationDataset(Dataset):
 
         # Read config
         self.config_dataset = config["dataset"]
+        self.config_read_function = self.config["storage"]["read_function"]
         self.label = self.config_dataset["label"]
         self.image_dimension = self.config_dataset["image_dimension"]  # height, width of image
         self.data_source = None  # Function to read data from
@@ -266,11 +267,23 @@ class TorchImageClassificationDataset(Dataset):
                         self.images.append((object_key,category_index))
 
     def read_file_system_data(self, image):
+        """
+        Read data from file system.
+        :param image:
+        :return:
+        """
         image_name = image[0]  # (image1,0) => (<image_name>,<Category Index>)
-        category   = self.label[image[1]] # Find out category
+        category = self.label[image[1]]  # Find out category
         #  Start time
         image_path = self.data_dir + "/" + category + "/" + image_name
-        img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
+        if self.config_read_function["cv2_imread"]:
+            img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
+        elif self.config_read_function["python_read"]:
+            with open(image_path, "rb") as fh:
+                image_buffer = fh.read()
+            image_numpy_array = np.asarray(bytearray(image_buffer))
+            # Converts to image format
+            img_ndarray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
         # end time
         return img_ndarray
 

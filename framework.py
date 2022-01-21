@@ -28,6 +28,7 @@ class DNNFramework(object):
         # DNN Parameters
         self.epochs = self.framework["epochs"]
         self.batch_size = self.framework["batch_size"]
+        self.max_batch_size = self.framework["max_batch_size"]
 
         self.model = None
         self.image_dimension = config["dataset"]["image_dimension"]
@@ -220,9 +221,9 @@ class PyTorch(DNNFramework):
 
                 # Add loss for 10 batches.
                 running_loss += loss.item()
-                if batch_index % 10 ==  0:
+                if batch_index % self.max_batch_size ==  0:
                     #print("Batch Index:{}, ImageTensor:{}, LabelTensor:{}".format(batch_index, len(images), len(labels)))
-                    print(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / 10:.3f}')
+                    print(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
                     running_loss = 0.0
 
         print("INFO: Training is done : {} seconds".format( (datetime.now() - start_time ).seconds))
