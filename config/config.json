@@ -11,8 +11,8 @@
                   "prefetch_factor": 2,
                   "pin_memory": false,
                   "drop_last": false
-                }
-
+                },
+                "distributed_data_parallel": false
               },
               "batch_size": 32,
               "max_batch_size": 10,
@@ -32,27 +32,23 @@
 },
 "device": "CPU",
 "model":{
-  "name": "CNN",
+  "name": "RNN",
   "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
 },
 "dataset" : {
              "name": "TorchImageClassificationDataset",
+             "access": {"random": true, "sequential":  false},
              "type":  "image",
              "label": ["roses", "sunflowers", "tulips", "daisy", "dandelion"],
              "image_dimension": [224,224]
             },
   "storage": {
-    "format": "fs",
-    "name": "nfs",
-    "read_function": {"cv2_imread": true,
-                      "python_read": false
-                     },
-
+    "format": "s3",
+    "name": "dss",
     "aws": {
         "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
         "s3": {
           "bucket": "bucket_name",
-          "dev_null": false,
           "prefix": "provide prefix"
         },
         "fs": {"data_dir": "File system path"}
@@ -62,7 +58,6 @@
         "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
         "prefix": "flower_photos/",
         "bucket": "bucket",
-        "dev_null": false,
         "client_lib": "dss_client"
     },
     "nfs": {

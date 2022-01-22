@@ -3,18 +3,12 @@
 import numpy as np
 import os,sys
 from utils.config import Config, ArgumentParser
-import tensorflow as tf
+
 import pathlib
 
-from dataset import DataSet
 from datetime import datetime
 from framework import TensorFlow, PyTorch
 
-#import tensorflow_datasets as tfds
-
-
-
-#tf.enable_eager_execution() # Operation are executed as they are.
 
 class Benchmarking(object):
     def __init__(self, config={}):
@@ -63,7 +57,7 @@ class Benchmarking(object):
 if __name__ == "__main__":
 
 
-    print("INFO: Running TensorFlow v{}".format(tf.__version__))
+
     #train_image()
     #sys.exit()
     # Process arguments

@@ -1,5 +1,4 @@
 
-import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
 
@@ -7,7 +6,8 @@ from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D,
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import torch.optim as optimization
-from dataset import DataSet, TorchImageClassificationDataset
+#from dataset import DataSet, TorchImageClassificationDataset
+from dataset import pytorch_dataset
 from datetime import datetime
 import numpy as np
 
@@ -74,7 +74,9 @@ class DNNFramework(object):
 class TensorFlow(DNNFramework):
 
     def __init__(self,config):
+        import tensorflow as tf
         DNNFramework.__init__(self,config)
+        print("INFO: Running TensorFlow v{}".format(tf.__version__))
 
     def initialize(self):
         """
@@ -144,8 +146,11 @@ class TensorFlow(DNNFramework):
 class PyTorch(DNNFramework):
 
     def __init__(self,config):
+        import torch
         DNNFramework.__init__(self,config)
         self.data_loader_params = self.framework["PyTorch"]["DataLoader"]
+        self.distributed_data_parallel =  self.framework["PyTorch"]["distributed_data_parallel"]
+        print("INFO: Using PyTorch v{}".format(torch.__version__))
 
 
     def initialize(self):
@@ -167,8 +172,8 @@ class PyTorch(DNNFramework):
         transform = transforms.Compose(
                     [transforms.ToTensor(),
                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-        self.dataset = TorchImageClassificationDataset(transform=transform,
-                                                        config=self.config)
+        custom_dataset = pytorch_dataset.CustomDataset(config=self.config)
+        self.dataset = custom_dataset.get_dataset()
 
     def create_data_loader(self):
         self.train_dataloader = DataLoader(self.dataset,
@@ -191,6 +196,7 @@ class PyTorch(DNNFramework):
         print("INFO: Creating AI model! - device:{}".format(self.device))
         #self.model = NeuralNetwork(self.image_dimension).to(self.device)
         self.model = pytorch.CNN(self.image_dimension).to(self.device)
+
         #self.model = Net().to(self.device)
         print(self.model)
     def training(self):
@@ -198,37 +204,10 @@ class PyTorch(DNNFramework):
         Train a model
         :return:
         """
-        start_time = datetime.now()
-        print(f"INFO: Training started!{start_time}")
-        criterion = self.model.loss_function()
-        optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
-        for epoch in range(self.epochs):
-            running_loss = 0.0
-            # Following line returns image, label tensor.
-            j = 0
-            for batch_index, data in enumerate(self.train_dataloader, 0):
-                images, labels = data
-                images = images.float() # Convert to float.
-                #print(images[0])
-                # Zero the parameter gradient
-                optimizer.zero_grad()
-
-                # forward + backward + optimize
-                outputs = self.model(images)
-                loss = criterion(outputs,labels)  # loss calculation based on CrossEntropy
-                loss.backward()
-                optimizer.step()
-
-                # Add loss for 10 batches.
-                running_loss += loss.item()
-                if batch_index % self.max_batch_size ==  0:
-                    #print("Batch Index:{}, ImageTensor:{}, LabelTensor:{}".format(batch_index, len(images), len(labels)))
-                    print(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
-                    running_loss = 0.0
-
-        print("INFO: Training is done : {} seconds".format( (datetime.now() - start_time ).seconds))
-
-
+        if self.distributed_data_parallel:
+            self.training_distributed_data_parallel()
+        else:
+            self.training_map_style()
 
     def training_distributed_data_parallel(self):
         """
@@ -242,7 +221,35 @@ class PyTorch(DNNFramework):
         Works both on CPU/GPU
         :return:
         """
-        pass
+        start_time = datetime.now()
+        print(f"INFO: Training started!{start_time}")
+        criterion = self.model.loss_function()
+        optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
+        for epoch in range(self.epochs):
+            running_loss = 0.0
+            # Following line returns image, label tensor.
+            j = 0
+            for batch_index, data in enumerate(self.train_dataloader, 0):
+                images, labels = data
+                images = images.float()  # Convert to float.
+                # print(images[0])
+                # Zero the parameter gradient
+                optimizer.zero_grad()
+
+                # forward + backward + optimize
+                outputs = self.model(images)
+                loss = criterion(outputs, labels)  # loss calculation based on CrossEntropy
+                loss.backward()
+                optimizer.step()
+
+                # Add loss for 10 batches.
+                running_loss += loss.item()
+                if batch_index % self.max_batch_size == 0:
+                    # print("Batch Index:{}, ImageTensor:{}, LabelTensor:{}".format(batch_index, len(images), len(labels)))
+                    print(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
+                    running_loss = 0.0
+
+        print("INFO: Training is done : {} seconds".format((datetime.now() - start_time).seconds))
 
     def inference(self):
         """
