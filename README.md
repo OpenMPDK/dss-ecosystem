@@ -184,7 +184,12 @@ class RandomAccessDatasetTrain(DNNTrain):
         print("INFO: Training is done : {} seconds".format((datetime.now() - start_time).seconds))
 
 ```
-
+Update custom training class name as below.
+```
+"training":{
+  "name": "RandomAccessDatasetTrain"  
+},
+```
 
 ## Execution
 Once all the configuration is done, run the tool as below.
