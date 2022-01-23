@@ -4,8 +4,8 @@ from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D,
 
 # PyTorch library
 from torch.utils.data import DataLoader
-import torchvision.transforms as transforms
-import torch.optim as optimization
+
+
 #from dataset import DataSet, TorchImageClassificationDataset
 from dataset import pytorch_dataset
 from datetime import datetime
@@ -13,6 +13,7 @@ import numpy as np
 
 #from models import NeuralNetwork, Net
 from models import pytorch
+from training import CustomTrain
 
 class DNNFramework(object):
     def __init__(self, config):
@@ -31,6 +32,7 @@ class DNNFramework(object):
         self.max_batch_size = self.framework["max_batch_size"]
 
         self.model = None
+        self.model_name = self.config["model"]["name"]
         self.image_dimension = config["dataset"]["image_dimension"]
 
         # Computation
@@ -159,19 +161,14 @@ class PyTorch(DNNFramework):
         :return: None
         """
         # Load few required libraries
-        #import torch.optim as optimization
-
         self.create_dataset()
         self.create_data_loader()
-        #self.divide_feature_label()
-
-        #self.create_model()
-
 
     def create_dataset(self):
-        transform = transforms.Compose(
-                    [transforms.ToTensor(),
-                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        """
+        Create custom dataset.
+        :return:
+        """
         custom_dataset = pytorch_dataset.CustomDataset(config=self.config)
         self.dataset = custom_dataset.get_dataset()
 
@@ -194,62 +191,25 @@ class PyTorch(DNNFramework):
         :return:
         """
         print("INFO: Creating AI model! - device:{}".format(self.device))
-        #self.model = NeuralNetwork(self.image_dimension).to(self.device)
-        self.model = pytorch.CNN(self.image_dimension).to(self.device)
+        torch_model = pytorch.Model(name=self.model_name,
+                                    image_dimension=self.image_dimension,
+                                    device=self.device)
+        self.model = torch_model.get()
 
-        #self.model = Net().to(self.device)
+        #self.model = pytorch.Model(self.image_dimension).to(self.device)
+
         print(self.model)
+
     def training(self):
         """
         Train a model
         :return:
         """
-        if self.distributed_data_parallel:
-            self.training_distributed_data_parallel()
-        else:
-            self.training_map_style()
-
-    def training_distributed_data_parallel(self):
-        """
-        Works only on GPU
-        :return:
-        """
-        pass
-
-    def training_map_style(self):
-        """
-        Works both on CPU/GPU
-        :return:
-        """
-        start_time = datetime.now()
-        print(f"INFO: Training started!{start_time}")
-        criterion = self.model.loss_function()
-        optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
-        for epoch in range(self.epochs):
-            running_loss = 0.0
-            # Following line returns image, label tensor.
-            j = 0
-            for batch_index, data in enumerate(self.train_dataloader, 0):
-                images, labels = data
-                images = images.float()  # Convert to float.
-                # print(images[0])
-                # Zero the parameter gradient
-                optimizer.zero_grad()
-
-                # forward + backward + optimize
-                outputs = self.model(images)
-                loss = criterion(outputs, labels)  # loss calculation based on CrossEntropy
-                loss.backward()
-                optimizer.step()
-
-                # Add loss for 10 batches.
-                running_loss += loss.item()
-                if batch_index % self.max_batch_size == 0:
-                    # print("Batch Index:{}, ImageTensor:{}, LabelTensor:{}".format(batch_index, len(images), len(labels)))
-                    print(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
-                    running_loss = 0.0
-
-        print("INFO: Training is done : {} seconds".format((datetime.now() - start_time).seconds))
+        train = CustomTrain(config=self.config,
+                            dataloader=self.train_dataloader,
+                            model=self.model,
+                            device=self.device)
+        train.start()
 
     def inference(self):
         """

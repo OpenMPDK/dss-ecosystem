@@ -14,7 +14,7 @@
                 },
                 "distributed_data_parallel": false
               },
-              "batch_size": 32,
+              "batch_size": 64,
               "max_batch_size": 10,
               "epochs": 1
               },
@@ -32,15 +32,18 @@
 },
 "device": "CPU",
 "model":{
-  "name": "RNN",
+  "name": "ConvNet",
   "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
+},
+"training":{
+  "name": "RandomAccessDatasetTrain"
 },
 "dataset" : {
              "name": "TorchImageClassificationDataset",
              "access": {"random": true, "sequential":  false},
              "type":  "image",
              "label": ["roses", "sunflowers", "tulips", "daisy", "dandelion"],
-             "image_dimension": [224,224]
+             "image_dimension": [32,32]
             },
   "storage": {
     "format": "s3",
