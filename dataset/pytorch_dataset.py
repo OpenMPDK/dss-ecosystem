@@ -9,6 +9,7 @@ from s3_client import S3
 
 import torch
 from torch.utils.data import Dataset
+from utils.utility import validate_s3_prefix
 
 
 
@@ -60,7 +61,7 @@ class RandomAccessDataset(Dataset):
         image_name_label = self.images[index]
         image_label = image_name_label[1]
         image_ndarray = self.data_source(image_name_label)  # Already converted using cv2.imread
-        image_ndarray = cv2.resize(image_ndarray, self.image_dimension)
+
         if self.transform is not None:
             image_ndarray = self.tansform(image_ndarray)
 
@@ -73,20 +74,29 @@ class RandomAccessDataset(Dataset):
         Create a image data
         :return: None
         """
-        for category in self.label:
-            category_index = self.label.index(category)
-            category_path = self.data_dir + "/" + category  # <base_image_dir>/<category>
-            print("INFO: Creating dataset for {}{}/".format(self.data_dir, category))
-            if self.storage_format == "fs":
-                for root_path, dirs, files in os.walk(category_path, topdown=True):
-                    for file in files:
-                        self.images.append((file, category_index))
-            else:
-                prefix = "{}{}/".format(self.data_dir, category)
-                for object_keys in self.s3_client.listObjects(bucket=self.bucket, prefix=prefix):
-                    for object_key in object_keys:
-                        # print("Object Key:{}".format(object_key))
-                        self.images.append((object_key, category_index))
+
+        # Iterate over all the NFS paths/ all the prefixes.
+        for data_dir in self.data_dir:
+            print("INFO: Reading datadir/prefix - {}".format(data_dir))
+            if self.storage_format == "s3" and not validate_s3_prefix(data_dir):
+                continue
+            for category in self.label:
+                category_index = self.label.index(category)
+
+                if self.storage_format == "fs":
+                    category_path = data_dir + "/" + category  # <base_image_dir>/<category>
+                    print("INFO: Creating dataset for directory: {}/".format(category_path))
+                    for root_path, dirs, files in os.walk(category_path, topdown=True):
+                        for file in files:
+                            file_path = root_path + "/" + file
+                            self.images.append((file_path, category_index))
+                else:
+                    prefix = "{}{}/".format(data_dir, category)
+                    print("INFO: Creating dataset for the prefix: {}".format(prefix))
+                    for object_keys in self.s3_client.listObjects(bucket=self.bucket, prefix=prefix):
+                        for object_key in object_keys:
+                            # print("Object Key:{}".format(object_key))
+                            self.images.append((object_key, category_index))
 
     def read_file_system_data(self, image):
         """
@@ -94,10 +104,11 @@ class RandomAccessDataset(Dataset):
         :param image:
         :return:
         """
-        image_name = image[0]  # (image1,0) => (<image_name>,<Category Index>)
+        image_path = image[0]  # (image1,0) => (<image_name>,<Category Index>)
         category = self.label[image[1]]  # Find out category
-        image_path = self.data_dir + "/" + category + "/" + image_name
+        #image_path = self.data_dir + "/" + category + "/" + image_name
         img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
+        img_ndarray = cv2.resize(img_ndarray, self.image_dimension)
         return img_ndarray
 
     def read_s3_object(self, image):
@@ -111,6 +122,7 @@ class RandomAccessDataset(Dataset):
         image_numpy_array = np.asarray(bytearray(image_buffer))
         # Converts to image format
         image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
+        image_2darray = cv2.resize(image_2darray, self.image_dimension)
         return image_2darray
 
 
@@ -128,8 +140,8 @@ class RandomAccessDataset(Dataset):
             if self.storage_format == "s3":
                 self.credentials = storage_config[self.storage_name]["credentials"]
                 self.data_dir = storage_config[self.storage_name]["prefix"]
-                if not self.data_dir.endswith("/"):
-                    self.data_dir += "/"
+                #if not self.data_dir.endswith("/"):
+                #    self.data_dir += "/"
                 self.bucket = storage_config[self.storage_name]["bucket"]
                 self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
                 self.data_source = self.read_s3_object

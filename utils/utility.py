@@ -199,7 +199,7 @@ def get_s3_prefix(logger, nfs_cluster, prefix=None):
         for nfs_server_ip in nfs_cluster:
             yield nfs_server_ip + "/"
 
-def validate_s3_prefix(logger, prefix):
+def validate_s3_prefix(prefix):
     """
     Validate a given prefix. A S3 prefix should start without "/" and end with "/".
     <prefix string>/
@@ -208,7 +208,7 @@ def validate_s3_prefix(logger, prefix):
     :return: Success/Failure
     """
     if prefix.startswith("/") or not prefix.endswith("/"):
-        logger.error("WRONG specification of prefix. Should be in the format of <nfs_server_ip>/<prefix>/ ")
+        print("ERROR: WRONG specification of prefix. Should be in the format of <prefix>/ => {}".format(prefix))
         return False
     return True
 

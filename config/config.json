@@ -52,22 +52,22 @@
         "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
         "s3": {
           "bucket": "bucket_name",
-          "prefix": "provide prefix"
+          "prefix": ["provide prefix"]
         },
         "fs": {"data_dir": "File system path"}
     },
     "gcp": {},
     "dss": {
         "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
-        "prefix": "flower_photos/",
+        "prefix": ["flower_photos/"],
         "bucket": "bucket",
         "client_lib": "dss_client"
     },
     "nfs": {
-        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
+        "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos"]
     },
     "ramfs": {
-        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
+        "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos/"]
     }
   },
   "metrics": {
