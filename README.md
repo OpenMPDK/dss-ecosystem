@@ -1,6 +1,12 @@
 # dss_dnn_benchmark
 A custom benchmark tool to evaluate read access of DSS Object storage through deep neural networks such as PyTorch , TensorFlow.
-The tool give flexibility to the use to add their custom dataset, training and neural network based model.
+The tool gives the flexibility to the user to add their custom dataset, training and neural network based model.These classes
+can be written into the respective files and can be configured through configuration file. This tool is specifically meant
+for classification problem where user suppose to specify data for couple of categories, train model and optional inference.
+
+Pending works
+- Metrics collection system development
+- Inference ( Test data set and sample inference for end to end flow )
 ## Setup and Installation
 Install the required libraries by running the following command in the node you are working on.
 ```
@@ -16,7 +22,42 @@ The custom usage requires user to update dataset, model and training. Update the
 - Add training class name 
 ## How to add custom dataset
 ### Data source 
-First add your data source to the tool.
+As mentioned above, the tool is suitable for classification problem which should have data in the following structures.
+The multiple data source is supported with same set of categories present into each data source. Let say we want to solve
+a classification problem of flowers. It requires to provide source data of multiple type of flowers. These are called categories.
+Each flower directories should have images. In the following example we have five categories of flower images.
+```
+## File System Structure , specify with data_dir as list
+# Source1
+/flower_photos1/daisy
+/flower_photos1/roses
+/flower_photos1/dandelion    
+/flower_photos1/sunflowers
+/flower_photos1/tulips
+# Source2
+/flower_photos2/daisy
+/flower_photos2/roses
+/flower_photos2/dandelion    
+/flower_photos2/sunflowers
+/flower_photos2/tulips
+
+## S3 structure for AWS , specify under same bucket
+# Source1
+bucket/flower_photos1/daisy
+bucket/flower_photos1/roses
+bucket/flower_photos1/dandelion    
+bucket/flower_photos1/sunflowers
+bucket/flower_photos1/tulips
+# Source2
+bucket/flower_photos2/daisy
+bucket/flower_photos2/roses
+bucket/flower_photos2/dandelion    
+bucket/flower_photos2/sunflowers
+bucket/flower_photos2/tulips
+
+## DSS Should hide bucket frrom user. So, bucket name is not relevant for that 
+```
+First add your data source to the tool. As me
 The tool support file system data as well as S3 data. Update configuration accordingly.
 ```
 "storage": {
@@ -33,15 +74,15 @@ The tool support file system data as well as S3 data. Update configuration accor
     "gcp": {},
     "dss": {
         "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
-        "prefix": "flower_photos/",
+        "prefix": ["flower_photos1/","flower_photos2/"]
         "bucket": "bucket",
         "client_lib": "dss_client"
     },
     "nfs": {
-        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
+        "data_dir": ["/flower_photos1","/flower_photos2"]
     },
     "ramfs": {
-        "data_dir": "/home/somnath.s/.keras/datasets/flower_photos/"
+        "data_dir": ["/flower_photos1","/flower_photos2"]
     }
   },
 

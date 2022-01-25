@@ -178,6 +178,7 @@ class PyTorch(DNNFramework):
                                            shuffle = self.data_loader_params["shuffle"],
                                            prefetch_factor=self.data_loader_params["prefetch_factor"],
                                            persistent_workers=self.data_loader_params["persistent_workers"],
+                                           num_workers=self.data_loader_params["num_workers"],
                                            pin_memory=self.data_loader_params["pin_memory"],
                                            drop_last=self.data_loader_params["drop_last"]
         )
