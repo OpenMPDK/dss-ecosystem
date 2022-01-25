@@ -86,6 +86,21 @@ class RandomAccessDatasetTrain(DNNTrain):
 
         print("INFO: Training is done : {} seconds".format((datetime.now() - start_time).seconds))
 
+class PythonReadTrain(DNNTrain):
+
+    def __init__(self,**kwargs):
+        self.config = kwargs["config"]
+        self.train_dataloader = kwargs["dataloader"]
+        super(PythonReadTrain, self).__init__(**kwargs)
+
+    def train(self):
+        start= time.time()
+        for epoch in range(self.epochs):
+            for batch_index, data in enumerate(self.train_dataloader):
+                if batch_index == self.max_batch_size - 1:
+                    total_time = time.time() - start
+                    print("1 epoch time: {}".format(total_time))
+                    break
 
 class SequentialDatasetTrain(DNNTrain):
     """

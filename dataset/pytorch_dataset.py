@@ -5,6 +5,7 @@ import random
 import numpy as np
 from datetime import datetime
 from s3_client import S3
+import glob
 #from utils.utility import exception
 
 import torch
@@ -86,10 +87,15 @@ class RandomAccessDataset(Dataset):
                 if self.storage_format == "fs":
                     category_path = data_dir + "/" + category  # <base_image_dir>/<category>
                     print("INFO: Creating dataset for directory: {}/".format(category_path))
-                    for root_path, dirs, files in os.walk(category_path, topdown=True):
-                        for file in files:
-                            file_path = root_path + "/" + file
-                            self.images.append((file_path, category_index))
+                    #for root_path, dirs, files in os.walk(category_path, topdown=True):
+                    #    for file in files:
+                    #        file_path = root_path + "/" + file
+                    #        self.images.append((file_path, category_index))
+                    path_list = glob.glob(category_path+'/*', recursive=False)
+                    #self.images += glob.glob(category_path+'/*', recursive=False)
+                    path_label_list = [(image_path, category_index) for image_path in path_list]
+                    
+                    self.images.extend(path_label_list)
                 else:
                     prefix = "{}{}/".format(data_dir, category)
                     print("INFO: Creating dataset for the prefix: {}".format(prefix))
@@ -97,6 +103,7 @@ class RandomAccessDataset(Dataset):
                         for object_key in object_keys:
                             # print("Object Key:{}".format(object_key))
                             self.images.append((object_key, category_index))
+            random.shuffle(self.images)
 
     def read_file_system_data(self, image):
         """
@@ -161,7 +168,25 @@ class RandomAccessDataset(Dataset):
 
         print("INFO: Data source:{}, format:{}".format(self.storage_name, self.storage_format))
 
+class PythonReadDataset(RandomAccessDataset):
+    
+    def __init__(self, config={}):
+        super(PythonReadDataset, self).__init__(
+                                                              transform=None,
+                                                              config=config)
+    
 
+    def read_file_system_data(self, image):
+        image_path = image[0]  # (image1,0) => (<image_name>,<Category Index>)
+        #category = self.label[image[1]]  # Find out category
+        #image_path = self.data_dir + "/" + category + "/" + image_name
+        #img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
+        #print(image)
+        with open(image_path, mode='rb') as file:
+            fileContent = file.read()
+            file.close()
+        
+        return torch.FloatTensor(3, 2)
 
 class TorchImageClassificationDataset(RandomAccessDataset):
     """
