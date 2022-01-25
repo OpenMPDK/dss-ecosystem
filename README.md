@@ -57,8 +57,8 @@ bucket/flower_photos2/tulips
 
 ## DSS Should hide bucket frrom user. So, bucket name is not relevant for that 
 ```
-First add your data source to the tool. As me
 The tool support file system data as well as S3 data. Update configuration accordingly.
+For AWS, we are suppose to add bucket name (flower).
 ```
 "storage": {
     "format": "s3",
@@ -66,8 +66,8 @@ The tool support file system data as well as S3 data. Update configuration accor
     "aws": {
         "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
         "s3": {
-          "bucket": "bucket_name",
-          "prefix": "provide prefix"
+          "bucket": "flower",
+          "prefix": ["flower_photos1/","flower_photos2/"]
         },
         "fs": {"data_dir": "File system path"}
     },
@@ -75,7 +75,7 @@ The tool support file system data as well as S3 data. Update configuration accor
     "dss": {
         "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
         "prefix": ["flower_photos1/","flower_photos2/"]
-        "bucket": "bucket",
+        "bucket": "bucket",  ## <<== can be ignored when used dss_client, for boto3 requires that.
         "client_lib": "dss_client"
     },
     "nfs": {
