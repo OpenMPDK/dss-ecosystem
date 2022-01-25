@@ -1,80 +1,81 @@
 {
-"framework": {"name": "PyTorch",
-              "TensorFlow": {
-
-              },
-              "PyTorch": {
-                "DataLoader": {
-                  "shuffle": true,
-                  "num_workers": 2,
-                  "persistent_workers": false,
-                  "prefetch_factor": 2,
-                  "pin_memory": false,
-                  "drop_last": false
+  "framework": {"name": "PyTorch",
+                "TensorFlow": {
+  
                 },
-                "distributed_data_parallel": false
-              },
-              "batch_size": 64,
-              "max_batch_size": 10,
-              "epochs": 1
-              },
-
-"execution":{
-  "sequential": true,
-  "parallel": {"workers": 5},
-  "steps":{
-    "dataset": {},
-    "model": true,
-    "training": true,
-    "inference": false,
-    "metrics": false
-  }
-},
-"device": "CPU",
-"model":{
-  "name": "ConvNet",
-  "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
-},
-"training":{
-  "name": "RandomAccessDatasetTrain"
-},
-"dataset" : {
-             "name": "TorchImageClassificationDataset",
-             "access": {"random": true, "sequential":  false},
-             "type":  "image",
-             "label": ["roses", "sunflowers", "tulips", "daisy", "dandelion"],
-             "image_dimension": [32,32]
-            },
-  "storage": {
-    "format": "s3",
-    "name": "dss",
-    "aws": {
-        "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
-        "s3": {
-          "bucket": "bucket_name",
-          "prefix": ["provide prefix"]
-        },
-        "fs": {"data_dir": "File system path"}
-    },
-    "gcp": {},
-    "dss": {
-        "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
-        "prefix": ["flower_photos/"],
-        "bucket": "bucket",
-        "client_lib": "dss_client"
-    },
-    "nfs": {
-        "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos"]
-    },
-    "ramfs": {
-        "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos/"]
+                "PyTorch": {
+                  "DataLoader": {
+                    "shuffle": true,
+                    "num_workers": 50,
+                    "persistent_workers": true,
+                    "prefetch_factor": 2,
+                    "pin_memory": false,
+                    "drop_last": false
+                  },
+                  "distributed_data_parallel": false
+                },
+                "batch_size": 100,
+                "max_batch_size": 10000,
+                "epochs": 1
+                },
+  
+  "execution":{
+    "sequential": true,
+    "parallel": {"workers": 5},
+    "steps":{
+      "dataset": {},
+      "model": true,
+      "training": true,
+      "inference": false,
+      "metrics": false
     }
   },
-  "metrics": {
-    "format": "csv",
-    "field_name": [],
-    "place": [],
-    "graph": false,
-    "path": "<path to store data>"
+  "device": "CPU",
+  "model":{
+    "name": "ConvNet",
+    "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
+  },
+  "training":{
+    "name": "PythonReadTrain"
+  },
+  "dataset" : {
+               "name": "PythonReadDataset",
+               "access": {"random": true, "sequential":  false},
+               "type":  "image",
+               "label": ["png_1t"],
+               "image_dimension": [32,32]
+              },
+    "storage": {
+      "format": "fs",
+      "name": "nfs",
+      "aws": {
+          "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
+          "s3": {
+            "bucket": "bucket_name",
+            "prefix": ["provide prefix"]
+          },
+          "fs": {"data_dir": "File system path"}
+      },
+      "gcp": {},
+      "dss": {
+          "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
+          "prefix": ["flower_photos/"],
+          "bucket": "bucket",
+          "client_lib": "dss_client"
+      },
+      "nfs": {
+          "data_dir": ["/da20202/bricks/brick1/pytorch_data/","/da21204/bricks/brick1/pytorch_data/","/da22206/bricks/brick1/pytorch_data/"]
+      },
+      "ramfs": {
+          "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos/"]
+      }
+    },
+    "metrics": {
+      "format": "csv",
+      "field_name": [],
+      "place": [],
+      "graph": false,
+      "path": "<path to store data>"
+    }
   }
-}
+  
