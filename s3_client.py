@@ -137,23 +137,26 @@ class S3:
       :param object_key:
       :return:
       """
-      bucket = kwargs.get("Bucket", None)
-      object_key = kwargs.get("Key", None)
+      bucket = kwargs.get("bucket", None)
+      object_key = kwargs.get("key", None)
       data = self.s3_client.get_object(Bucket=bucket, Key=object_key)
       contents = data['Body'].read()
       return contents
 
 
-  def getObjectToFile(self,bucket, object_key):
+  def getObjectToFile(self,**kwargs):
       """
       Download an object from S3 to a file.
-      :param object_key:
+      :param bucket: bucket name to read from
+      :param key: object key to download object from the bucket
+      :param dest_file_path: store the file in the mentioned path, by default "/dev/null"
       :return:
       """
+      bucket= kwargs["bucket"]
+      object_key=kwargs["key"]
+      dest_file_path=kwargs["dest_file_path"]
       # Create local directory structure
-      #local_file_path = "/" + object_key
-      filename = os.path.split(object_key)[-1]
-      local_file_path = "/var/log/dss/" + filename
+      local_file_path = dest_file_path + "/" + object_key
       directory = os.path.dirname(local_file_path)
       if not os.path.exists(directory):
           os.makedirs(directory)

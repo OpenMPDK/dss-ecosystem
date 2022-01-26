@@ -38,11 +38,14 @@ from minio.error import BucketAlreadyOwnedByYou
 
 
 class DssClientLib(object):
-    def __init__(self, s3_endpoint, access_key, secret_key, logger=None):
-        self.s3_endpoint = "http://" + s3_endpoint
-        self.logger = logger
+    def __init__(self, **kwargs):
+        self.credentials = kwargs["credentials"]
+        self.logger = kwargs["logger"]
+        self.s3_endpoint = self.credentials["endpoint"]
+        self.access_key = self.credentials["access_key"]
+        self.secret_key = self.credentials["secret_key"]
         self.status = False
-        self.dss_client = self.create_client(self.s3_endpoint, access_key, secret_key)
+        self.dss_client = self.create_client(self.s3_endpoint, self.access_key, self.secret_key)
 
     def create_client(self, endpoint, access_key, secret_key):
         """
@@ -65,7 +68,8 @@ class DssClientLib(object):
         except dss.DiscoverError as e:
             self.logger.excep("DiscoverError -  {}".format(e))
         except dss.NetworkError as e:
-            self.logger.excep("NetworkError - {} , {}".format(endpoint, e))
+            #self.logger.excep("NetworkError - {} , {}".format(endpoint, e))
+            print("NetworkError - {} , {}".format(endpoint, e))
         return dss_client
 
     def putObject(self, bucket=None,file=""):
@@ -164,14 +168,18 @@ class DssClientLib(object):
             ret = 1
         return ret
 
-    def getObject(self, bucket=None, object_key="", dest_file_path=""):
+    def getObject(self, **kwargs):
         """
         Download the objects from S3 storage and store in a local or share path.
         :param bucket: None # Not required
-        :param object_key: required to get object
+        :param key: required to get object
         :param dest_file_path: file path in which object should be copied.
         :return:
         """
+        """
+        bucket= kwargs["bucket"]
+        object_key = kwargs["key"]
+        dest_file_path= kwargs["dest_file_path"]
         if object_key and dest_file_path:
             ret = self.get_object(object_key, dest_file_path)
             if ret == 0:
@@ -179,6 +187,34 @@ class DssClientLib(object):
             if ret == 1:
                 self.logger.error("Retry downloading object for key - {}".format(object_key))
                 if self.get_object(object_key, dest_file_path) == 0:
+                    return True
+        return False
+        """
+        raise NotImplementedError("dss_client library: Use getObjectToFile function instead!")
+
+    def getObjectToFile(self, **kwargs):
+        """
+        Download the objects from S3 storage and store in a local or share path.
+        :param bucket: None # Not required
+        :param key: required to get object
+        :param dest_file_path: file path in which object should be copied.
+        :return:
+        """
+        bucket= kwargs["bucket"]
+        object_key = kwargs["key"]
+        dest_file_path= kwargs["dest_file_path"]
+        file_path = dest_file_path + "/" + object_key
+        # The complete directory path should be created before calling get_object function.
+        directory = os.path.dirname(file_path)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        if object_key and dest_file_path:
+            ret = self.get_object(object_key, file_path)
+            if ret == 0:
+                return True
+            if ret == 1:
+                print("Retry downloading object for key - {}".format(object_key))
+                if self.get_object(object_key, file_path) == 0:
                     return True
         return False
 
@@ -196,14 +232,14 @@ class DssClientLib(object):
             else:
                 self.logger.error("Download Failed for Object-Key - {}".format(object_key))
         except dss.FileIOError as e:
-            self.logger.execp("FileIOError - key:{}, {}".format(object_key, e))
+            print("FileIOError - key:{}, {}".format(object_key, e))
             ret = 1
         except dss.NetworkError as e:
             self.logger.execp("NetworkError - key:{}, {}".format(object_key, e))
         except dss.NoSuchResouceError as e:
             self.logger.excep("NoSuchResouceError - {} , {}".format(object_key, e))
         except dss.GenericError as e:
-            self.logger.excep("GenericError - {} , {}".format(object_key, e))
+            print("GenericError - {} , {}".format(object_key, e))
             ret = 1
         except Exception as e:
             self.logger.excep("OtherException - {} , {}".format(object_key, e))
@@ -222,8 +258,10 @@ class DssClientLib(object):
             objects = self.dss_client.getObjects(prefix, delimiter, True)
             while True:
                 try:
+                    object_keys = []
                     for obj_key in objects:
-                        yield obj_key
+                        object_keys.append(obj_key)
+                    yield object_keys
                 except dss.NoIterator:
                     break
                 except Exception as e:

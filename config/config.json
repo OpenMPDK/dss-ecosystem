@@ -6,7 +6,7 @@
                 "PyTorch": {
                   "DataLoader": {
                     "shuffle": true,
-                    "num_workers": 50,
+                    "num_workers": 10,
                     "persistent_workers": true,
                     "prefetch_factor": 2,
                     "pin_memory": false,
@@ -14,8 +14,8 @@
                   },
                   "distributed_data_parallel": false
                 },
-                "batch_size": 100,
-                "max_batch_size": 10000,
+                "batch_size": 64,
+                "max_batch_size": 10,
                 "epochs": 1
                 },
   
@@ -23,7 +23,6 @@
     "sequential": true,
     "parallel": {"workers": 5},
     "steps":{
-      "dataset": {},
       "model": true,
       "training": true,
       "inference": false,
@@ -36,18 +35,18 @@
     "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
   },
   "training":{
-    "name": "PythonReadTrain"
+    "name": "RandomAccessDatasetTrain"
   },
   "dataset" : {
-               "name": "PythonReadDataset",
+               "name": "TorchImageClassificationDataset",
                "access": {"random": true, "sequential":  false},
                "type":  "image",
-               "label": ["png_1t"],
+               "label": ["daisy", "dandelion", "roses", "sunflowers", "tulips"],
                "image_dimension": [32,32]
               },
     "storage": {
-      "format": "fs",
-      "name": "nfs",
+      "format": "s3",
+      "name": "dss",
       "aws": {
           "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
           "s3": {
@@ -58,13 +57,13 @@
       },
       "gcp": {},
       "dss": {
-          "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
-          "prefix": ["flower_photos/"],
+          "credentials": {"endpoint": "http://202.0.0.137:9000", "access_key": "minio", "secret_key": "minio123"},
+          "prefix": ["flower_photos/", "flower_photos2/"],
           "bucket": "bucket",
-          "client_lib": "dss_client"
+          "client_lib": "boto3"
       },
       "nfs": {
-          "data_dir": ["/da20202/bricks/brick1/pytorch_data/","/da21204/bricks/brick1/pytorch_data/","/da22206/bricks/brick1/pytorch_data/"]
+          "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos","/home/somnath.s/.keras/datasets/flower_photos2"]
       },
       "ramfs": {
           "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos/"]

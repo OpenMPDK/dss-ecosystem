@@ -5,6 +5,7 @@ import random
 import numpy as np
 from datetime import datetime
 from s3_client import S3
+from dss_client import DssClientLib
 import glob
 #from utils.utility import exception
 
@@ -91,19 +92,16 @@ class RandomAccessDataset(Dataset):
                     #    for file in files:
                     #        file_path = root_path + "/" + file
                     #        self.images.append((file_path, category_index))
-                    path_list = glob.glob(category_path+'/*', recursive=False)
-                    #self.images += glob.glob(category_path+'/*', recursive=False)
-                    path_label_list = [(image_path, category_index) for image_path in path_list]
-                    
-                    self.images.extend(path_label_list)
+                    path_list = glob.glob(category_path + '/*', recursive=False)
+                    for image_path in path_list:
+                        self.images.append((image_path, category_index))
                 else:
                     prefix = "{}{}/".format(data_dir, category)
                     print("INFO: Creating dataset for the prefix: {}".format(prefix))
                     for object_keys in self.s3_client.listObjects(bucket=self.bucket, prefix=prefix):
                         for object_key in object_keys:
-                            # print("Object Key:{}".format(object_key))
+                            #print("Object Key:{}".format(object_key))
                             self.images.append((object_key, category_index))
-            random.shuffle(self.images)
 
     def read_file_system_data(self, image):
         """
@@ -125,11 +123,17 @@ class RandomAccessDataset(Dataset):
         :return:
         """
         object_key = image[0]
-        image_buffer = self.s3_client.getObject(Bucket=self.bucket, Key=object_key)
-        image_numpy_array = np.asarray(bytearray(image_buffer))
-        # Converts to image format
-        image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
-        image_2darray = cv2.resize(image_2darray, self.image_dimension)
+        image_buffer = None
+        image_2darray = []
+        try:
+            image_buffer = self.s3_client.getObject(bucket=self.bucket, key=object_key)
+        except Exception as e:
+            print(f"Exception:{e}")
+        if image_buffer:
+            image_numpy_array = np.asarray(bytearray(image_buffer))
+            # Converts to image format
+            image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
+            image_2darray = cv2.resize(image_2darray, self.image_dimension)
         return image_2darray
 
 
@@ -150,14 +154,20 @@ class RandomAccessDataset(Dataset):
                 #if not self.data_dir.endswith("/"):
                 #    self.data_dir += "/"
                 self.bucket = storage_config[self.storage_name]["bucket"]
-                self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
+                if storage_config[self.storage_name]["client_lib"] == "dss_client":
+                    self.s3_client = DssClientLib(credentials=self.credentials,
+                                                  logger=None)
+                else:
+                    self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
                 self.data_source = self.read_s3_object
         elif self.storage_name == "aws":
             self.credentials = storage_config[self.storage_name]["credentials"]
             if self.storage_format == "s3":
-                pass
+                self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
+                self.data_source = self.read_s3_object
             elif self.storage_format == "fs":
-                pass
+                self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
+                self.data_source = self.read_file_system_data  # Need to check
             else:
                 print("INFO: Wrong format ")
         elif self.storage_name in ["nfs", "ramfs"]:
@@ -168,25 +178,25 @@ class RandomAccessDataset(Dataset):
 
         print("INFO: Data source:{}, format:{}".format(self.storage_name, self.storage_format))
 
+
 class PythonReadDataset(RandomAccessDataset):
-    
+
     def __init__(self, config={}):
         super(PythonReadDataset, self).__init__(
-                                                              transform=None,
-                                                              config=config)
-    
+                                                transform=None,
+                                                config=config)
 
     def read_file_system_data(self, image):
         image_path = image[0]  # (image1,0) => (<image_name>,<Category Index>)
-        #category = self.label[image[1]]  # Find out category
-        #image_path = self.data_dir + "/" + category + "/" + image_name
-        #img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
-        #print(image)
+        # category = self.label[image[1]]  # Find out category
+        # image_path = self.data_dir + "/" + category + "/" + image_name
+        # img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
+        # print(image)
         with open(image_path, mode='rb') as file:
             fileContent = file.read()
-            file.close()
-        
+
         return torch.FloatTensor(3, 2)
+
 
 class TorchImageClassificationDataset(RandomAccessDataset):
     """
@@ -223,11 +233,25 @@ class TorchImageClassificationDataset(RandomAccessDataset):
         """
     #def read_s3_object(self, image):
         """
-        User need to update
-        :param image: 
-        :return: 
+        Read object from S3 , Any S3 compatible storage DSS, AWS-S3
+        :param object_key:
+        :return:
         """
-    #    pass
+        """
+        object_key = image[0]
+        #print("ObjectKey:{}".format(object_key))
+        self.s3_client.getObjectToFile(bucket=self.bucket, key=object_key, dest_file_path="/var/log/dss")
+        image_path= "/var/log/dss/" + object_key
+        with open(image_path, "rb") as fh:
+            image_buffer = fh.read()
+        image_numpy_array = np.asarray(bytearray(image_buffer))
+        # Converts to image format
+        image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
+        image_2darray = cv2.resize(image_2darray, self.image_dimension)
+        return image_2darray
+        """
+
+
 
 
 
