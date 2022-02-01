@@ -6,7 +6,7 @@
                 "PyTorch": {
                   "DataLoader": {
                     "shuffle": true,
-                    "num_workers": 10,
+                    "num_workers": 49,
                     "persistent_workers": true,
                     "prefetch_factor": 2,
                     "pin_memory": false,

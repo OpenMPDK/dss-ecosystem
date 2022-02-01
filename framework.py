@@ -18,8 +18,6 @@ import numpy as np
 #from models import NeuralNetwork, Net
 from models import pytorch
 from training import CustomTrain
-from s3_client import S3
-from dss_client import DssClientLib
 
 class DNNFramework(object):
     def __init__(self, config, logger):

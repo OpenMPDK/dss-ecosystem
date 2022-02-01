@@ -5,7 +5,7 @@ import random
 import numpy as np
 from datetime import datetime
 from s3_client import S3
-from dss_client import DssClientLib
+#from dss_client import DssClientLib
 import glob
 #from utils.utility import exception
 
@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 from utils.utility import validate_s3_prefix
 from multiprocessing import Queue, Value
 from worker import Worker
+import time
 
 
 class RandomAccessDataset(Dataset):
@@ -33,6 +34,7 @@ class RandomAccessDataset(Dataset):
         self.categories = self.config_dataset["label"]
         self.image_dimension = self.config_dataset["image_dimension"]  # height, width of image
         self.max_workers = self.config["execution"]["workers"]
+        self.data_loader_workers = self.config["framework"]["PyTorch"]["DataLoader"]["num_workers"]
         self.data_source = None  # Function to read data from
         self.credentials = None  # Required to access data from storage.
         self.storage_name = None  # Storage name such as aws,dss
@@ -120,6 +122,7 @@ class RandomAccessDataset(Dataset):
                 else:
                     category_paths[index].append(data_dir + category)
                 index +=1
+        start_listing_time = time.monotonic()
         s3_client = None
         # Distribute load among the max_workers.
         for worker_id in range(self.max_workers):
@@ -146,11 +149,12 @@ class RandomAccessDataset(Dataset):
                 listed_files = len(category_images)
                 total_listed_file += listed_files
                 self.images.extend(category_images)
+        end_listing_time = time.monotonic()
         if not self.image_queue:
             self.logger.fatal("Couldn't list files, exit application")
             sys.exit()
 
-        self.logger.info("Total files listed : {}".format(total_listed_file))
+        self.logger.info("Total files listed: {}, Time: {:0.4f} seconds".format(total_listed_file, end_listing_time - start_listing_time))
 
     def read_file_system_data(self, **kwargs):
         """
@@ -220,12 +224,16 @@ class RandomAccessDataset(Dataset):
         Get s3_clients equal numbers of max_workers.
         :return: None
         """
-
+        max_s3_client_count = self.max_workers
+        if self.data_loader_workers > self.max_workers:
+            max_s3_client_count = self.data_loader_workers
+        self.logger.info(f"** Creating {max_s3_client_count} s3 clients for parallel processing! **")
         if self.s3_config["client_lib"] == "dss_client":
-            self.s3_clients = [ DssClientLib(credentials=self.credentials,logger=self.logger) for i in range(self.max_workers)]
+            from dss_client import DssClientLib
+            self.s3_clients = [ DssClientLib(credentials=self.credentials,logger=self.logger) for i in range(max_s3_client_count)]
         elif self.s3_config["client_lib"] == "boto3":
             self.s3_clients = [ S3(storage_name=self.storage_name, credentials=self.credentials, logger=self.logger) for
-                                i in range(self.max_workers)]
+                                i in range(max_s3_client_count)]
 
 
 class PythonReadDataset(RandomAccessDataset):
@@ -303,7 +311,6 @@ class TorchImageClassificationDataset(RandomAccessDataset):
         image_2darray = cv2.resize(image_2darray, self.image_dimension)
         return image_2darray
         """
-
 
 class SequentialAccessDataset(Dataset):
     """

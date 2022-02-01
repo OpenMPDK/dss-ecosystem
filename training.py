@@ -1,10 +1,10 @@
 
 from abc import abstractmethod, abstractproperty
-from datetime import datetime
 
 # Torch Libraries
 import torch.optim as optimization
 import torchvision.transforms as transforms
+import time
 
 class DNNTrain(object):
 
@@ -58,7 +58,7 @@ class RandomAccessDatasetTrain(DNNTrain):
                                        logger=kwargs["logger"])
 
     def train(self):
-        start_time = datetime.now()
+        start_time = time.monotonic()
         self.logger.info(f"INFO: Training started! {start_time}")
         criterion = self.model.loss_function()
         optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
@@ -84,7 +84,7 @@ class RandomAccessDatasetTrain(DNNTrain):
                     self.logger.info(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
                     running_loss = 0.0
 
-        self.logger.info("Training is done : {} seconds".format((datetime.now() - start_time).seconds))
+        self.logger.info("Training is done : {:.4f} seconds".format(time.monotonic() - start_time))
 
 class PythonReadTrain(DNNTrain):
 
@@ -94,12 +94,12 @@ class PythonReadTrain(DNNTrain):
         super(PythonReadTrain, self).__init__(**kwargs)
 
     def train(self):
-        start= time.time()
+        start= time.monotonic()
         for epoch in range(self.epochs):
             for batch_index, data in enumerate(self.train_dataloader):
                 if batch_index == self.max_batch_size - 1:
-                    total_time = time.time() - start
-                    self.logger.info("1 epoch time: {}".format(total_time))
+                    total_time = time.monotonic() - start
+                    self.logger.info("1 epoch time: {:.4f}".format(total_time))
                     break
 
 class SequentialDatasetTrain(DNNTrain):
