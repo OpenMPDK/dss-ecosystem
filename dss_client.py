@@ -68,8 +68,7 @@ class DssClientLib(object):
         except dss.DiscoverError as e:
             self.logger.excep("DiscoverError -  {}".format(e))
         except dss.NetworkError as e:
-            #self.logger.excep("NetworkError - {} , {}".format(endpoint, e))
-            print("NetworkError - {} , {}".format(endpoint, e))
+            self.logger.excep("NetworkError - {} , {}".format(endpoint, e))
         return dss_client
 
     def putObject(self, bucket=None,file=""):
@@ -213,7 +212,7 @@ class DssClientLib(object):
             if ret == 0:
                 return True
             if ret == 1:
-                print("Retry downloading object for key - {}".format(object_key))
+                self.logger.warn("Retry downloading object for key - {}".format(object_key))
                 if self.get_object(object_key, file_path) == 0:
                     return True
         return False
@@ -232,14 +231,14 @@ class DssClientLib(object):
             else:
                 self.logger.error("Download Failed for Object-Key - {}".format(object_key))
         except dss.FileIOError as e:
-            print("FileIOError - key:{}, {}".format(object_key, e))
+            self.logger.error("FileIOError - key:{}, {}".format(object_key, e))
             ret = 1
         except dss.NetworkError as e:
             self.logger.execp("NetworkError - key:{}, {}".format(object_key, e))
         except dss.NoSuchResouceError as e:
             self.logger.excep("NoSuchResouceError - {} , {}".format(object_key, e))
         except dss.GenericError as e:
-            print("GenericError - {} , {}".format(object_key, e))
+            self.logger.error("GenericError - {} , {}".format(object_key, e))
             ret = 1
         except Exception as e:
             self.logger.excep("OtherException - {} , {}".format(object_key, e))

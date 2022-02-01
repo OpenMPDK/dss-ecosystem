@@ -37,25 +37,26 @@ from botocore.client import Config
 from datetime import datetime
 
 class S3:
-  def __init__(self, config={}):
-      self.storage_name = config.get("name")
-      self.config = config["credentials"]
+  def __init__(self, **kwargs):
+      self.storage_name = kwargs["storage_name"]
+      self.credentials = kwargs["credentials"]
+      self.logger = kwargs["logger"]
       self.get_s3_client()
 
   def get_s3_client(self):
       if self.storage_name.lower() == "aws":
           self.s3_client = boto3.client('s3',
-                        aws_access_key_id=self.config["access_key"],
-                        aws_secret_access_key=self.config["secret_key"],
+                        aws_access_key_id=self.credentials["access_key"],
+                        aws_secret_access_key=self.credentials["secret_key"],
                         config=Config(signature_version='s3v4'),
                         region_name='us-east-1')
       elif self.storage_name.lower() == "dss":
           self.s3_client = boto3.client('s3',
-                                        endpoint_url=self.config["endpoint"],
-                                        aws_access_key_id=self.config["access_key"],
-                                        aws_secret_access_key=self.config["secret_key"])
+                                        endpoint_url=self.credentials["endpoint"],
+                                        aws_access_key_id=self.credentials["access_key"],
+                                        aws_secret_access_key=self.credentials["secret_key"])
       else:
-          print("ERROR: Wrong object storage!")
+          self.logger.error("Wrong object storage name!")
 
   def create_bucket(self, bucket=None):
       """
@@ -67,7 +68,7 @@ class S3:
           try:
               self.s3_client.create_bucket(Bucket=bucket)
           except Exception as e:
-              print("EXCEPTION: {}".format(e))
+              self.logger.error("{}".format(e))
               return False
       return True
 
@@ -80,7 +81,7 @@ class S3:
       """
 
       if not bucket:
-          print("ERROR: Requires bucket name")
+          self.logger.error("Requires bucket name!")
           return False
       object_key = source_file_path[1:]
       if os.path.exists(source_file_path) and os.path.isfile(source_file_path)  and not object_key.startswith("/"):
@@ -104,7 +105,7 @@ class S3:
           for bucket in response["Buckets"]:
               buckets.append(bucket["Name"])
       except Exception as e:
-          print("EXCEPTION: {}".format(e))
+          self.logger.excep("{}".format(e))
 
       return buckets
 
@@ -127,7 +128,7 @@ class S3:
                       object_keys.append(content["Key"])
                   yield object_keys
           except Exception as e:
-              print(e)
+              self.logger.error("listObjects:{}".format(e))
 
 
   def getObject(self, **kwargs):
@@ -155,11 +156,14 @@ class S3:
       bucket= kwargs["bucket"]
       object_key=kwargs["key"]
       dest_file_path=kwargs["dest_file_path"]
-      # Create local directory structure
-      local_file_path = dest_file_path + "/" + object_key
-      directory = os.path.dirname(local_file_path)
-      if not os.path.exists(directory):
-          os.makedirs(directory)
+      if dest_file_path == "/dev/null":
+          local_file_path = dest_file_path
+      else:
+          # Create local directory structure
+          local_file_path = dest_file_path + "/" + object_key
+          directory = os.path.dirname(local_file_path)
+          if not os.path.exists(directory):
+              os.makedirs(directory)
       self.s3_client.download_file(Bucket=bucket, Key=object_key, Filename=local_file_path)
 
   def deleteObject(self, bucket=None,prefix=None):
@@ -185,7 +189,6 @@ class S3:
       if bucket and prefix:
           try:
               response = self.s3_client.delete_object(Bucket=bucket, Key=prefix)
-              #print("Response:{}".format(respose))
               """ 
               {'ResponseMetadata': {'RequestId': '16646EFF2BD0F3CB',
                'HostId': '', 'HTTPStatusCode': 204, 
@@ -197,35 +200,14 @@ class S3:
                   if response["DeleteMarker"]:
                       return True
                   else:
-                      print("ERROR: {} not deleted ".format(prefix))
+                      self.logger.error("{} not deleted ".format(prefix))
               else:
                   return True   # Require to handle properly.
           except Exception as e:
-              print("EXCEPTION: {}".format(e))
+              self.logger.error("{}".format(e))
 
       return False
 
-
-
-
-
-if __name__ =="__main__":
-
-    config = { "name": "dss",
-            "credentials": { "endpoint": "http://msl-ssg-vm21-tcp-0:9000", "access_key": "minio", "secret_key": "minio123"}
-    }
-    start_time = datetime.now()
-    s3=  S3(config)
-    print("INFO: DSS Client Connection Time: {}".format((datetime.now() - start_time).seconds))
-    data = s3.getObject(Bucket="dss0", Key="192.168.200.200/mnt/nfs_share/10gb-B/1MB_0018.dat")
-    print(type(data))
-    if s3.getObjectToFile("dss0", "192.168.200.200/mnt/nfs_share/10gb-B/1MB_0018.dat") is not None:
-        print("ERROR: In downloading object to file ")
-
-    for objects in s3.listObjects(bucket="dss0",prefix="192.168.200.200/mnt/nfs_share/10gb-B"):
-
-        print("Total Objects Listed: {}".format(len(objects)))
-        print(objects[0], objects[-1])
 
 
 

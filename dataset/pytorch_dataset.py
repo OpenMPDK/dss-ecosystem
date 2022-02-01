@@ -1,4 +1,4 @@
-import os
+import os,sys
 import tensorflow as tf
 import cv2
 import random
@@ -12,7 +12,8 @@ import glob
 import torch
 from torch.utils.data import Dataset
 from utils.utility import validate_s3_prefix
-
+from multiprocessing import Queue, Value
+from worker import Worker
 
 
 class RandomAccessDataset(Dataset):
@@ -22,29 +23,40 @@ class RandomAccessDataset(Dataset):
     return size of the dataset and indexing
     """
 
-    def __init__(self, transform=None, config={}):
+    def __init__(self, transform=None, config={}, logger=None):
         self.transform = transform
         self.config = config
+        self.logger = logger
 
         # Read config
         self.config_dataset = config["dataset"]
-        self.label = self.config_dataset["label"]
+        self.categories = self.config_dataset["label"]
         self.image_dimension = self.config_dataset["image_dimension"]  # height, width of image
         self.data_source = None  # Function to read data from
         self.credentials = None  # Required to access data from storage.
         self.storage_name = None  # Storage name such as aws,dss
         self.storage_format = None  # Data storage format such as s3, file system.
-        self.data_dir = None
+        self.data_dirs = None
         self.s3_client = None
         self.bucket = None
+        self.s3_config = {}
         # Call initial data-source setup functions
 
         self.set_data_source()
+
+
+        # Parallel Listing
+        self.workers_finished = Value('i', 0)
+        self.workers = []
+        self.image_queue = Queue()
+
         # Collect all the image names and corresponding label
         self.images = []
         self.get_image_names()  # [(image1,0),(image200,1)]
 
         # Transform
+
+
 
     def __len__(self):
         """
@@ -73,35 +85,71 @@ class RandomAccessDataset(Dataset):
 
     def get_image_names(self):
         """
-        Create a image data
+        Create a image dataset
+
+        Parallel Listing:
+         - Check no of file system shares or prefixes and categories . Based on that numbers, create workers
+          Shares/Prefixes = N, Categories = M , Max Workers Wmax = 50, W =?
+          if NxM < Wmax:
+             W = NxM
+          else:
+             W = Wmax
         :return: None
         """
 
-        # Iterate over all the NFS paths/ all the prefixes.
-        for data_dir in self.data_dir:
-            print("INFO: Reading datadir/prefix - {}".format(data_dir))
-            if self.storage_format == "s3" and not validate_s3_prefix(data_dir):
-                continue
-            for category in self.label:
-                category_index = self.label.index(category)
+        fs_share_count = len(self.data_dirs)  # N
+        categoris_count = len(self.categories)  # M
+        max_workers = self.config["execution"]["workers"]
 
-                if self.storage_format == "fs":
-                    category_path = data_dir + "/" + category  # <base_image_dir>/<category>
-                    print("INFO: Creating dataset for directory: {}/".format(category_path))
-                    #for root_path, dirs, files in os.walk(category_path, topdown=True):
-                    #    for file in files:
-                    #        file_path = root_path + "/" + file
-                    #        self.images.append((file_path, category_index))
-                    path_list = glob.glob(category_path + '/*', recursive=False)
-                    for image_path in path_list:
-                        self.images.append((image_path, category_index))
+        # Calculate maximum number of workers.
+        if max_workers > fs_share_count * categoris_count:
+            max_workers = fs_share_count * categoris_count
+            categories_per_worker = 1
+        else:
+            categories_per_worker = int(fs_share_count * categoris_count / max_workers)
+
+        # List all category paths.
+        category_paths = []
+        for data_dir in self.data_dirs:
+            for category in self.categories:
+                if not data_dir.endswith("/"):
+                    category_paths.append(data_dir + "/" + category)
                 else:
-                    prefix = "{}{}/".format(data_dir, category)
-                    print("INFO: Creating dataset for the prefix: {}".format(prefix))
-                    for object_keys in self.s3_client.listObjects(bucket=self.bucket, prefix=prefix):
-                        for object_key in object_keys:
-                            #print("Object Key:{}".format(object_key))
-                            self.images.append((object_key, category_index))
+                    category_paths.append(data_dir + category)
+
+        # Distribute load among the max_workers.
+        index = 0
+        for worker_id in range(max_workers):
+            N = index + categories_per_worker
+            w = Worker(id=worker_id,
+                       s3_config=self.s3_config,
+                       storage_name=self.storage_name,
+                       storage_format=self.storage_format,
+                       categories=self.categories,
+                       data_dirs=category_paths[index: N],
+                       queue=self.image_queue,
+                       worker_finished=self.workers_finished,
+                       logger=self.logger
+                       )
+            w.start()
+            self.workers.append(w)
+            index += categories_per_worker
+
+
+        self.logger.info("Started listing with workers - {}".format(max_workers))
+        total_listed_file = 0
+        while self.workers_finished.value < max_workers :
+            while self.image_queue.qsize() > 0:
+                category_images = self.image_queue.get()
+                listed_files = len(category_images)
+                #self.logger.info("Dataset Received Images Count:{}".format(listed_files))
+                total_listed_file += listed_files
+                self.images.extend(category_images)
+        if not self.image_queue:
+            self.logger.fatal("Couldn't list files, exit application")
+            sys.exit()
+
+        self.logger.info("Total files listed : {}".format(total_listed_file))
 
     def read_file_system_data(self, image):
         """
@@ -110,7 +158,7 @@ class RandomAccessDataset(Dataset):
         :return:
         """
         image_path = image[0]  # (image1,0) => (<image_name>,<Category Index>)
-        category = self.label[image[1]]  # Find out category
+        #category = self.label[image[1]]  # Find out category
         #image_path = self.data_dir + "/" + category + "/" + image_name
         img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
         img_ndarray = cv2.resize(img_ndarray, self.image_dimension)
@@ -128,7 +176,7 @@ class RandomAccessDataset(Dataset):
         try:
             image_buffer = self.s3_client.getObject(bucket=self.bucket, key=object_key)
         except Exception as e:
-            print(f"Exception:{e}")
+            self.logger.execp(f"Exception:{e}")
         if image_buffer:
             image_numpy_array = np.asarray(bytearray(image_buffer))
             # Converts to image format
@@ -146,45 +194,57 @@ class RandomAccessDataset(Dataset):
         self.storage_format = storage_config["format"].lower()
         self.storage_name = storage_config["name"].lower()
 
+        data_source_summary = ""
+
         # File system access
         if self.storage_name == "dss":
             if self.storage_format == "s3":
                 self.credentials = storage_config[self.storage_name]["credentials"]
-                self.data_dir = storage_config[self.storage_name]["prefix"]
+                self.data_dirs = storage_config[self.storage_name]["prefix"]
                 #if not self.data_dir.endswith("/"):
                 #    self.data_dir += "/"
                 self.bucket = storage_config[self.storage_name]["bucket"]
                 if storage_config[self.storage_name]["client_lib"] == "dss_client":
                     self.s3_client = DssClientLib(credentials=self.credentials,
-                                                  logger=None)
+                                                  logger=self.logger)
                 else:
-                    self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
+                    self.s3_client = S3(storage_name=self.storage_name,
+                                        credentials=self.credentials,
+                                        logger=self.logger)
+                    data_source_summary = "Bucket:{} ".format(storage_config[self.storage_name]["bucket"])
                 self.data_source = self.read_s3_object
+
+                self.s3_config = {"credentials":self.credentials, "bucket": self.bucket, "client_lib": storage_config[self.storage_name]["client_lib"]}
+                data_source_summary = ", Client_Lib:{} ".format(self.s3_config["client_lib"]) + data_source_summary
         elif self.storage_name == "aws":
             self.credentials = storage_config[self.storage_name]["credentials"]
             if self.storage_format == "s3":
                 self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
                 self.data_source = self.read_s3_object
+                self.s3_config = {"credentials": self.credentials, "bucket": self.bucket,
+                                  "client_lib": storage_config[self.storage_name]["client_lib"]}
+                data_source_summary = ", Client_Lib:{} ,Bucket:{} ".format(self.s3_config["client_lib"], storage_config[self.storage_name]["bucket"])
             elif self.storage_format == "fs":
                 self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
                 self.data_source = self.read_file_system_data  # Need to check
             else:
-                print("INFO: Wrong format ")
+                self.logger.error(" Wrong format ")
         elif self.storage_name in ["nfs", "ramfs"]:
-            self.data_dir = storage_config[self.storage_name]["data_dir"]
+            self.data_dirs = storage_config[self.storage_name]["data_dir"]
             self.data_source = self.read_file_system_data
         else:
-            print("ERROR: Wrong storage name! {}".format(self.storage_name))
+            self.logger.error("Wrong storage name! {}".format(self.storage_name))
 
-        print("INFO: Data source:{}, format:{}".format(self.storage_name, self.storage_format))
+        self.logger.info("Data source:{}, format:{}{}".format(self.storage_name, self.storage_format, data_source_summary))
 
 
 class PythonReadDataset(RandomAccessDataset):
 
-    def __init__(self, config={}):
+    def __init__(self, config={},logger=None):
         super(PythonReadDataset, self).__init__(
                                                 transform=None,
-                                                config=config)
+                                                config=config,
+                                                logger=logger)
 
     def read_file_system_data(self, image):
         image_path = image[0]  # (image1,0) => (<image_name>,<Category Index>)
@@ -204,10 +264,11 @@ class TorchImageClassificationDataset(RandomAccessDataset):
     Each functions in the override section can be overide
     """
 
-    def __init__(self, config={}):
+    def __init__(self, config={}, logger=None):
         super(TorchImageClassificationDataset, self).__init__(
                                                               transform=None,
-                                                              config=config)
+                                                              config=config,
+                                                              logger=logger)
 
 
 
@@ -251,16 +312,13 @@ class TorchImageClassificationDataset(RandomAccessDataset):
         return image_2darray
         """
 
-
-
-
-
 class SequentialAccessDataset(Dataset):
     """
     This is Python iterator based
     """
-    def __init__(self,config):
+    def __init__(self,config, logger):
         self.config = config
+        self.logger = logger
 
     def __iter__(self):
         pass
@@ -268,12 +326,14 @@ class SequentialAccessDataset(Dataset):
 
 
 class CustomDataset(object):
-    def __init__(self,config):
+    def __init__(self,config, logger):
         self.config = config
+        self.logger = logger
         self.random_access_dataset = config["dataset"]["access"]["random"]
         self.name = config["dataset"]["name"]
         self.class_name = self.get_class_name()
         self.dataset = None
+        #self.logger.info(self.class_name)
 
 
     def get_class_name(self):
@@ -284,13 +344,13 @@ class CustomDataset(object):
         try:
             return eval(self.name) # Convert the string to class name.
         except NameError as e:
-            print("ERROR: Custom dataset doesn't exist! {}".format(e))
+            self.logger.execp("ERROR: Custom dataset doesn't exist! {}".format(e))
             sys.exit()
 
     def get_dataset(self):
-        print("INFO: Using custom dataset - {}->{}".format(self.name,self.class_name))
+        self.logger.info("INFO: Using custom dataset - {}->{}".format(self.name,self.class_name))
         if self.random_access_dataset :
-            return self.class_name(self.config)
+            return self.class_name(self.config,self.logger)
         else:
             # This section should be for sequential read
             pass

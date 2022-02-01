@@ -1,4 +1,8 @@
 
+
+from worker import Worker
+
+
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
 
@@ -14,17 +18,20 @@ import numpy as np
 #from models import NeuralNetwork, Net
 from models import pytorch
 from training import CustomTrain
+from s3_client import S3
+from dss_client import DssClientLib
 
 class DNNFramework(object):
-    def __init__(self, config):
+    def __init__(self, config, logger):
         self.config = config
+        self.logger = logger
         self.features = []
         self.labels = []
         self.dataset = None
 
         self.framework = config.get("framework", {})
         self.name = self.framework.get("name", None)
-        self.categories = config["dataset"].get("label", [])
+        self.categories = config["dataset"]["label"]
 
         # DNN Parameters
         self.epochs = self.framework["epochs"]
@@ -44,12 +51,6 @@ class DNNFramework(object):
                 self.device = 'cpu'
 
 
-        # Execution
-        if config["execution"]["sequential"]:
-            self.execution =  "sequential"
-        else:
-            self.execution = "parallel"
-
     def create_dataset(self):
         if self.dataset is None:
             self.dataset = DataSet(self.config)
@@ -67,7 +68,7 @@ class DNNFramework(object):
         for feature, label in self.train_dataset:
             self.features.append(feature)
             self.labels.append(label)
-        print("INFO:Features Size:{}, Labels:{}".format(len(self.features), len(self.labels)))
+        self.logger.info("Features Size:{}, Labels:{}".format(len(self.features), len(self.labels)))
         # Convert np-array
         self.features = np.array(self.features).reshape(-1, self.image_dimension[0], self.image_dimension[1], 1)
         self.labels = np.array(self.labels)
@@ -78,7 +79,7 @@ class TensorFlow(DNNFramework):
     def __init__(self,config):
         import tensorflow as tf
         DNNFramework.__init__(self,config)
-        print("INFO: Running TensorFlow v{}".format(tf.__version__))
+        self.logger.info("Running TensorFlow v{}".format(tf.__version__))
 
     def initialize(self):
         """
@@ -136,23 +137,23 @@ class TensorFlow(DNNFramework):
         The inference process predicts category for a random image.
         :return:
         """
-        print("INFO: Inference ...")
+        self.logger.info("Inference ...")
         test_dataset = self.dataset.test_dataset()
         result = np.argmax(self.model.predict(test_dataset) , axis=-1)
-        print("INFO: Predicted result - {}".format(result))
+        self.logger.info("Predicted result - {}".format(result))
         result  = self.model.predict_classes(test_dataset)
-        print("INFO: Predicted result - {}".format(result))
+        self.logger.info("Predicted result - {}".format(result))
 
 
 
 class PyTorch(DNNFramework):
 
-    def __init__(self,config):
+    def __init__(self,config,logger):
         import torch
-        DNNFramework.__init__(self,config)
+        DNNFramework.__init__(self,config, logger)
         self.data_loader_params = self.framework["PyTorch"]["DataLoader"]
         self.distributed_data_parallel =  self.framework["PyTorch"]["distributed_data_parallel"]
-        print("INFO: Using PyTorch v{}".format(torch.__version__))
+        self.logger.info("Using PyTorch v{}".format(torch.__version__))
 
 
     def initialize(self):
@@ -169,7 +170,7 @@ class PyTorch(DNNFramework):
         Create custom dataset.
         :return:
         """
-        custom_dataset = pytorch_dataset.CustomDataset(config=self.config)
+        custom_dataset = pytorch_dataset.CustomDataset(config=self.config, logger=self.logger)
         self.dataset = custom_dataset.get_dataset()
 
     def create_data_loader(self):
@@ -185,21 +186,22 @@ class PyTorch(DNNFramework):
 
         dataiter = iter(self.train_dataloader)
         train_image , train_label = dataiter.next()
-        print("Train Data:{},{}".format(train_image.size(),train_label.size()))
+        self.logger.info("Train Data:{},{}".format(train_image.size(),train_label.size()))
     def create_model(self):
         """
         Create NeuralNetwork model
         :return:
         """
-        print("INFO: Creating AI model! - device:{}".format(self.device))
+        self.logger.info("Creating AI model! - device:{}".format(self.device))
         torch_model = pytorch.Model(name=self.model_name,
                                     image_dimension=self.image_dimension,
-                                    device=self.device)
+                                    device=self.device,
+                                    logger=self.logger)
         self.model = torch_model.get()
 
         #self.model = pytorch.Model(self.image_dimension).to(self.device)
 
-        print(self.model)
+        self.logger.info("{}".format(self.model))
 
     def training(self):
         """
@@ -209,7 +211,8 @@ class PyTorch(DNNFramework):
         train = CustomTrain(config=self.config,
                             dataloader=self.train_dataloader,
                             model=self.model,
-                            device=self.device)
+                            device=self.device,
+                            logger=self.logger)
         train.start()
 
     def inference(self):

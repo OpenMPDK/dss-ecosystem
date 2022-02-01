@@ -16,6 +16,7 @@ class Model(object):
     def __init__(self,**kwargs):
         self.name = kwargs["name"]
         self.device = kwargs["device"]
+        self.logger = kwargs["logger"]
         self.image_dimension = kwargs["image_dimension"]
         self.model_class_name = self.get_class_name()
 
@@ -23,12 +24,12 @@ class Model(object):
         try:
             return eval(self.name)
         except NameError as e:
-            print("ERROR: {}".format(e))
+            self.logger.fatal("{}".format(e))
         except Exception as e:
-            print("ERROR: {}".format(e))
+            self.logger.fatal("ERROR: {}".format(e))
         return None
     def get(self):
-        print("INFO: Creating neural network model instance - {}=>{}".format(self.name, self.model_class_name))
+        self.logger.info("INFO: Creating neural network model instance - {}=>{}".format(self.name, self.model_class_name))
         if self.model_class_name:
             return self.model_class_name(self.image_dimension).to(self.device)
 
@@ -44,7 +45,8 @@ class NeuralNetwork(nn.Module):
     forward()
     """
 
-    def __init__(self):
+    def __init__(self, logger):
+        self.logger = logger
         super(NeuralNetwork,self).__init__()
 
     def loss_function(self):
@@ -52,11 +54,11 @@ class NeuralNetwork(nn.Module):
 
     @abstractmethod
     def forward(self):
-        print("ERROR: Should be implemented in child class!")
+        self.logger.fatal("Should be implemented in child class!")
 
     @abstractmethod
     def network(self):
-        print("ERROR: Should be implemented in child class!")
+        self.logger.fatal("Should be implemented in child class!")
 
 
 
@@ -80,7 +82,6 @@ class SequentialNet(NeuralNetwork):
         )
 
     def forward(self, x):
-        # print(x)
         x = self.flatten(x)
         logits = self.linear_relu_stack(x)
         return logits
@@ -94,10 +95,11 @@ class ConvNet(NeuralNetwork):
     Expected a image dimesion of 32x32 because of tensor size
     Train Data:torch.Size([64, 32, 32]),torch.Size([64])
     """
-    def __init__(self,image_diments=()):
-        super(ConvNet, self).__init__()
+    def __init__(self,image_diments=(), logger=None):
+        super(ConvNet, self).__init__(logger=logger)
         self.input_image_height = int(image_diments[0])
         self.input_image_weidth = int(image_diments[1])
+        self.logger = logger
         self.network()
 
 
@@ -114,7 +116,6 @@ class ConvNet(NeuralNetwork):
     def forward(self, x):
 
         x = x.unsqueeze(1)
-        #print(x)
         # Max pooling over a (2,2) window ( Sub sampling ) of the output from first feature maps.
         x = F.max_pool2d(F.relu(self.conv1(x)),(2,2))
         # If the size is a square, you can specify with a single number
