@@ -50,15 +50,12 @@ class Worker(object):
 
         # Worker details
         self.id = kwargs.get("id", None)
+        self.s3_client = kwargs.get("s3_client", None)
         self.status = Value('i',0)
         self.worker_pid = Value('i',0)
 
-        self.storage_name = kwargs["storage_name"]
+        self.s3_config = kwargs["s3_config"]
         self.storage_format = kwargs["storage_format"]
-
-        self.s3_config = kwargs.get("s3_config", {})
-        self.s3_client = None
-        self.bucket = None
         self.queue = kwargs.get("queue", None)
         self.logger = kwargs.get("logger", None)
         self.data_dirs = kwargs["data_dirs"]
@@ -71,38 +68,6 @@ class Worker(object):
     def __del__(self):
         self.stop()
         # time.sleep(1)
-
-    def create_s3_client(self):
-        """
-        Create actual s3_client based on s3 credential
-        :return: s3_client connection.
-        """
-        credentials = self.s3_config["credentials"]
-        try:
-            s3_client_lib_name = self.s3_config["client_lib"].lower()
-            #if s3_client_lib_name == "minio":
-            #    self.s3_client = MinioClient(minio_url, minio_access_key, minio_secret_key, self.logger)
-            if s3_client_lib_name == "dss_client":
-                from dss_client import DssClientLib
-                self.s3_client = DssClientLib(credentials=credentials,
-                                              logger=self.logger)
-            elif s3_client_lib_name == "boto3":
-                self.s3_client = S3(storage_name=self.storage_name,
-                                    credentials=credentials,
-                                    logger=self.logger)
-            else:
-                self.logger.error(
-                    "S3 Client-{} doesn't exist! Supported S3 clients [\"minio\",\"dss_client\", \"boto3\"] ".format(
-                        s3_client_lib_name))
-        except Exception as e:
-            self.logger.excep("BAD s3_client {}".format(e))
-
-
-    def get_s3_client(self):
-        """
-        Return s3_client 
-        """
-        return self.s3_client
 
     def start(self):
         """
@@ -151,13 +116,6 @@ class Worker(object):
         name = "DNN_worker_" + str(self.id)
         #prctl.set_name(name)
         #prctl.set_proctitle(name)
-        if self.storage_format == "s3":
-            self.create_s3_client()
-            if not self.s3_client:
-                self.status.value = -1
-                self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
-                return
-
         self.worker_pid.value = current_process().pid
         #self.logger.info("Worker-{}, PID-{} started ...".format(self.id, self.worker_pid.value))
 
@@ -185,8 +143,6 @@ class Worker(object):
         # Iterate over all specified the NFS paths/ all the prefixes.
         for category_path in self.data_dirs:
             self.logger.info("Worker-{}, Listing datadir/prefix - {}".format(self.id,category_path))
-            #if self.storage_format == "s3" and not validate_s3_prefix(category_path):
-            #    continue
             category = category_path.split("/")[-1]
             category_index = self.categories.index(category)
 
@@ -203,14 +159,8 @@ class Worker(object):
                 if self.s3_config:
                     bucket = self.s3_config["bucket"]
                 prefix = "{}/".format(category_path)
-                #self.logger.info("INFO: Creating dataset for the prefix: {} from bucket:{}".format(prefix,bucket))
                 for object_keys in s3_client.listObjects(bucket=bucket, prefix=prefix):
                     for object_key in object_keys:
-                        #self.logger.info("Object Key:{}".format(object_key))
                         images.append((object_key, category_index))
-            #with self.categories_count.get_lock():
-            #    self.categories_count.value -=1
-
-        #self.logger.info("Worker-{}:{}".format(self.id,len(images)))
         return images
 

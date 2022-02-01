@@ -32,13 +32,13 @@ class RandomAccessDataset(Dataset):
         self.config_dataset = config["dataset"]
         self.categories = self.config_dataset["label"]
         self.image_dimension = self.config_dataset["image_dimension"]  # height, width of image
+        self.max_workers = self.config["execution"]["workers"]
         self.data_source = None  # Function to read data from
         self.credentials = None  # Required to access data from storage.
         self.storage_name = None  # Storage name such as aws,dss
         self.storage_format = None  # Data storage format such as s3, file system.
         self.data_dirs = None
-        self.s3_client = None
-        self.bucket = None
+        self.s3_clients = []
         self.s3_config = {}
         # Call initial data-source setup functions
 
@@ -71,10 +71,12 @@ class RandomAccessDataset(Dataset):
         This behave like python generator.
         :return:
         """
-
+        worker_info = torch.utils.data.get_worker_info()
+        #self.logger.info("WorkerID: {}, {}".format(worker_info.id,worker_info))
         image_name_label = self.images[index]
         image_label = image_name_label[1]
-        image_ndarray = self.data_source(image_name_label)  # Already converted using cv2.imread
+        image_ndarray = self.data_source(image=image_name_label,
+                                         worker_id=worker_info.id)  # Already converted using cv2.imread
 
         if self.transform is not None:
             image_ndarray = self.tansform(image_ndarray)
@@ -99,32 +101,33 @@ class RandomAccessDataset(Dataset):
 
         fs_share_count = len(self.data_dirs)  # N
         categoris_count = len(self.categories)  # M
-        max_workers = self.config["execution"]["workers"]
+
 
         # Calculate maximum number of workers.
-        if max_workers > fs_share_count * categoris_count:
+        if self.max_workers > fs_share_count * categoris_count:
             max_workers = fs_share_count * categoris_count
 
         # Create max_workers number of sets of category paths.
-        category_paths = []
-        for i in range(max_workers):
-            category_paths.append([])
+        category_paths = [[] for i in range(self.max_workers)]
+
         index = 0
         for data_dir in self.data_dirs:
             for category in self.categories:
-                if index >= max_workers:
+                if index >= self.max_workers:
                     index = 0  # Reset counter
                 if not data_dir.endswith("/"):
                     category_paths[index].append(data_dir + "/" + category)
                 else:
                     category_paths[index].append(data_dir + category)
                 index +=1
-
+        s3_client = None
         # Distribute load among the max_workers.
-        for worker_id in range(max_workers):
+        for worker_id in range(self.max_workers):
+            if self.storage_format == "s3":
+                s3_client = self.s3_clients[worker_id]
             w = Worker(id=worker_id,
                        s3_config=self.s3_config,
-                       storage_name=self.storage_name,
+                       s3_client=s3_client,
                        storage_format=self.storage_format,
                        categories=self.categories,
                        data_dirs=category_paths[worker_id],
@@ -134,16 +137,13 @@ class RandomAccessDataset(Dataset):
                        )
             w.start()
             self.workers.append(w)
-
-
-
-        self.logger.info("Started listing with workers - {}".format(max_workers))
+        # Aggregate all files listed by workers
+        self.logger.info("Started listing with {} workers".format(self.max_workers))
         total_listed_file = 0
-        while self.workers_finished.value < max_workers :
+        while self.workers_finished.value < self.max_workers :
             while self.image_queue.qsize() > 0:
                 category_images = self.image_queue.get()
                 listed_files = len(category_images)
-                #self.logger.info("Dataset Received Images Count:{}".format(listed_files))
                 total_listed_file += listed_files
                 self.images.extend(category_images)
         if not self.image_queue:
@@ -152,32 +152,33 @@ class RandomAccessDataset(Dataset):
 
         self.logger.info("Total files listed : {}".format(total_listed_file))
 
-    def read_file_system_data(self, image):
+    def read_file_system_data(self, **kwargs):
         """
         Read data from file system.
         :param image:
         :return:
         """
+        image = kwargs["image"]
         image_path = image[0]  # (image1,0) => (<image_name>,<Category Index>)
-        #category = self.label[image[1]]  # Find out category
-        #image_path = self.data_dir + "/" + category + "/" + image_name
         img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
         img_ndarray = cv2.resize(img_ndarray, self.image_dimension)
         return img_ndarray
 
-    def read_s3_object(self, image):
+    def read_s3_object(self, **kwargs):
         """
         Read object from S3 , Any S3 compatible storage DSS, AWS-S3
         :param object_key:
         :return:
         """
+        image = kwargs["image"]
+        worker_id = kwargs["worker_id"]
         object_key = image[0]
         image_buffer = None
         image_2darray = []
         try:
-            image_buffer = self.s3_client.getObject(bucket=self.bucket, key=object_key)
+            image_buffer = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key)
         except Exception as e:
-            self.logger.execp(f"Exception:{e}")
+            self.logger.excep(f"Exception:{e}")
         if image_buffer:
             image_numpy_array = np.asarray(bytearray(image_buffer))
             # Converts to image format
@@ -194,49 +195,37 @@ class RandomAccessDataset(Dataset):
         storage_config = self.config["storage"]
         self.storage_format = storage_config["format"].lower()
         self.storage_name = storage_config["name"].lower()
-
         data_source_summary = ""
 
-        # File system access
-        if self.storage_name == "dss":
-            if self.storage_format == "s3":
-                self.credentials = storage_config[self.storage_name]["credentials"]
-                self.data_dirs = storage_config[self.storage_name]["prefix"]
-                #if not self.data_dir.endswith("/"):
-                #    self.data_dir += "/"
-                self.bucket = storage_config[self.storage_name]["bucket"]
-                if storage_config[self.storage_name]["client_lib"] == "dss_client":
-                    self.s3_client = DssClientLib(credentials=self.credentials,
-                                                  logger=self.logger)
-                else:
-                    self.s3_client = S3(storage_name=self.storage_name,
-                                        credentials=self.credentials,
-                                        logger=self.logger)
-                    data_source_summary = "Bucket:{} ".format(storage_config[self.storage_name]["bucket"])
-                self.data_source = self.read_s3_object
-
-                self.s3_config = {"credentials":self.credentials, "bucket": self.bucket, "client_lib": storage_config[self.storage_name]["client_lib"]}
-                data_source_summary = ", Client_Lib:{} ".format(self.s3_config["client_lib"]) + data_source_summary
-        elif self.storage_name == "aws":
-            self.credentials = storage_config[self.storage_name]["credentials"]
-            if self.storage_format == "s3":
-                self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
-                self.data_source = self.read_s3_object
-                self.s3_config = {"credentials": self.credentials, "bucket": self.bucket,
-                                  "client_lib": storage_config[self.storage_name]["client_lib"]}
-                data_source_summary = ", Client_Lib:{} ,Bucket:{} ".format(self.s3_config["client_lib"], storage_config[self.storage_name]["bucket"])
-            elif self.storage_format == "fs":
-                self.s3_client = S3({"name": self.storage_name, "credentials": self.credentials})
-                self.data_source = self.read_file_system_data  # Need to check
-            else:
-                self.logger.error(" Wrong format ")
-        elif self.storage_name in ["nfs", "ramfs"]:
-            self.data_dirs = storage_config[self.storage_name]["data_dir"]
-            self.data_source = self.read_file_system_data
-        else:
-            self.logger.error("Wrong storage name! {}".format(self.storage_name))
+        if self.storage_format == "s3":
+            bucket = storage_config[self.storage_format]["bucket"]
+            client_lib = storage_config[self.storage_format]["client_lib"]
+            self.credentials = storage_config[self.storage_format][self.storage_name]["credentials"]
+            self.s3_config = {"credentials": self.credentials, "bucket": bucket, "client_lib": client_lib}
+            self.data_dirs = storage_config[self.storage_format]["prefix"]
+            if client_lib == "boto3":
+                data_source_summary = "Bucket:{} ".format(bucket)
+            self.data_source = self.read_s3_object
+            self.get_s3_clients()
+            data_source_summary = ", Client_Lib:{} ".format(self.s3_config["client_lib"]) + data_source_summary
+        elif self.storage_format == "fs":
+            if self.storage_name in ["nfs", "ramfs"]:
+                self.data_dirs = storage_config[self.storage_format]["data_dir"]
+                self.data_source = self.read_file_system_data
 
         self.logger.info("Data source:{}, format:{}{}".format(self.storage_name, self.storage_format, data_source_summary))
+
+    def get_s3_clients(self):
+        """
+        Get s3_clients equal numbers of max_workers.
+        :return: None
+        """
+
+        if self.s3_config["client_lib"] == "dss_client":
+            self.s3_clients = [ DssClientLib(credentials=self.credentials,logger=self.logger) for i in range(self.max_workers)]
+        elif self.s3_config["client_lib"] == "boto3":
+            self.s3_clients = [ S3(storage_name=self.storage_name, credentials=self.credentials, logger=self.logger) for
+                                i in range(self.max_workers)]
 
 
 class PythonReadDataset(RandomAccessDataset):
@@ -293,16 +282,18 @@ class TorchImageClassificationDataset(RandomAccessDataset):
         # end time
         return img_ndarray
         """
-    #def read_s3_object(self, image):
+    #def read_s3_object(self, **kwargs):
         """
         Read object from S3 , Any S3 compatible storage DSS, AWS-S3
         :param object_key:
         :return:
         """
         """
+        image = kwargs["image"]
+        worker_id = kwargs["worker_id"]
         object_key = image[0]
         #print("ObjectKey:{}".format(object_key))
-        self.s3_client.getObjectToFile(bucket=self.bucket, key=object_key, dest_file_path="/var/log/dss")
+        self.s3_clients[worker_id].getObjectToFile(bucket=self.s3_config["bucket"], key=object_key, dest_file_path="/var/log/dss")
         image_path= "/var/log/dss/" + object_key
         with open(image_path, "rb") as fh:
             image_buffer = fh.read()
@@ -312,6 +303,7 @@ class TorchImageClassificationDataset(RandomAccessDataset):
         image_2darray = cv2.resize(image_2darray, self.image_dimension)
         return image_2darray
         """
+
 
 class SequentialAccessDataset(Dataset):
     """

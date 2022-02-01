@@ -20,7 +20,7 @@
                 },
   
   "execution":{
-    "workers": 5,
+    "workers": 10,
     "steps":{
       "model": true,
       "training": true,
@@ -46,26 +46,27 @@
   "storage": {
       "format": "s3",
       "name": "dss",
-      "aws": {
-          "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
-          "s3": {
-            "bucket": "bucket_name",
-            "prefix": ["provide prefix"]
-          },
-          "fs": {"data_dir": "File system path"}
+      "s3": {
+        "bucket": "bucket",
+        "prefix": ["flower_photos/", "flower_photos2/"],
+        "client_lib": "boto3",
+        "aws": {
+          "credentials": {
+            "region_name": "us-east-2",
+            "access_key": "access_key",
+            "secret_key": "secret_key"
+          }
+        },
+        "dss": {
+          "credentials": {
+            "endpoint": "http://202.0.0.137:9000",
+            "access_key": "minio",
+            "secret_key": "minio123"
+          }
+        }
       },
-      "gcp": {},
-      "dss": {
-          "credentials": {"endpoint": "http://202.0.0.137:9000", "access_key": "minio", "secret_key": "minio123"},
-          "prefix": ["flower_photos/", "flower_photos2/"],
-          "bucket": "bucket",
-          "client_lib": "boto3"
-      },
-      "nfs": {
-          "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos","/home/somnath.s/.keras/datasets/flower_photos2"]
-      },
-      "ramfs": {
-          "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos/"]
+      "fs": {
+         "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos","/home/somnath.s/.keras/datasets/flower_photos2"]
       }
   },
   "metrics": {
