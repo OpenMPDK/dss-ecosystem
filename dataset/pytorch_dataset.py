@@ -104,36 +104,37 @@ class RandomAccessDataset(Dataset):
         # Calculate maximum number of workers.
         if max_workers > fs_share_count * categoris_count:
             max_workers = fs_share_count * categoris_count
-            categories_per_worker = 1
-        else:
-            categories_per_worker = int(fs_share_count * categoris_count / max_workers)
 
-        # List all category paths.
+        # Create max_workers number of sets of category paths.
         category_paths = []
+        for i in range(max_workers):
+            category_paths.append([])
+        index = 0
         for data_dir in self.data_dirs:
             for category in self.categories:
+                if index >= max_workers:
+                    index = 0  # Reset counter
                 if not data_dir.endswith("/"):
-                    category_paths.append(data_dir + "/" + category)
+                    category_paths[index].append(data_dir + "/" + category)
                 else:
-                    category_paths.append(data_dir + category)
+                    category_paths[index].append(data_dir + category)
+                index +=1
 
         # Distribute load among the max_workers.
-        index = 0
         for worker_id in range(max_workers):
-            N = index + categories_per_worker
             w = Worker(id=worker_id,
                        s3_config=self.s3_config,
                        storage_name=self.storage_name,
                        storage_format=self.storage_format,
                        categories=self.categories,
-                       data_dirs=category_paths[index: N],
+                       data_dirs=category_paths[worker_id],
                        queue=self.image_queue,
                        worker_finished=self.workers_finished,
                        logger=self.logger
                        )
             w.start()
             self.workers.append(w)
-            index += categories_per_worker
+
 
 
         self.logger.info("Started listing with workers - {}".format(max_workers))
