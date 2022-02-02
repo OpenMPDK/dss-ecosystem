@@ -58,34 +58,33 @@ bucket/flower_photos2/tulips
 ## DSS Should hide bucket frrom user. So, bucket name is not relevant for that 
 ```
 The tool support file system data as well as S3 data. Update configuration accordingly.
-For AWS, we are suppose to add bucket name (flower).
+For AWS, we are suppose to add bucket name (bucket).
 ```
 "storage": {
-    "format": "s3",
-    "name": "dss",   <<=== DSS storage should be used 
-    "aws": {
-        "credentials": { "region_name": "us-east-2", "access_key": "access_key", "secret_key": "secret_key"},
-        "s3": {
-          "bucket": "flower",
-          "prefix": ["flower_photos1/","flower_photos2/"]
+      "format": "fs",
+      "name": "nfs1",
+      "s3": {
+        "bucket": "bucket",
+        "prefix": ["flower_photos/", "flower_photos2/"],
+        "client_lib": "boto3",
+        "aws": {
+          "credentials": {
+            "region_name": "us-east-2",
+            "access_key": "access_key",
+            "secret_key": "secret_key"
+          }
         },
-        "fs": {"data_dir": "File system path"}
-    },
-    "gcp": {},
-    "dss": {
-        "credentials": {"endpoint": "http://10.1.51.2:9000", "access_key": "minio", "secret_key": "minio123"},
-        "prefix": ["flower_photos1/","flower_photos2/"]
-        "bucket": "bucket",  ## <<== can be ignored when used dss_client, for boto3 requires that.
-        "client_lib": "dss_client"
-    },
-    "nfs": {
-        "data_dir": ["/flower_photos1","/flower_photos2"]
-    },
-    "ramfs": {
-        "data_dir": ["/flower_photos1","/flower_photos2"]
-    }
-  },
-
+        "dss": {
+          "credentials": {
+            "endpoint": "http://202.0.0.137:9000",
+            "access_key": "minio",
+            "secret_key": "minio123"
+          }
+        }
+      },
+      "fs": {
+         "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos","/home/somnath.s/.keras/datasets/flower_photos2"]
+      }
 ```
 ### Create a CustomData class at  the following file
 ```
@@ -125,6 +124,33 @@ Update categories to read from.
             },
 
 ## Add / update training class
+```
+## Parallel listing of files or objects
+Update the "workers" count in the following section , to start parallel listing.
+```
+ "execution":{
+    "workers": 10,  <<=== Update parallel workers no
+    "steps":{
+      "model": true,
+      "training": true,
+      "inference": false,
+      "metrics": false
+    }
+  },
+```
+## Parallel read of file or objects from S3
+The PyTorch data_loader can be used to read files or objects in parallel through multiple workers. The workers number can
+be specified in the following section. 
+```
+"PyTorch": {
+                  "DataLoader": {
+                    "shuffle": true,
+                    "num_workers": 49,   << ==== Update this variable.
+                    "persistent_workers": true,
+                    "prefetch_factor": 2,
+                    "pin_memory": false,
+                    "drop_last": false
+                  },
 ```
 ## Update model
 A default Convolution Neural Network (CNN) is provided with few layers. Based on that a custom class can be created.

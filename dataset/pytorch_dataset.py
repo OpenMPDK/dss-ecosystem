@@ -213,9 +213,9 @@ class RandomAccessDataset(Dataset):
             self.get_s3_clients()
             data_source_summary = ", Client_Lib:{} ".format(self.s3_config["client_lib"]) + data_source_summary
         elif self.storage_format == "fs":
-            if self.storage_name in ["nfs", "ramfs"]:
-                self.data_dirs = storage_config[self.storage_format]["data_dir"]
-                self.data_source = self.read_file_system_data
+            #if self.storage_name in ["nfs", "ramfs"]:
+            self.data_dirs = storage_config[self.storage_format]["data_dir"]
+            self.data_source = self.read_file_system_data
 
         self.logger.info("Data source:{}, format:{}{}".format(self.storage_name, self.storage_format, data_source_summary))
 
@@ -244,7 +244,8 @@ class PythonReadDataset(RandomAccessDataset):
                                                 config=config,
                                                 logger=logger)
 
-    def read_file_system_data(self, image):
+    def read_file_system_data(self, **kwargs):
+        image = kwargs["image"]
         image_path = image[0]  # (image1,0) => (<image_name>,<Category Index>)
         # category = self.label[image[1]]  # Find out category
         # image_path = self.data_dir + "/" + category + "/" + image_name
