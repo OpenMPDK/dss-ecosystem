@@ -107,7 +107,7 @@ class RandomAccessDataset(Dataset):
 
         # Calculate maximum number of workers.
         if self.max_workers > fs_share_count * categoris_count:
-            max_workers = fs_share_count * categoris_count
+            self.max_workers = fs_share_count * categoris_count
 
         # Create max_workers number of sets of category paths.
         category_paths = [[] for i in range(self.max_workers)]
