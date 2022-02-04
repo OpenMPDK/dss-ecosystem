@@ -202,12 +202,15 @@ class DssClientLib(object):
         bucket= kwargs["bucket"]
         object_key = kwargs["key"]
         dest_file_path= kwargs["dest_file_path"]
-        file_path = dest_file_path + "/" + object_key
-        # The complete directory path should be created before calling get_object function.
-        directory = os.path.dirname(file_path)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        if object_key and dest_file_path:
+        if dest_file_path == "/dev/null":
+            file_path = dest_file_path
+        else:
+            file_path = dest_file_path + "/" + object_key
+            # The complete directory path should be created before calling get_object function.
+            directory = os.path.dirname(file_path)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+        if object_key and file_path:
             ret = self.get_object(object_key, file_path)
             if ret == 0:
                 return True

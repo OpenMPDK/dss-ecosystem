@@ -83,8 +83,9 @@ class RandomAccessDatasetTrain(DNNTrain):
                 if batch_index % self.max_batch_size == 0:
                     self.logger.info(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
                     running_loss = 0.0
-
-        self.logger.info("Training is done : {:.4f} seconds".format(time.monotonic() - start_time))
+        total_time = time.monotonic() - start_time
+        bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value /1024) / total_time
+        self.logger.info("Training is done : {:.2f} seconds, BW:{:.2f} MiB/Sec".format(total_time, bw))
 
 class PythonReadTrain(DNNTrain):
 
@@ -98,9 +99,11 @@ class PythonReadTrain(DNNTrain):
         for epoch in range(self.epochs):
             for batch_index, data in enumerate(self.train_dataloader):
                 if batch_index == self.max_batch_size - 1:
-                    total_time = time.monotonic() - start
-                    self.logger.info("1 epoch time: {:.4f}".format(total_time))
                     break
+        total_time = time.monotonic() - start
+        bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value/1024) / total_time
+        self.logger.info("1 epoch time: {:.2f} Sec, {} KBytes, BW:{:.2f} MiB/Sec".format(total_time, self.train_dataloader.dataset.dataset_size_in_bytes.value, bw))
+
 
 class SequentialDatasetTrain(DNNTrain):
     """

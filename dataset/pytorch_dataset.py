@@ -58,6 +58,9 @@ class RandomAccessDataset(Dataset):
 
         # Transform
 
+        # Datasize calculation
+        self.dataset_size_in_bytes = Value('l', 0) # In bytes
+
 
 
     def __len__(self):
@@ -84,8 +87,6 @@ class RandomAccessDataset(Dataset):
             image_ndarray = self.tansform(image_ndarray)
 
         return image_ndarray, image_label
-
-
 
     def get_image_names(self):
         """
@@ -184,6 +185,8 @@ class RandomAccessDataset(Dataset):
         except Exception as e:
             self.logger.excep(f"Exception:{e}")
         if image_buffer:
+            with self.dataset_size_in_bytes.get_lock():
+                self.dataset_size_in_bytes.value += len(image_buffer)
             image_numpy_array = np.asarray(bytearray(image_buffer))
             # Converts to image format
             image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
@@ -252,9 +255,57 @@ class PythonReadDataset(RandomAccessDataset):
         # img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
         # print(image)
         with open(image_path, mode='rb') as file:
-            fileContent = file.read()
+            fileContent = file.read()  # Returns byte object
+            with self.dataset_size_in_bytes.get_lock():
+                self.dataset_size_in_bytes.value += int(len(fileContent) / 1024)
 
         return torch.FloatTensor(3, 2)
+
+    def read_s3_object(self, **kwargs):
+        """
+        Read object from S3 , Any S3 compatible storage DSS, AWS-S3
+        :param object_key:
+        :return:
+        """
+        image = kwargs["image"]
+        worker_id = kwargs["worker_id"]
+        object_key = image[0]
+        image_buffer = None
+        image_2darray = []
+        try:
+            image_buffer = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key)
+            #self.logger.info("Type:{}, len:{}".format(type(image_buffer), len(image_buffer)))
+        except Exception as e:
+            self.logger.excep(f"Exception:{e}")
+        if image_buffer:
+            with self.dataset_size_in_bytes.get_lock():
+                self.dataset_size_in_bytes.value += int(len(image_buffer) / 1024)
+                #self.logger.info("File Size:{} Bytes".format(self.dataset_size_in_bytes.value))
+
+        return torch.FloatTensor(3, 2)
+
+class PythonReadDatasetToDevNull(RandomAccessDataset):
+
+    def __init__(self, config={}, logger=None):
+        super(PythonReadDatasetToDevNull, self).__init__(
+                transform=None,
+                config=config,
+                logger=logger)
+    def read_s3_object(self, **kwargs):
+        """
+        Read object from S3 , Any S3 compatible storage DSS, AWS-S3
+        :param object_key:
+        :return:
+        """
+
+        image = kwargs["image"]
+        worker_id = kwargs["worker_id"]
+        object_key = image[0]
+        self.s3_clients[worker_id].getObjectToFile(bucket=self.s3_config["bucket"], key=object_key, dest_file_path="/dev/null")
+        with self.dataset_size_in_bytes.get_lock():
+            self.dataset_size_in_bytes.value = 40857600
+        return torch.FloatTensor(3, 2)
+
 
 
 class TorchImageClassificationDataset(RandomAccessDataset):
@@ -291,6 +342,8 @@ class TorchImageClassificationDataset(RandomAccessDataset):
         # end time
         return img_ndarray
         """
+
+
     #def read_s3_object(self, **kwargs):
         """
         Read object from S3 , Any S3 compatible storage DSS, AWS-S3
