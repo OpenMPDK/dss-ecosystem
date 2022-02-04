@@ -58,10 +58,14 @@ class RandomAccessDatasetTrain(DNNTrain):
                                        logger=kwargs["logger"])
 
     def train(self):
-        start_time = time.monotonic()
-        self.logger.info(f"INFO: Training started! {start_time}")
+        """
+        Train the model with valid dataset.
+        :return: None
+        """
+        self.logger.info("INFO: Training started!")
         criterion = self.model.loss_function()
         optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
+        start_time = time.monotonic()
         for epoch in range(self.epochs):
             running_loss = 0.0
             # Following line returns image, label tensor.
@@ -85,7 +89,11 @@ class RandomAccessDatasetTrain(DNNTrain):
                     running_loss = 0.0
         total_time = time.monotonic() - start_time
         bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value /1024) / total_time
-        self.logger.info("Training is done : {:.2f} seconds, BW:{:.2f} MiB/Sec".format(total_time, bw))
+        train_summary = "** Train Summary **\n"
+        train_summary += "\t Epochs:{}, BatchSize:{}, MaxBatchSize:{}\n".format(self.epochs, self.batch_size,self.max_batch_size)
+        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec".format(total_time,
+                                                self.train_dataloader.dataset.dataset_size_in_bytes.value,  bw)
+        self.logger.info(train_summary)
 
 class PythonReadTrain(DNNTrain):
 
@@ -102,7 +110,11 @@ class PythonReadTrain(DNNTrain):
                     break
         total_time = time.monotonic() - start
         bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value/1024) / total_time
-        self.logger.info("1 epoch time: {:.2f} Sec, {} KBytes, BW:{:.2f} MiB/Sec".format(total_time, self.train_dataloader.dataset.dataset_size_in_bytes.value, bw))
+        train_summary = "** Train Summary **\n"
+        train_summary += "\t Epochs:{}, BatchSize:{}, MaxBatchSize:{}\n".format(self.epochs,self.batch_size, self.max_batch_size)
+        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec".format( total_time,
+                         self.train_dataloader.dataset.dataset_size_in_bytes.value, bw)
+        self.logger.info(train_summary)
 
 
 class SequentialDatasetTrain(DNNTrain):

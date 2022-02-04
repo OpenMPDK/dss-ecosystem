@@ -105,6 +105,7 @@ class MultiprocessingLogger(object):
             self.warn("Logger already started!")
 
     def stop(self):
+        self.info("Log file is saved at {}".format(self.logfile))
         self.info("LOGGER Stopping logging!")
         while self.process.is_alive():
             self.stop_logging.value = 1

@@ -186,7 +186,7 @@ class RandomAccessDataset(Dataset):
             self.logger.excep(f"Exception:{e}")
         if image_buffer:
             with self.dataset_size_in_bytes.get_lock():
-                self.dataset_size_in_bytes.value += len(image_buffer)
+                self.dataset_size_in_bytes.value += int(len(image_buffer) / 1024)
             image_numpy_array = np.asarray(bytearray(image_buffer))
             # Converts to image format
             image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
