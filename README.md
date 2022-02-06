@@ -12,6 +12,7 @@ Install the required libraries by running the following command in the node you 
 ```
 python3 -m pip install -r requirements.txt
 ```
+To work with dss_client lib, one require to install that library separately on the node.
 
 ## Configuration
 The custom usage requires user to update dataset, model and training. Update the following sections.
@@ -261,7 +262,14 @@ Update custom training class name as below.
 ## Execution
 Once all the configuration is done, run the tool as below.
 ```
+# Use configuration file from default location.
 python3 benchmark.py
+
+# Use configuration file from custom location
+python3 benchmark.py -cfg <configuration fle>
+
+# To run with dss_cleint lib use thw following command
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 benchmark.py '
 
 ```
 

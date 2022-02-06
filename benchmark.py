@@ -22,16 +22,14 @@ class Benchmarking(object):
         # dnn framework instance
         self.dnn_framework = None
 
-        if config.get("debug", False):
-            self.logging_level = "DEBUG"
-
-
         # Logging
         self.logging_path = "/var/log/dss"
         self.logging_level = "INFO"
         if "logging" in config:
             self.logging_path = config["logging"].get("path", "/var/log/dss")
             self.logging_level = config["logging"].get("level", "INFO")
+        if config.get("debug", False):
+            self.logging_level = "DEBUG"
         self.logger = None
         self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
         self.logger_queue = Queue()

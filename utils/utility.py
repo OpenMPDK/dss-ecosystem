@@ -35,13 +35,11 @@ import os
 import sys
 import subprocess
 import traceback
-import ntplib
 import time
 import hashlib
-import paramiko
 import socket
 import queue
-from multiprocessing import Process, Queue, Value, Lock
+from multiprocessing import Process, Queue, Value
 
 
 """
@@ -115,18 +113,6 @@ def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="
     return ret, console_output
 
 
-@exception
-def ntp_time(host):
-    """
-    return the ntp server time for unified timing
-    :return: <int> ntp time
-    """
-
-    client = ntplib.NTPClient()
-    response = client.request(host)
-    ntp_time = int(response.tx_time)
-    return ntp_time
-
 
 @exception
 def epoch(ts):
@@ -151,30 +137,6 @@ def get_file_path(base_dir, file_name):
     file_path = os.path.abspath(base_dir + "/" + file_name)
 
     return file_path
-
-
-@exception
-def remoteExecution(host, username, password="", cmd="", blocking=False):
-    """
-    Remote execution of a command to the specified host
-    :param host:
-    :param cmd:
-    :param blocking:
-    :return:
-    """
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-    client.connect(hostname=host, username=username, password=password)
-    stdin, stdout, stderr = client.exec_command(cmd)
-
-    if blocking:
-        status = stdout.channel.recv_exit_status()
-        stdout_lines = stdout.readlines()
-        stderr_lines = stderr.readlines()
-        client.close()
-        return stdout_lines, stderr_lines, status
-    else:
-        return client, stdin, stdout, stderr
 
 def get_s3_prefix(logger, nfs_cluster, prefix=None):
     """
@@ -259,30 +221,7 @@ def get_hash_key(**kwargs):
 
     return hash_key
 
-def get_ip_address(logger, hostname_or_ip_address=None, ip_address_family="IPV4"):
-    """
-    Generate IP address from hostname and internet address family specified.
-    If IP address specified instead of hostname, it returns IP address.
-    :param logger:
-    :param hostname_or_ip_address:
-    :param ip_address_family:
-    :return:
-    """
-    ip_address = None
-    if hostname_or_ip_address:
-      try:
-        if ip_address_family.upper() == "IPV4":
-          ip_address = socket.gethostbyname(hostname_or_ip_address)
-        elif ip_address_family.upper() == "IPV6":
-          ip_address = socket.getaddrinfo(hostname_or_ip_address, None, family=socket.AF_INET6, proto=socket.IPPROTO_TCP)[-1][-1][0]
-        else:
-          logger.error("WRONG IP Address Family ...")
-      except Exception as e:
-        logger.error("Failed getting IP address for hostname/ip_address :{},Family:{} \n- {}".format(
-                                                                    hostname_or_ip_address, ip_address_family, e))
-    else:
-      logger.error("Hostname or IP Address not specified!")
-    return ip_address
+
 
 @exception
 def is_prefix_valid_for_nfs_share(logger, **kwargs):
