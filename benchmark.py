@@ -9,6 +9,7 @@ import pathlib
 from datetime import datetime
 from framework import TensorFlow, PyTorch
 from logger import MultiprocessingLogger
+from metrics.metrics import Metrics
 from multiprocessing import Queue, Value
 
 
@@ -34,6 +35,9 @@ class Benchmarking(object):
         self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
         self.logger_queue = Queue()
 
+        # Metrics
+        self.metric =None
+
     def start(self):
         """
         Start the DNN process with dataset creation, training and sample inference.
@@ -49,26 +53,44 @@ class Benchmarking(object):
         if self.framework_name == "TensorFlow":
             self.dnn_framework =  TensorFlow(self.config, self.logger)
         elif self.framework_name == "PyTorch":
-            self.dnn_framework = PyTorch(self.config, self.logger)
+            self.dnn_framework = PyTorch(config=self.config,
+                                         logger=self.logger)
         else:
             pass
 
         self.logger.info(f"Starting DNN benchmark with {self.framework_name} framework")
         self.dnn_framework.initialize()
+
+        # Create model
         if self.execution_config["steps"]["model"]:
             self.dnn_framework.create_model()
+        # Train model
         if self.execution_config["steps"]["training"]:
             self.dnn_framework.training()
-
+        # Perform inference
         if self.execution_config["steps"]["inference"]:
             self.dnn_framework.inference()
+
+        # Initiate metrics collection
+        if self.execution_config["steps"]["metrics"]:
+            self.metrics_collection()
+
+
 
     def stop(self):
         pass
 
 
-    def metrics(self):
-        pass
+    def metrics_collection(self):
+        """
+        Create metrics collection class
+        :return:
+        """
+        self.dnn_framework.update_metrics()
+        self.metric = Metrics(config=self.config["metrics"],
+                              data=self.dnn_framework.metrics,
+                              logger=self.logger)
+        self.metric.process()
 
     def start_logging(self):
         """
@@ -104,7 +126,7 @@ if __name__ == "__main__":
     #print(params)
     config_obj = Config(params)
     config = config_obj.get_config()
-    print(config)
+    #print(config)
 
     bench = Benchmarking(config)
     bench.start()

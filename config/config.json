@@ -14,7 +14,7 @@
                   },
                   "distributed_data_parallel": false
                 },
-                "batch_size": 64,
+                "batch_size": 140,
                 "max_batch_size": 10,
                 "epochs": 1
                 },
@@ -25,7 +25,7 @@
       "model": true,
       "training": true,
       "inference": false,
-      "metrics": false
+      "metrics": true
     }
   },
   "device": "CPU",
@@ -44,8 +44,8 @@
                "image_dimension": [32,32]
               },
   "storage": {
-      "format": "s3",
-      "name": "dss",
+      "format": "fs",
+      "name": "nfs",
       "s3": {
         "bucket": "bucket",
         "prefix": ["flower_photos/", "flower_photos2/"],
@@ -71,10 +71,8 @@
   },
   "metrics": {
       "format": "csv",
-      "field_name": [],
-      "place": [],
-      "graph": false,
-      "path": "<path to store data>"
+      "graph": {"name": "SampleGraph", "enabled": false},
+      "path": "/home/somnath.s/work/dss_dnn_benchmark"
   },
   "logging": { "path": "/var/log/dss", "level": "INFO"}
 }

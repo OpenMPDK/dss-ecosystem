@@ -48,6 +48,12 @@ class DNNFramework(object):
             else:
                 self.device = 'cpu'
 
+        # Workers:
+        self.listing_workers = config["execution"]["workers"]
+        # Metrics
+        self.metrics = []
+        self.metrics_train = []
+
 
     def create_dataset(self):
         if self.dataset is None:
@@ -70,6 +76,25 @@ class DNNFramework(object):
         # Convert np-array
         self.features = np.array(self.features).reshape(-1, self.image_dimension[0], self.image_dimension[1], 1)
         self.labels = np.array(self.labels)
+
+    def update_metrics(self):
+
+        for index in range(2):
+            self.metrics.append([])
+        # Update metrics
+        self.metrics[0] = ["dl_workers","listing_workers","listing_time", "max_batch_size","batch_size"]
+        self.metrics[1] = [str(self.dataset.data_loader_workers),
+                           str(self.dataset.max_workers),
+                           str(self.dataset.listing_time),
+                           str(self.max_batch_size),
+                           str(self.batch_size)
+                           ]
+
+        # Update train metrics
+        self.metrics[0].extend(self.metrics_train[0])
+        self.metrics[1].extend(self.metrics_train[1])
+
+
 
 
 class TensorFlow(DNNFramework):
@@ -182,9 +207,8 @@ class PyTorch(DNNFramework):
                                            drop_last=self.data_loader_params["drop_last"]
         )
 
-        dataiter = iter(self.train_dataloader)
-        train_image , train_label = dataiter.next()
-        self.logger.info("Train Data:{},{}".format(train_image.size(),train_label.size()))
+        self.logger.info("DataLoader initialized with workers:{}, max_batch_size:{}, batch_size:{}".format(
+            self.data_loader_params["num_workers"], self.max_batch_size, self.batch_size))
     def create_model(self):
         """
         Create NeuralNetwork model
@@ -210,6 +234,7 @@ class PyTorch(DNNFramework):
                             dataloader=self.train_dataloader,
                             model=self.model,
                             device=self.device,
+                            metrics=self.metrics_train,
                             logger=self.logger)
         train.start()
 

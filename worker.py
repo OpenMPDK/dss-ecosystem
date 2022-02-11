@@ -142,7 +142,7 @@ class Worker(object):
         images = []
         # Iterate over all specified the NFS paths/ all the prefixes.
         for category_path in self.data_dirs:
-            self.logger.info("Worker-{}, Listing datadir/prefix - {}".format(self.id,category_path))
+            self.logger.debug("Worker-{}, Listing datadir/prefix - {}".format(self.id,category_path))
             category = category_path.split("/")[-1]
             category_index = self.categories.index(category)
 

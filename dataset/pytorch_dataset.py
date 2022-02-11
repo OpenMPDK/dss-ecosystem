@@ -11,7 +11,7 @@ import glob
 
 import torch
 from torch.utils.data import Dataset
-from utils.utility import validate_s3_prefix
+from utils.utility import validate_s3_prefix, exec_cmd
 from multiprocessing import Queue, Value
 from worker import Worker
 import time
@@ -51,6 +51,8 @@ class RandomAccessDataset(Dataset):
         self.workers_finished = Value('i', 0)
         self.workers = []
         self.image_queue = Queue()
+        # Listing time
+        self.listing_time = 0
 
         # Collect all the image names and corresponding label
         self.images = []
@@ -60,8 +62,6 @@ class RandomAccessDataset(Dataset):
 
         # Datasize calculation
         self.dataset_size_in_bytes = Value('l', 0) # In bytes
-
-
 
     def __len__(self):
         """
@@ -154,8 +154,8 @@ class RandomAccessDataset(Dataset):
         if not self.image_queue:
             self.logger.fatal("Couldn't list files, exit application")
             sys.exit()
-
-        self.logger.info("Total files listed: {}, Time: {:0.4f} seconds".format(total_listed_file, end_listing_time - start_listing_time))
+        self.listing_time = "{:0.4f}".format(end_listing_time - start_listing_time)
+        self.logger.info("Total files listed: {}, Time: {} seconds".format(total_listed_file, self.listing_time))
 
     def read_file_system_data(self, **kwargs):
         """
@@ -216,7 +216,13 @@ class RandomAccessDataset(Dataset):
             self.get_s3_clients()
             data_source_summary = ", Client_Lib:{} ".format(self.s3_config["client_lib"]) + data_source_summary
         elif self.storage_format == "fs":
-            #if self.storage_name in ["nfs", "ramfs"]:
+            # Empty page cache.
+            command = "echo 3> /proc/sys/vm/drop_caches"
+            ret,console = exec_cmd(command, True, True)
+            if ret ==0 :
+                self.logger.info("Cleared page cache ...")
+            else:
+                self.logger.error("Unable to clear pagecache - ret:{},console:{}".format(ret, console))
             self.data_dirs = storage_config[self.storage_format]["data_dir"]
             self.data_source = self.read_file_system_data
 

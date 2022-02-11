@@ -52,6 +52,7 @@ class RandomAccessDatasetTrain(DNNTrain):
     def __init__(self,**kwargs):
         self.config = kwargs["config"]
         self.train_dataloader = kwargs["dataloader"]
+        self.metrics = kwargs["metrics"]
         super(RandomAccessDatasetTrain,self).__init__(config=self.config,
                                        model=kwargs["model"],
                                        device=kwargs["device"],
@@ -66,10 +67,13 @@ class RandomAccessDatasetTrain(DNNTrain):
         criterion = self.model.loss_function()
         optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
         start_time = time.monotonic()
+        # Add metrics header
+        self.metrics.append(["time", "dataset_size","bw"])
         for epoch in range(self.epochs):
             running_loss = 0.0
             # Following line returns image, label tensor.
-            j = 0
+            self.train_dataloader.dataset.dataset_size_in_bytes.value = 0
+            epoch_start_time = time.monotonic()
             for batch_index, data in enumerate(self.train_dataloader, 0):
                 images, labels = data
                 images = images.float()  # Convert to float.
@@ -87,6 +91,10 @@ class RandomAccessDatasetTrain(DNNTrain):
                 if batch_index % self.max_batch_size == 0:
                     self.logger.info(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
                     running_loss = 0.0
+            dataload_time = round((time.monotonic() - epoch_start_time),2)
+            dataset_size_mb = round((self.train_dataloader.dataset.dataset_size_in_bytes.value /1024), 2)
+            epoch_bw = round((dataset_size_mb / dataload_time),2)
+            self.metrics.append([str(dataload_time),str(dataset_size_mb), str(epoch_bw)])
         total_time = time.monotonic() - start_time
         bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value /1024) / total_time
         train_summary = "** Train Summary **\n"
@@ -94,6 +102,7 @@ class RandomAccessDatasetTrain(DNNTrain):
         train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec".format(total_time,
                                                 self.train_dataloader.dataset.dataset_size_in_bytes.value,  bw)
         self.logger.info(train_summary)
+
 
 class PythonReadTrain(DNNTrain):
 
@@ -148,6 +157,7 @@ class CustomTrain(object):
         self.device = kwargs["device"]
         self.name = self.config["training"]["name"]
         self.logger = kwargs["logger"]
+        self.metrics = kwargs["metrics"]
         self.class_name = self.get_class_name()
 
     def get_class_name(self):
@@ -164,6 +174,7 @@ class CustomTrain(object):
                                            dataloader=self.dataloader,
                                            model=self.model,
                                            device=self.device,
+                                           metrics=self.metrics,
                                            logger=self.logger
                                            )
             # custom_train.create_model()

@@ -58,13 +58,27 @@ class Config(object):
         config = {}
         with open(self.config_file, "rb") as cfg:
             config = json.loads(cfg.read().decode('UTF-8', "ignore"))
+        # Update config location
+        if self.params["config"] is None:
+            config["config"] = self.config_file
         if self.params:
             for param in self.params:
                 if param in config:
                     if self.params[param]:
                         config[param] = self.params[param]
                 else:
-                    config[param] = self.params[param]
+                    # dataloader_workers
+                    if self.params[param]:
+                        if param == "dataloader_workers":
+                            config["framework"]["PyTorch"]["DataLoader"]["num_workers"] = self.params[param]
+                        elif param == "listing_workers":
+                            config["execution"]["workers"] = self.params[param]
+                        elif param == "batch_size":
+                            config["framework"]["batch_size"] = self.params[param]
+                        elif param == "max_batch_size":
+                            config["framework"]["max_batch_size"] = self.params[param]
+                        else:
+                            config[param] = self.params[param]
         return config
 
     def get_config_file(self, config_file):
@@ -85,6 +99,14 @@ def ArgumentParser():
     parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
     parser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                         help='Dry run - Just check operation is working , but does not actual upload')
+    parser.add_argument("--dataloader_workers", "-dw", type=int, required=False,
+                        help='Dataloader workers ')
+    parser.add_argument("--listing_workers", "-lw", type=int, required=False,
+                        help='Listing workers ')
+    parser.add_argument("--batch_size", "-bs", type=int, required=False,
+                        help='Batch size ')
+    parser.add_argument("--max_batch_size", "-mbs", type=int, required=False,
+                        help='Max batch size ')
     parser.add_argument("--computation", "-comp", type=str, required=False, default="CPU", help='CPU/GPU based computation.')
     parser.add_argument("--framework", "-fw", type=str, required=False,
                         help='Deep learning framework such as TensorFlow(TF), PyTorch(PT)')
