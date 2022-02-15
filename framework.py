@@ -91,8 +91,9 @@ class DNNFramework(object):
                            ]
 
         # Update train metrics
-        self.metrics[0].extend(self.metrics_train[0])
-        self.metrics[1].extend(self.metrics_train[1])
+        if self.metrics_train:
+            self.metrics[0].extend(self.metrics_train[0])
+            self.metrics[1].extend(self.metrics_train[1])
 
 
 

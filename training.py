@@ -20,6 +20,10 @@ class DNNTrain(object):
         self.batch_size = self.framework["batch_size"]
         self.max_batch_size = self.framework["max_batch_size"]
         self.image_dimension = self.config["dataset"]["image_dimension"]
+        self.train_dataloader = kwargs["dataloader"]
+
+        # Metrics
+        self.metrics = kwargs["metrics"]
 
         self.load_libraries()
 
@@ -50,13 +54,7 @@ class RandomAccessDatasetTrain(DNNTrain):
     Example of training for MapStyle dataset.
     """
     def __init__(self,**kwargs):
-        self.config = kwargs["config"]
-        self.train_dataloader = kwargs["dataloader"]
-        self.metrics = kwargs["metrics"]
-        super(RandomAccessDatasetTrain,self).__init__(config=self.config,
-                                       model=kwargs["model"],
-                                       device=kwargs["device"],
-                                       logger=kwargs["logger"])
+        super(RandomAccessDatasetTrain,self).__init__(**kwargs)
 
     def train(self):
         """
@@ -107,21 +105,24 @@ class RandomAccessDatasetTrain(DNNTrain):
 class PythonReadTrain(DNNTrain):
 
     def __init__(self,**kwargs):
-        self.config = kwargs["config"]
         self.train_dataloader = kwargs["dataloader"]
         super(PythonReadTrain, self).__init__(**kwargs)
 
     def train(self):
+        # Add metrics header
+        self.metrics.append(["time", "dataset_size", "bw"])
         start= time.monotonic()
         for epoch in range(self.epochs):
             for batch_index, data in enumerate(self.train_dataloader):
                 if batch_index == self.max_batch_size - 1:
                     break
-        total_time = time.monotonic() - start
-        bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value/1024) / total_time
+        dataload_time = round((time.monotonic() - start),2)
+        dataset_size_mb = round((self.train_dataloader.dataset.dataset_size_in_bytes.value / 1024), 2)
+        bw = round((dataset_size_mb / dataload_time),2)
+        self.metrics.append([str(dataload_time), str(dataset_size_mb), str(bw)])
         train_summary = "** Train Summary **\n"
         train_summary += "\t Epochs:{}, BatchSize:{}, MaxBatchSize:{}\n".format(self.epochs,self.batch_size, self.max_batch_size)
-        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec".format( total_time,
+        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec".format( dataload_time,
                          self.train_dataloader.dataset.dataset_size_in_bytes.value, bw)
         self.logger.info(train_summary)
 

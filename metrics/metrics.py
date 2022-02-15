@@ -16,7 +16,10 @@ class Metrics(object):
         self.graph_data = []
 
     def process(self):
-        print(self.data)
+        """
+        Process metrics data. Save the metrics to a file and create Graph if enabled.
+        :return:
+        """
         self.save()
         # Check graph plotting is enabled?
         if self.graph_config["enabled"]:
@@ -39,10 +42,12 @@ class Metrics(object):
                 for record in self.data:
                     fh.write( ",".join(record) + "\n")
             self.logger.info("Metrics data stored at {}".format(self.metrics_file_name))
+        except PermissionError as e:
+            self.logger.excep(f"PermissionError: {e}")
         except IOError as e:
-            self.logger.error(e)
+            self.logger.excep(f"IOError:{e}")
         except Exception as e:
-            self.logger.error("{}".format(e))
+            self.logger.excep(f"{e}")
 
 
     def graph_plot(self):
