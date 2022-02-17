@@ -60,14 +60,16 @@ bucket/flower_photos2/tulips
 ```
 The tool support file system data as well as S3 data. Update configuration accordingly.
 For AWS, we are suppose to add bucket name (bucket).
+The supported client_lib is "boto3" or "dss_client". The "boto3" should support of type of object storage.
+But, "dss_client" only works for stock minio and dss-minio storage.
 ```
 "storage": {
-      "format": "fs",
-      "name": "nfs1",
+      "format": "fs",  <<<== Supported formats fs ( File Systems ), s3
+      "name": "nfs",  <<<== File System name such as nfs/wekafs or dss/aws for s3
       "s3": {
         "bucket": "bucket",
         "prefix": ["flower_photos/", "flower_photos2/"],
-        "client_lib": "boto3",
+        "client_lib": "boto3", <<<== Supported lib boto3, dss_client
         "aws": {
           "credentials": {
             "region_name": "us-east-2",
@@ -126,6 +128,9 @@ Update categories to read from.
 
 ## Add / update training class
 ```
+## Available dataset class and corresponding training class.
+"PythonReadDataset" => "PythonReadTrain"   # This skip actual model training, only measure read performance. 
+"TorchImageClassificationDataset" => "RandomAccessDatasetTrain" # It trains simple CNN model while load data.
 ## Parallel listing of files or objects
 Update the "workers" count in the following section , to start parallel listing.
 ```
@@ -258,7 +263,27 @@ Update custom training class name as below.
   "name": "RandomAccessDatasetTrain"  
 },
 ```
+## Metrics collection
+Enable metrics collection and path.
+```
+  "steps":{
+      "model": true,
+      "training": true,
+      "inference": false,
+      "metrics": true  <<=== Enable metrics collection
+    }
+"metrics": {
+      "format": "csv",
+      "graph": {"name": "SampleGraph", "enabled": false},
+      "path": "/home/somnath.s/work/dss_dnn_benchmark"
+  },
+```
 
+## Logging
+Set the logging path in the following section.
+```
+"logging": { "path": <log_path>, "level": "INFO"}
+```
 ## Execution
 Once all the configuration is done, run the tool as below.
 ```
