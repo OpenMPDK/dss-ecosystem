@@ -56,8 +56,11 @@ class DssClientLib(object):
         :return:
         """
         dss_client = None
+        dss_client_option = dss.clientOption()
+        dss_client_option.requestTimeoutMs = 10000 # 10 sec
+
         try:
-            dss_client =  dss.createClient(endpoint, access_key,secret_key)
+            dss_client =  dss.createClient(endpoint, access_key, secret_key, dss_client_option)
             if not dss_client:
                 self.logger.error("Failed to create s3 client from - {}".format(endpoint))
             else:
@@ -251,13 +254,14 @@ class DssClientLib(object):
         """
         List object-keys under a specified prefix . 
         The getObjects function has 3rd argument common_prefix should be True
+        The forth argument is used to specify number of object keys are to be returned in a single page. (10000)
         :param bucket: None ( for dss_client ) , For minio and boto3 there should be an bucket already created.
         :param prefix: A object key prefix
         :param delimiter: Default is "/" to receive first level object keys.
         :return: List of object keys.
         """
         try:
-            objects = self.dss_client.getObjects(prefix, delimiter, True)
+            objects = self.dss_client.getObjects(prefix, delimiter, True, 10000)
             while True:
                 try:
                     object_keys = []
