@@ -40,12 +40,32 @@ from minio.error import BucketAlreadyOwnedByYou
 class DssClientLib(object):
     def __init__(self, **kwargs):
         self.credentials = kwargs["credentials"]
+        self.config = kwargs["config"]
         self.logger = kwargs["logger"]
         self.s3_endpoint = self.credentials["endpoint"]
         self.access_key = self.credentials["access_key"]
         self.secret_key = self.credentials["secret_key"]
         self.status = False
+        self.dss_client_options = None
         self.dss_client = self.create_client(self.s3_endpoint, self.access_key, self.secret_key)
+
+
+    def set_dss_client_options(self):
+        """
+        Set some S3 options as required by S3.
+        :return:
+        """
+        try:
+            self.dss_client_options = dss.clientOption()
+            self.dss_client_options.requestTimeoutMs = self.config["request_timeout_ms"]  # 10 sec
+            self.dss_client_options.maxConnections = self.config["max_connections"]
+            self.dss_client_options.httpRequestTimeoutMs = self.config["http_request_timeout_ms"]
+            self.dss_client_options.connectTimeoutMs = self.config["connect_timeout_ms"] # 1000
+            self.dss_client_options.enableTcpKeepAlive = self.config["enable_tcp_keep_alive"]
+            self.dss_client_options.tcpKeepAliveIntervalMs = self.config["tcp_keep_alive_interval_ms"]  # 10 sec
+        except Exception as e:
+            self.logger.excep(f"DSS_CLIENT_OPTIONS: {e}")
+
 
     def create_client(self, endpoint, access_key, secret_key):
         """
@@ -56,11 +76,13 @@ class DssClientLib(object):
         :return:
         """
         dss_client = None
-        dss_client_option = dss.clientOption()
-        dss_client_option.requestTimeoutMs = 10000 # 10 sec
+        self.set_dss_client_options()
 
         try:
-            dss_client =  dss.createClient(endpoint, access_key, secret_key, dss_client_option)
+            if self.dss_client_options:
+                dss_client =  dss.createClient(endpoint, access_key, secret_key, self.dss_client_options)
+            else:
+                dss_client = dss.createClient(endpoint, access_key, secret_key)
             if not dss_client:
                 self.logger.error("Failed to create s3 client from - {}".format(endpoint))
             else:

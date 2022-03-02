@@ -6,7 +6,7 @@
                 "PyTorch": {
                   "DataLoader": {
                     "shuffle": true,
-                    "num_workers": 49,
+                    "num_workers": 64,
                     "persistent_workers": true,
                     "prefetch_factor": 2,
                     "pin_memory": false,
@@ -14,15 +14,15 @@
                   },
                   "distributed_data_parallel": false
                 },
-                "batch_size": 140,
-                "max_batch_size": 10,
+                "batch_size": 100,
+                "max_batch_size": 10000,
                 "epochs": 1
                 },
   
   "execution":{
-    "workers": 10,
+    "workers": 10, 
     "steps":{
-      "model": true,
+      "model": false,
       "training": true,
       "inference": false,
       "metrics": true
@@ -34,22 +34,27 @@
     "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
   },
   "training":{
-    "name": "RandomAccessDatasetTrain"
+    "name": "PythonReadTrain"
   },
   "dataset" : {
-               "name": "TorchImageClassificationDataset",
+               "name": "PythonReadDataset",
                "access": {"random": true, "sequential":  false},
                "type":  "image",
-               "label": ["daisy", "dandelion", "roses", "sunflowers", "tulips"],
+               "label": ["dir500k", "dir500k1"],
                "image_dimension": [32,32]
               },
   "storage": {
-      "format": "fs",
-      "name": "nfs",
+      "format": "s3",
+      "name": "dss",
       "s3": {
         "bucket": "bucket",
-        "prefix": ["flower_photos/", "flower_photos2/"],
-        "client_lib": "boto3",
+        "prefix": ["204.0.0.137/nfs_share1/"],
+        "client_lib": {
+          "name": "dss_client",
+          "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
+                         "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
+                         "tcp_keep_alive_interval_ms":  1000 }
+        },
         "aws": {
           "credentials": {
             "region_name": "us-east-2",
@@ -66,7 +71,7 @@
         }
       },
       "fs": {
-         "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos","/home/somnath.s/.keras/datasets/flower_photos2"]
+         "data_dir": ["/nfs_share1"]
       }
   },
   "metrics": {
@@ -74,5 +79,5 @@
       "graph": {"name": "SampleGraph", "enabled": false},
       "path": "/home/somnath.s/work/dss_dnn_benchmark"
   },
-  "logging": { "path": "/var/log/dss", "level": "INFO"}
+  "logging": { "path": "/home/somnath.s/work/dss_dnn_benchmark", "level": "INFO"}
 }

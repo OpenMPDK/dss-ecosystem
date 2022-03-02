@@ -210,11 +210,11 @@ class RandomAccessDataset(Dataset):
             self.credentials = storage_config[self.storage_format][self.storage_name]["credentials"]
             self.s3_config = {"credentials": self.credentials, "bucket": bucket, "client_lib": client_lib}
             self.data_dirs = storage_config[self.storage_format]["prefix"]
-            if client_lib == "boto3":
+            if client_lib["name"] == "boto3":
                 data_source_summary = "Bucket:{} ".format(bucket)
             self.data_source = self.read_s3_object
             self.get_s3_clients()
-            data_source_summary = ", Client_Lib:{} ".format(self.s3_config["client_lib"]) + data_source_summary
+            data_source_summary = ", Client_Lib:{} ".format(client_lib["name"]) + data_source_summary
         elif self.storage_format == "fs":
             # Empty page cache.
             command = "echo 3> /proc/sys/vm/drop_caches"
@@ -237,10 +237,13 @@ class RandomAccessDataset(Dataset):
         if self.data_loader_workers > self.max_workers:
             max_s3_client_count = self.data_loader_workers
         self.logger.info(f"** Creating {max_s3_client_count} s3 clients for parallel processing! **")
-        if self.s3_config["client_lib"] == "dss_client":
+        if self.s3_config["client_lib"]["name"] == "dss_client":
             from dss_client import DssClientLib
-            self.s3_clients = [ DssClientLib(credentials=self.credentials,logger=self.logger) for i in range(max_s3_client_count)]
-        elif self.s3_config["client_lib"] == "boto3":
+            for i in range(max_s3_client_count):
+                s3_client = DssClientLib(credentials=self.credentials,config=self.s3_config["client_lib"]["dss_client"],
+                                         logger=self.logger)
+                self.s3_clients.append(s3_client)
+        elif self.s3_config["client_lib"]["name"] == "boto3":
             self.s3_clients = [ S3(storage_name=self.storage_name, credentials=self.credentials, logger=self.logger) for
                                 i in range(max_s3_client_count)]
 
@@ -309,7 +312,7 @@ class PythonReadDatasetToDevNull(RandomAccessDataset):
         object_key = image[0]
         self.s3_clients[worker_id].getObjectToFile(bucket=self.s3_config["bucket"], key=object_key, dest_file_path="/dev/null")
         with self.dataset_size_in_bytes.get_lock():
-            self.dataset_size_in_bytes.value = 40857600
+            self.dataset_size_in_bytes.value += 1024
         return torch.FloatTensor(3, 2)
 
 
