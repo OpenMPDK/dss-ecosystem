@@ -1,0 +1,18 @@
+{
+	"version": 0.1,
+	"init_time": 5,
+	"clusters": [
+		{
+			"id": 0,
+    		"endpoints": [
+        		{ "ipv4": "localhost", "port": 9001 }
+        	]
+        },
+        {
+			"id": 1,
+    		"endpoints": [
+        		{ "ipv4": "localhost", "port": 9002 }
+        	]
+        }
+	]
+}
