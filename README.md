@@ -1,36 +1,43 @@
 # dss-ecosystem
 
-The ecosystem software consists couple of software to interact with or benchmark DSS Object storage.
-The following section provides a very high level overview of the DSS ecosystem  
+DSS Ecosystem software consists of several software packages to interact with and benchmark DSS Object storage.
 
-## DSS Client library
+## DSS Client Library
 
-A customize S3 client library developed based on AWS C++ sdk to support multiple clusters.
-The library hide bucket from user and simply allow user to access objects using corresponding keys.
+A customized S3 client library based on [AWS SDK for C++](https://github.com/aws/aws-sdk-cpp) to support multiple logical clusters.
+DSS Client Library hides the underlying buckets from the user, allowing access to objects using corresponding keys.
 
-## Datamover
+[DSS Client Library README](./dss_client/README.md)
 
-A horizontally scalable distributed version of command line tool to interact with DSS Object storage. It supports following operations.
+## DSS Datamover
 
-- PUT: Uploaded file systems data to DSS object storage
+A horizontally scalable distributed command line tool to interact with DSS Object storage, supporting the following operations:
+
+- `PUT`: Uploaded file systems data to DSS object storage
   - Upload files from several client nodes and aggregate the upload status.
-- LIST: List the object keys from DSS object storage
+- `LIST`: List the object keys from DSS object storage
   - Supports parallel listing of object keys from a single node
   - Supports distributed listing of object keys and aggregation of keys.
-- GET: Download the objects from DSS object storage
+- `GET`: Download objects from DSS object storage
   - Download objects to a shared file space
-- DELETE: Remove objects from DSS object storage
+- `DELETE`: Remove objects from DSS object storage
 
-In addition to that, we support RESUME operation to upload files those were not uploaded in the previous run.
+Additionally, there is support for `RESUME` operation to upload additional files excluded from a previous `PUT`.
+
+[DSS Datamover README](./dss_datamover/README.md)
 
 ## Benchmark Tools
 
-Following are the custom benchmark tools developed to measure performance of DSS Object storage.
+The following are custom benchmark tools developed to measure performance of DSS Object storage.
 
 ### DSS PyTorch
 
 A benchmark tool developed to showcase the read access performance of the DSS Object storage.
 
-### DSS S3Bench
+[DSS PyTorch README](./dss_PyTorch/README.md)
 
-A customized version of S3Benchmark tool developed on top of original Wasabi S3 Benchmark tool.
+### DSS s3-benchmark
+
+A customized benchmark tool based on the original [Wasabi s3-benchmark](https://github.com/wasabi-tech/s3-benchmark) tool.
+
+[DSS s3-benchmark README](./dss_s3benchmark/README.md)
