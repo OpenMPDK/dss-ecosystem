@@ -283,9 +283,8 @@ class PythonReadDataset(RandomAccessDataset):
         image_2darray = []
         try:
             image_buffer = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key)
-            #self.logger.info("Type:{}, len:{}".format(type(image_buffer), len(image_buffer)))
         except Exception as e:
-            self.logger.excep(f"Exception:{e}")
+            self.logger.excep(f"{e}")
         if image_buffer:
             with self.dataset_size_in_bytes.get_lock():
                 self.dataset_size_in_bytes.value += int(len(image_buffer) / 1024)

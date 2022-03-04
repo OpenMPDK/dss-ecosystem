@@ -200,21 +200,14 @@ class DssClientLib(object):
         :param dest_file_path: file path in which object should be copied.
         :return:
         """
-        """
-        bucket= kwargs["bucket"]
         object_key = kwargs["key"]
-        dest_file_path= kwargs["dest_file_path"]
-        if object_key and dest_file_path:
-            ret = self.get_object(object_key, dest_file_path)
-            if ret == 0:
-                return True
-            if ret == 1:
+        if object_key:
+            buffer = self.get_object_buffer(object_key)
+            if not buffer:
                 self.logger.error("Retry downloading object for key - {}".format(object_key))
-                if self.get_object(object_key, dest_file_path) == 0:
-                    return True
-        return False
-        """
-        raise NotImplementedError("dss_client library: Use getObjectToFile function instead!")
+                buffer = self.get_object_buffer(object_key)
+
+        return buffer
 
     def getObjectToFile(self, **kwargs):
         """
@@ -247,7 +240,7 @@ class DssClientLib(object):
 
     def get_object(self, object_key, dest_file_path):
         """
-        Download the objects from S3 storage and store in a local or share path.
+        Download the objects from S3 storage and store in a local or shared file path.
         :param object_key:  A object key is unique in S3 storage and doesn't start with forward slash "/"
         :param dest_file_path: A physical file path where object to be copied.
         :return: Success = 0, Failure-Retry = 1, Failure = -1 (No-Retry)
@@ -271,6 +264,32 @@ class DssClientLib(object):
         except Exception as e:
             self.logger.excep("OtherException - {} , {}".format(object_key, e))
         return ret
+
+
+    def get_object_buffer(self, object_key):
+        """
+        Download the objects from S3 storage and store in a local or shared file path.
+        :param object_key:  A object key is unique in S3 storage and doesn't start with forward slash "/"
+        :param dest_file_path: A physical file path where object to be copied.
+        :return: Success = 0, Failure-Retry = 1, Failure = -1 (No-Retry)
+        """
+        buffer_length = 0
+        buffer = bytearray(10* 1024 * 1024)
+        try:
+            buffer_length = self.dss_client.getObjectBuffer(object_key, buffer)
+        except dss.FileIOError as e:
+            self.logger.error("FileIOError - key:{}, {}".format(object_key, e))
+        except dss.NetworkError as e:
+            self.logger.execp("NetworkError - key:{}, {}".format(object_key, e))
+        except dss.NoSuchResouceError as e:
+            self.logger.excep("NoSuchResouceError - {} , {}".format(object_key, e))
+        except dss.GenericError as e:
+            self.logger.error("GenericError - {} , {}".format(object_key, e))
+        except AttributeError as e:
+            raise NotImplementedError(f"NotImplemented - {e}")
+        except Exception as e:
+            self.logger.excep("OtherException - {} , {}".format(object_key, e))
+        return buffer[0: buffer_length]
 
     def listObjects(self, bucket=None,  prefix="", delimiter="/"):
         """
