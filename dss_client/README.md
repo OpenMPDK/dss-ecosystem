@@ -21,7 +21,7 @@ The easiest way to setup the build env is to use Anaconda to install gcc, cmake,
 
 - Install Anaconda
 
-```
+```bash
 wget https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh
 chmod +x Anaconda3-2020.11-Linux-x86_64.sh
 ./Anaconda3-2020.11-Linux-x86_64.sh
@@ -29,14 +29,14 @@ chmod +x Anaconda3-2020.11-Linux-x86_64.sh
 
 - Install pybind11 and aws-cpp-sdk
 
-```
+```bash
 Install pybind11
 sudo pip3 install pybind11
 ```
 
 - Use aws-cpp-sdk rpm, if not available build aws-cpp-sdk from the source
 
-```
+```bash
 Build aws-cpp-sdk:
 yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
 git clone https://github.com/aws/aws-sdk-cpp.git
@@ -52,13 +52,13 @@ sudo make install
 
 - Install dependencies
 
-```
+```bash
 sudo yum install -y git libmpc-devel mpfr-devel gmp-devel zlib-devel gcc gcc-c++ openssl-devel libcurl-devel libuuid-devel pulseaudio-libs-devel python3 python3-pip python3-devel
 ```
 
 - Build GCC 9.3.0
 
-```
+```bash
 git clone https://gcc.gnu.org/git/gcc.git
 cd gcc
 git checkout releases/gcc-9.3.0
@@ -72,7 +72,7 @@ sudo ldconfig
 
 - Build cmake 3.18.4
 
-```
+```bash
 cd ~/
 git clone https://gitlab.kitware.com/cmake/cmake.git
 cd cmake
@@ -84,21 +84,21 @@ sudo gmake install
 
 - Add cmake to path
 
-```
+```bash
 sed -i 's|^PATH=.*|&:/opt/cmake/bin|g' ~/.bash_profile
 source ~/.bash_profile
 ```
 
 - Install pybind11 and aws-cpp-sdk
 
-```
+```bash
 Install pybind11
 sudo pip3 install pybind11
 ```
 
 - Use aws-cpp-sdk rpm, if not available build aws-cpp-sdk from the source
 
-```
+```bash
 Build aws-cpp-sdk:
 yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
 git clone https://github.com/aws/aws-sdk-cpp.git
@@ -112,7 +112,7 @@ sudo make install
 
 - Build client library
 
-```
+```bash
 cd ~/
 git -c http.sslVerify=false clone https://msl-dc-gitlab.ssi.samsung.com/ssd/dss_client.git
 cd dss_client
@@ -121,7 +121,7 @@ cd dss_client
 
 - Validate the python extension, by starting python shell and run the following code, you should be able see a list of classes offered by client library
 
-```
+```python
  >>> import dss
  >>> print(help(dss))
 ```
@@ -135,7 +135,7 @@ or DSS cluster.
 
 Note: Before the run, you need to config S3 endpoint in the header section of the file,
 
-```
+```ini
 access_key = "minioadmin"
 access_secret = "minioadmin"
 discover_endpoint = 'http://127.0.0.1:9001'
@@ -150,16 +150,16 @@ to it. See conf.json example in the source tree.
 
 To enable aws-cpp-sdk logging, set environment variable DSS_AWS_LOG to the range between 0 and 6.
 
-```
+```c++
 enum class LogLevel : int
 {
-	Off = 0,
-	Fatal = 1,
-	Error = 2,
-	Warn = 3,
-	Info = 4,
-	Debug = 5,
-	Trace = 6
+    Off = 0,
+    Fatal = 1,
+    Error = 2,
+    Warn = 3,
+    Info = 4,
+    Debug = 5,
+    Trace = 6
 };
 ```
 
