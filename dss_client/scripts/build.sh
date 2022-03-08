@@ -40,8 +40,9 @@ BUILD_DIR="$DSS_CLIENT_DIR/build"
 STAGING_DIR="$BUILD_DIR/staging"
 # ARTIFACTS_DIR="$ANSIBLE_DIR/artifacts"
 
-# Remove Client Library build dir if it exists
+# Remove Client Library build dir and artifacts if they exist
 rm -rf "$BUILD_DIR"
+rm -f "$DSS_CLIENT_DIR"/*.tgz
 
 # Load GCC
 . "$SCRIPT_DIR/load_gcc.sh"
