@@ -204,7 +204,10 @@ class DssClientLib(object):
         buffer =  kwargs["memory"]
         buffer_length = 0
         if object_key:
-            buffer_length = self.get_object_buffer(object_key, buffer)
+            if type(buffer) == bytearray:
+                buffer_length = self.get_object_buffer(object_key, buffer)
+            else:
+                buffer_length = self.get_object_numpy_buffer(object_key, buffer)
             #if not buffer:
             #    self.logger.error("Retry downloading object for key - {}".format(object_key))
             #    buffer_length = self.get_object_buffer(object_key, buffer)
@@ -272,7 +275,7 @@ class DssClientLib(object):
 
     def get_object_buffer(self, object_key, buffer ):
         """
-        Download the objects from S3 storage and store in a local or shared file path.
+        Download the objects from S3 storage and store into a bytearray buffer.
         :param object_key:  A object key is unique in S3 storage and doesn't start with forward slash "/"
         :param dest_file_path: A physical file path where object to be copied.
         :return: Success = 0, Failure-Retry = 1, Failure = -1 (No-Retry)
@@ -297,9 +300,9 @@ class DssClientLib(object):
 
     def get_object_numpy_buffer(self, object_key, buffer ):
         """
-        Download the objects from S3 storage and store in a local or shared file path.
+        Download the objects from S3 storage and store that into numpy object buffer.
         :param object_key:  A object key is unique in S3 storage and doesn't start with forward slash "/"
-        :param dest_file_path: A physical file path where object to be copied.
+        :param buffer: A numpy memory
         :return: Success = 0, Failure-Retry = 1, Failure = -1 (No-Retry)
         """
         buffer_length = 0

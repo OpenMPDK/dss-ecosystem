@@ -5,8 +5,8 @@
                 },
                 "PyTorch": {
                   "DataLoader": {
-                    "shuffle": true,
-                    "num_workers": 64,
+                    "shuffle": false,
+                    "num_workers": 20,
                     "persistent_workers": true,
                     "prefetch_factor": 2,
                     "pin_memory": false,
@@ -14,13 +14,14 @@
                   },
                   "distributed_data_parallel": false
                 },
-                "batch_size": 100,
-                "max_batch_size": 10000,
-                "epochs": 1
+                "batch_size": 200,
+                "max_batch_size": 100,
+                "max_object_size": 1048576 ,
+                "epochs": 2
                 },
   
   "execution":{
-    "workers": 10, 
+    "workers": 10,
     "steps":{
       "model": false,
       "training": true,
@@ -40,17 +41,17 @@
                "name": "PythonReadDataset",
                "access": {"random": true, "sequential":  false},
                "type":  "image",
-               "label": ["dir500k", "dir500k1"],
+               "label": ["daisy","dandelion","roses","sunflowers","tulips"],
                "image_dimension": [32,32]
               },
   "storage": {
       "format": "s3",
       "name": "dss",
       "s3": {
-        "bucket": "bucket",
-        "prefix": ["204.0.0.137/nfs_share1/"],
+        "bucket": "dss0",
+        "prefix": ["flower_photos1/"],
         "client_lib": {
-          "name": "dss_client",
+          "name": "boto3",
           "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
                          "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
                          "tcp_keep_alive_interval_ms":  1000 }

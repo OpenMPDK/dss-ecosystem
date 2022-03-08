@@ -35,6 +35,7 @@ class RandomAccessDataset(Dataset):
         self.image_dimension = self.config_dataset["image_dimension"]  # height, width of image
         self.max_workers = self.config["execution"]["workers"]
         self.data_loader_workers = self.config["framework"]["PyTorch"]["DataLoader"]["num_workers"]
+        self.max_object_size = int(self.config["framework"]["max_object_size"])
         self.data_source = None  # Function to read data from
         self.credentials = None  # Required to access data from storage.
         self.storage_name = None  # Storage name such as aws,dss
@@ -182,11 +183,12 @@ class RandomAccessDataset(Dataset):
         image_2darray = []
         try:
             if self.s3_config["client_lib"]["name"] == "dss_client":
-                image_buffer = bytearray(10 * 1024 * 1024)
+                image_buffer = bytearray( self.max_object_size )
                 buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
                                                      memory=image_buffer)
-                image_buffer = image_buffer[0:buffer_length]
-                image_numpy_array = np.asarray(image_buffer)
+
+                image_numpy_array = memoryview(image_buffer)
+                image_numpy_array = np.asarray(image_numpy_array)
             else:
                 image_buffer , buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
                                                                                     key=object_key )
@@ -293,13 +295,16 @@ class PythonReadDataset(RandomAccessDataset):
         image_2darray = []
         try:
             if self.s3_config["client_lib"]["name"] == "dss_client":
-                image_buffer = bytearray(10 * 1024 * 1024)
+                image_buffer = bytearray( self.max_object_size )
                 buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
                                                      memory=image_buffer)
-                image_buffer = image_buffer[0:buffer_length]
+
+                image_numpy_array = memoryview(image_buffer)
+                image_numpy_array = np.asarray(image_numpy_array)
             else:
                 image_buffer , buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
                                                                                     key=object_key )
+                image_numpy_array = np.asarray(bytearray(image_buffer))
         except Exception as e:
             self.logger.excep(f"{e}")
         if image_buffer:
