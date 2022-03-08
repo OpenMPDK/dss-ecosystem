@@ -9,9 +9,10 @@
 
 ## Build
 
-In source code tree, there is a build.sh can be used as reference to build Client lib which
-consists of libdss.so and dss.cpython-XXXXXX.so which provides python interface
-under ./build directory.
+Simply execute `./scripts/build.sh`
+
+The build produces `libdss.so` and `dss.cpython-XXXXXX.so` which provide the python interface
+under the `./build` directory. Additionally, a release tarball `dss_client-#GITHASH#.tgz` file is generated for use with automated deployment.
 
 ### Build Setup Enviroment
 
