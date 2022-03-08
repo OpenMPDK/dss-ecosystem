@@ -142,7 +142,8 @@ class S3:
       object_key = kwargs.get("key", None)
       data = self.s3_client.get_object(Bucket=bucket, Key=object_key)
       contents = data['Body'].read()
-      return contents
+
+      return contents , data["ContentLength"]
 
 
   def getObjectToFile(self,**kwargs):

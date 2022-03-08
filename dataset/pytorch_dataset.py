@@ -181,13 +181,23 @@ class RandomAccessDataset(Dataset):
         image_buffer = None
         image_2darray = []
         try:
-            image_buffer = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key)
+            if self.s3_config["client_lib"]["name"] == "dss_client":
+                image_buffer = bytearray(10 * 1024 * 1024)
+                buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
+                                                     memory=image_buffer)
+                image_buffer = image_buffer[0:buffer_length]
+                image_numpy_array = np.asarray(image_buffer)
+            else:
+                image_buffer , buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
+                                                                                    key=object_key )
+                image_numpy_array = np.asarray(bytearray(image_buffer))
+
         except Exception as e:
             self.logger.excep(f"Exception:{e}")
         if image_buffer:
             with self.dataset_size_in_bytes.get_lock():
-                self.dataset_size_in_bytes.value += int(len(image_buffer) / 1024)
-            image_numpy_array = np.asarray(bytearray(image_buffer))
+                self.dataset_size_in_bytes.value += int(buffer_length / 1024)
+
             # Converts to image format
             image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
             image_2darray = cv2.resize(image_2darray, self.image_dimension)
@@ -282,13 +292,19 @@ class PythonReadDataset(RandomAccessDataset):
         image_buffer = None
         image_2darray = []
         try:
-            image_buffer = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key)
+            if self.s3_config["client_lib"]["name"] == "dss_client":
+                image_buffer = bytearray(10 * 1024 * 1024)
+                buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
+                                                     memory=image_buffer)
+                image_buffer = image_buffer[0:buffer_length]
+            else:
+                image_buffer , buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
+                                                                                    key=object_key )
         except Exception as e:
             self.logger.excep(f"{e}")
         if image_buffer:
             with self.dataset_size_in_bytes.get_lock():
-                self.dataset_size_in_bytes.value += int(len(image_buffer) / 1024)
-                #self.logger.info("File Size:{} Bytes".format(self.dataset_size_in_bytes.value))
+                self.dataset_size_in_bytes.value += int( buffer_length / 1024)
 
         return torch.FloatTensor(3, 2)
 
