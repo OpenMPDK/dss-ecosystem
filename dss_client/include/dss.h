@@ -36,8 +36,11 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/s3/S3Client.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 
 namespace dss {
+namespace py = pybind11;
 
 #define DSS_VER					"20210217"
 #define DSS_PAGINATION_DEFAULT	100UL
@@ -179,12 +182,15 @@ public:
 	Config& GetConfig() { return m_cfg; }
 
     int GetObject(const Aws::String& objectName, const Aws::String& dest_fn);
+    PYBIND11_EXPORT int GetObjectNumpyBuffer(const Aws::String& objectName, py::array_t<uint8_t> numpy_buffer);
+    PYBIND11_EXPORT int GetObjectBuffer(const Aws::String& objectName, py::buffer buffer);
 	int GetObjectAsync(const std::string& objectName, const std::string& dst_fn,
 					   Callback cb, void* cb_arg);
     int PutObject(const Aws::String& objectName, const Aws::String& src_fn, bool async = false);
 	int PutObjectAsync(const std::string& objectName, const std::string& src_fn,
 					   Callback cb = [](void* ptr, std::string key, std::string message, int err){},
 					   void *cb_arg = nullptr);
+    PYBIND11_EXPORT int PutObjectBuffer(const Aws::String& objectName, py::buffer buffer, int content_length);
     int DeleteObject(const Aws::String& objectName);
     std::unique_ptr<Objects> GetObjects(std::string prefix, std::string delimiter,
     									bool comm_prefix = false,
@@ -212,3 +218,4 @@ private:
 }; //namespace dss
 
 #endif /* !DSS_H */
+

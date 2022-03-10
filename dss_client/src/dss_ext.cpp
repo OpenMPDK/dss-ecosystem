@@ -96,8 +96,14 @@ PYBIND11_MODULE(dss, m) {
         	py::arg("key"),
         	py::arg("file_path"),
         	py::arg("async") = false)
+        .def("putObjectBuffer", &Client::PutObjectBuffer,
+            "Upload object from bytearray buffer to dss cluster",
+            py::arg("key"),
+            py::arg("buffer"),
+            py::arg("content_length"))
+
         .def("putObjectAsync", 
-        	 [&](Client& self, const std::string& key, const std::string& src_fn, AsyncCtx& actx)
+             [&](Client& self, const std::string& key, const std::string& src_fn, AsyncCtx& actx)
         	 {
         		Callback pb_callback = [](void* ptr, std::string key, std::string message, int err) {
         			AsyncCtx* ctx = (AsyncCtx*)ptr;
@@ -111,9 +117,21 @@ PYBIND11_MODULE(dss, m) {
         	py::arg("key"),
         	py::arg("file_path"),
         	py::arg("asyncCtx"))
-        .def("getObject", &Client::GetObject,	"Download object from dss cluster",
+
+        .def("getObject", &Client::GetObject, "Download object to file from dss cluster",
         	py::arg("key"),
         	py::arg("file_path"))
+
+        .def("getObjectBuffer", &Client::GetObjectBuffer,
+            "Download object to bytearray buffer from dss cluster. Returns actual data length in the buffer",
+        	py::arg("key"),
+        	py::arg("buffer"))
+
+        .def("getObjectNumpyBuffer", &Client::GetObjectNumpyBuffer,
+            "Download object to numpy buffer from dss cluster. Returns actual data length in the buffer",
+        	py::arg("key"),
+        	py::arg("numpy_buffer"))
+
         .def("deleteObject", &Client::DeleteObject, "Delete object from dss cluster",
         	py::arg("key"))
         .def("listObjects", &Client::ListObjects, "List object keys with prefix",

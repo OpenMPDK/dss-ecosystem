@@ -54,6 +54,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <aws/s3/model/HeadBucketRequest.h>
 #include <aws/s3/model/BucketLocationConstraint.h>
 #include <aws/s3/model/CommonPrefix.h>
+#include <aws/core/utils/stream/PreallocatedStreamBuf.h>
+
 
 #include "dss.h"
 #include "dss_internal.h"
@@ -61,6 +63,8 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pr.h"
 
 namespace dss {
+
+namespace py = pybind11;
 
 using namespace Aws;
 
@@ -144,6 +148,21 @@ Endpoint::GetObject(const Aws::String& bn, const Aws::String& objectName)
 
     if (out.IsSuccess()) {
         return Result(true, out.GetResultWithOwnership());
+    } else {
+		return Result(false, out.GetError());
+    }
+}
+
+Result
+Endpoint::GetObject(const Aws::String& bn, Request* req, unsigned char* res_buff, long long buffer_size)
+{
+    Aws::S3::Model::GetObjectRequest ep_req;
+    ep_req.WithBucket(bn).SetKey(Aws::String(req->key.c_str()));
+    Aws::Utils::Stream::PreallocatedStreamBuf streambuf(res_buff, buffer_size);
+    ep_req.SetResponseStreamFactory([&streambuf]() { return Aws::New<Aws::IOStream>("", &streambuf); });
+    Aws::S3::Model::GetObjectOutcome out = m_ses.GetObject(ep_req);
+    if (out.IsSuccess()) {
+        return Result(true, out.GetResultWithOwnership().GetContentLength());
     } else {
 		return Result(false, out.GetError());
     }
@@ -275,6 +294,25 @@ Endpoint::PutObject(const Aws::String& bn, Request* req)
 		return Result(false, out.GetError());
     }
 }
+
+Result
+Endpoint::PutObject(const Aws::String& bn, Request* req, unsigned char* res_buff, long long content_length)
+{
+    S3::Model::PutObjectRequest ep_req;
+    ep_req.WithBucket(bn).SetKey(Aws::String(req->key.c_str()));
+    Aws::Utils::Stream::PreallocatedStreamBuf streambuf(res_buff, content_length);
+    auto preallocated_stream = Aws::MakeShared<Aws::IOStream>("", &streambuf);
+    ep_req.SetBody(preallocated_stream);
+
+    S3::Model::PutObjectOutcome out = m_ses.PutObject(ep_req);
+
+    if (out.IsSuccess()) {
+        return Result(true);
+    } else {
+        return Result(false, out.GetError());
+    }
+}
+
 
 Result
 Endpoint::DeleteObject(const Aws::String& bn, const Aws::String& objectName)
@@ -574,6 +612,13 @@ Cluster::GetObjectAsync(Request* r)
 }
 
 Result
+Cluster::GetObject(Request* r, unsigned char* resp_buff, long long buffer_size)
+{
+	return GetEndpoint(r)->GetObject(m_bucket, r, resp_buff, buffer_size);
+}
+
+
+Result
 Cluster::PutObject(const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream)
 {
 	return std::move(m_endpoints[0]->PutObject(m_bucket, objectName, input_stream));
@@ -590,6 +635,13 @@ Cluster::PutObject(Request* r)
 {
 	return std::move(GetEndpoint(r)->PutObject(m_bucket, r));
 }
+
+Result
+Cluster::PutObject(Request* r, unsigned char* resp_buff, long long buffer_size)
+{
+	return m_endpoints[0]->PutObject(m_bucket, r, resp_buff, buffer_size);
+}
+
 
 Result
 Cluster::DeleteObject(const Aws::String& objectName)
@@ -665,9 +717,16 @@ Request::Submit(Handler handler)
 	return ((this->cluster->*handler)(this));
 }
 
-int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
+Result
+Request::Submit_with_buffer(Handler_with_buffer handler, unsigned char* resp_buff, long long buffer_size)
 {
-	std::unique_ptr<Request> req_guard(new Request(objectName.c_str(), dest_fn.c_str()));
+        return ((this->cluster->*handler)(this, resp_buff, buffer_size));
+}
+
+
+int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_filename)
+{
+	std::unique_ptr<Request> req_guard(new Request(objectName.c_str(), dest_filename.c_str()));
 
 	m_cluster_map->GetCluster(req_guard.get());
 	Result r = req_guard->Submit(&Cluster::GetObject);
@@ -677,13 +736,13 @@ int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
         fs.exceptions(std::fstream::failbit | std::fstream::badbit);
 
         try {
-        	fs.open(dest_fn.c_str(), std::ios::out | std::ios::binary);
+        	fs.open(dest_filename.c_str(), std::ios::out | std::ios::binary);
 			//TODO: revist performance
         	fs << r.GetIOStream().rdbuf();
         	fs.flush();
         	fs.close();
         } catch (std::exception&) {
-        	std::string fname(dest_fn.c_str());
+        	std::string fname(dest_filename.c_str());
         	auto e = std::system_error(errno, std::system_category(),
         							   "Path " + fname);
 			throw FileIOError(e.what());
@@ -701,6 +760,55 @@ int Client::GetObject(const Aws::String& objectName, const Aws::String& dest_fn)
         return -1;
     }
 }
+
+int Client::GetObjectNumpyBuffer(const Aws::String& objectName, py::array_t<uint8_t> numpy_buffer)
+{
+	std::unique_ptr<Request> req_guard(new Request(objectName.c_str()));
+	py::buffer_info info = numpy_buffer.request();
+    long int buffer_size = numpy_buffer.size();
+    auto ptr = static_cast<unsigned char*> (info.ptr);
+
+	m_cluster_map->GetCluster(req_guard.get());
+
+	Result r = req_guard->Submit_with_buffer(&Cluster::GetObject, ptr, buffer_size);
+
+    if (r.IsSuccess()) {
+        return r.GetContentLengthValue();
+    } else {
+        auto err = r.GetErrorType();
+        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
+                throw NoSuchResourceError();
+        else
+            throw GenericError(r.GetErrorMsg().c_str());
+
+        return -1;
+    }
+}
+
+int Client::GetObjectBuffer(const Aws::String& objectName, py::buffer buffer)
+{
+	std::unique_ptr<Request> req_guard(new Request(objectName.c_str()));
+	py::buffer_info info = buffer.request();
+    long int buffer_size = info.size;
+    auto ptr = static_cast<unsigned char*> (info.ptr);
+
+	m_cluster_map->GetCluster(req_guard.get());
+
+	Result r = req_guard->Submit_with_buffer(&Cluster::GetObject, ptr, buffer_size);
+
+    if (r.IsSuccess()) {
+        return r.GetContentLengthValue();
+    } else {
+        auto err = r.GetErrorType();
+        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
+                throw NoSuchResourceError();
+        else
+            throw GenericError(r.GetErrorMsg().c_str());
+
+        return -1;
+    }
+}
+
 
 int Client::PutObjectAsync(const std::string& objectName, const std::string& src_fn,
 						   Callback cb, void* cb_arg)
@@ -793,6 +901,31 @@ int Client::PutObject(const Aws::String& objectName, const Aws::String& src_fn, 
         return -1;
     }
 }
+
+int Client::PutObjectBuffer(const Aws::String& objectName, py::buffer buffer, int content_length)
+{
+    py::buffer_info info = buffer.request();
+    //long int buffer_size = info.size;
+    auto ptr = static_cast<unsigned char*> (info.ptr);
+
+	Result r;
+	std::unique_ptr<Request> req_guard(new Request(objectName.c_str()));
+	m_cluster_map->GetCluster(req_guard.get());
+    r = req_guard->Submit_with_buffer(&Cluster::PutObject, ptr, content_length);
+
+    if (r.IsSuccess()) {
+        return 0;
+    } else {
+        auto err = r.GetErrorType();
+        if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
+            throw NoSuchResourceError();
+        else
+            throw GenericError(r.GetErrorMsg().c_str());
+
+        return -1;
+    }
+}
+
 
 int Client::DeleteObject(const Aws::String& objectName)
 {
@@ -916,3 +1049,4 @@ Client::~Client()
 }
 
 } // namespace dss
+
