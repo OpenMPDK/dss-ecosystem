@@ -23,10 +23,10 @@
   "execution":{
     "workers": 10,
     "steps":{
-      "model": false,
+      "model": true,
       "training": true,
       "inference": false,
-      "metrics": false
+      "metrics": true
     }
   },
   "device": "CPU",
@@ -35,7 +35,7 @@
     "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
   },
   "training":{
-    "name": "PythonReadTrain"
+    "name": "RandomAccessDatasetTrain"
   },
   "dataset" : {
                "name": "TorchImageClassificationDataset",
