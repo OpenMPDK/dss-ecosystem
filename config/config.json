@@ -23,7 +23,7 @@
   "execution":{
     "workers": 10,
     "steps":{
-      "model": false,
+      "model": true,
       "training": true,
       "inference": false,
       "metrics": true
@@ -35,13 +35,13 @@
     "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
   },
   "training":{
-    "name": "PythonReadTrain"
+    "name": "RandomAccessDatasetTrain"
   },
   "dataset" : {
-               "name": "PythonReadDataset",
+               "name": "TorchImageClassificationDataset",
                "access": {"random": true, "sequential":  false},
                "type":  "image",
-               "label": ["daisy","dandelion","roses","sunflowers","tulips"],
+               "label": ["daisy"],
                "image_dimension": [32,32]
               },
   "storage": {
@@ -51,10 +51,10 @@
         "bucket": "dss0",
         "prefix": ["flower_photos1/"],
         "client_lib": {
-          "name": "boto3",
+          "name": "dss_client",
           "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
                          "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
-                         "tcp_keep_alive_interval_ms":  1000 }
+                         "tcp_keep_alive_interval_ms":  1000, "object_keys_per_page_count":  1000}
         },
         "aws": {
           "credentials": {

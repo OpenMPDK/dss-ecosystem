@@ -173,6 +173,8 @@ class RandomAccessDataset(Dataset):
     def read_s3_object(self, **kwargs):
         """
         Read object from S3 , Any S3 compatible storage DSS, AWS-S3
+        For dss_client allocate memory at the application and let client library update object into that memory.
+
         :param object_key:
         :return:
         """
@@ -183,11 +185,12 @@ class RandomAccessDataset(Dataset):
         image_2darray = []
         try:
             if self.s3_config["client_lib"]["name"] == "dss_client":
-                image_buffer = bytearray( self.max_object_size )
+                #image_buffer = np.asarray(bytearray( self.max_object_size )) # Used for getObjectNumpyBuffer
+                image_buffer = bytearray(self.max_object_size)  # Use that for getObjectBuffer
                 buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
                                                      memory=image_buffer)
-
-                image_numpy_array = memoryview(image_buffer)
+                #image_numpy_array = image_buffer
+                image_numpy_array = memoryview(image_buffer)[0:buffer_length]
                 image_numpy_array = np.asarray(image_numpy_array)
             else:
                 image_buffer , buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
@@ -196,7 +199,7 @@ class RandomAccessDataset(Dataset):
 
         except Exception as e:
             self.logger.excep(f"Exception:{e}")
-        if image_buffer:
+        if buffer_length:
             with self.dataset_size_in_bytes.get_lock():
                 self.dataset_size_in_bytes.value += int(buffer_length / 1024)
 
@@ -252,7 +255,7 @@ class RandomAccessDataset(Dataset):
         if self.s3_config["client_lib"]["name"] == "dss_client":
             from dss_client import DssClientLib
             for i in range(max_s3_client_count):
-                s3_client = DssClientLib(credentials=self.credentials,config=self.s3_config["client_lib"]["dss_client"],
+                s3_client = DssClientLib(credentials=self.credentials,config=self.s3_config["client_lib"].get("dss_client",{}),
                                          logger=self.logger)
                 self.s3_clients.append(s3_client)
         elif self.s3_config["client_lib"]["name"] == "boto3":
@@ -298,16 +301,12 @@ class PythonReadDataset(RandomAccessDataset):
                 image_buffer = bytearray( self.max_object_size )
                 buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
                                                      memory=image_buffer)
-
-                image_numpy_array = memoryview(image_buffer)
-                image_numpy_array = np.asarray(image_numpy_array)
             else:
                 image_buffer , buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
                                                                                     key=object_key )
-                image_numpy_array = np.asarray(bytearray(image_buffer))
         except Exception as e:
             self.logger.excep(f"{e}")
-        if image_buffer:
+        if buffer_length:
             with self.dataset_size_in_bytes.get_lock():
                 self.dataset_size_in_bytes.value += int( buffer_length / 1024)
 
