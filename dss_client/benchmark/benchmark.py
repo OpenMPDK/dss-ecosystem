@@ -48,6 +48,7 @@ from minio.error import ResponseError, BucketAlreadyOwnedByYou, BucketAlreadyExi
 
 object_data = None
 object_data_md5 = None
+object_data_size = 0
 data_dir = 'dss_client_data/'
 data_file_ref = None
 data_md5_file_ref = None
@@ -201,6 +202,7 @@ class DSSClient(object):
         self.endpoint = endpoint
         self.region = region
         self.logger = logger
+        self.buffer = bytearray(1024*1024)
         try:
             option = dss.clientOption()
             option.maxConnections = 1
@@ -216,14 +218,20 @@ class DSSClient(object):
 
     def put_object(self, key, value):
         try:
-            self.client.putObject(key, value)
+            if value:
+                self.client.putObject(key, value)
+            else:
+                self.client.putObjectBuffer(key, object_data, object_data_size)
         except Exception as e:
             self.logger.exception('Failed to put the key %s', key)
             raise e
 
     def get_object(self, key, value):
         try:
-            self.client.getObject(key, value)
+            if value:
+                self.client.getObject(key, value)
+            else:
+                self.client.getObjectBuffer(key, self.buffer)
         except Exception as e:
             self.logger.exception('Failed to get the object %s', key)
             raise e
@@ -290,7 +298,10 @@ def run_data_put(thr_id, key_prefix, num_ios=0, duration=0):
         if duration and time.time() - start_time > duration:
             break
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
-        filename = os.path.join(data_dir, key)
+        if data_dir not in ['/dev/null', 'None']:
+            filename = os.path.join(data_dir, key)
+        else:
+            filename = None
         count = count + 1
         logger.debug('Thread-%d - Uploading the file %s', thr_id, filename)
         try:
@@ -341,16 +352,19 @@ def run_data_get(thr_id, key_prefix, num_ios=0, duration=0):
         else:
             key_id = count
         key = '%s-object-%s-%d' % (key_prefix, thr_id, key_id)
-        if data_dir != '/dev/null':
-            filename = os.path.join(data_dir, key)
-        else:
+        if data_dir == '/dev/null':
             filename = data_dir
+        elif data_dir == 'None':
+            filename = None
+        else:
+            filename = os.path.join(data_dir, key)
+
         count = count + 1
         try:
             client_conn.get_object(key, filename)
         except:
-            logger.error('Thread-%d - Downloading the file %s FAILED', thr_id, filename)
-            print(f'Failed to download the file {filename} by thread {thr_id}. Exiting')
+            logger.error('Thread-%d - Downloading the file %s FAILED', thr_id, key)
+            print(f'Failed to download the file {key} by thread {thr_id}. Exiting')
             # fail_count += 1
             return count, (num_ios - count)
 
@@ -516,6 +530,7 @@ if __name__ == '__main__':
 
     if args.op_type in [0, 1, 8]:
         object_data = os.urandom(args.object_size * 1024)
+        object_data_size = args.object_size * 1024
         object_data_md5 = hashlib.md5(object_data).hexdigest()
         with open(data_file_ref, 'wb') as f:
             f.write(object_data)

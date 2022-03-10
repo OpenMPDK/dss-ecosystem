@@ -8,6 +8,9 @@ project("dss")
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
+#set(CMAKE_VERBOSE_MAKEFILE ON)
+
+
 # Enable CTest for testing these code examples.
 # include(CTest)
 
@@ -23,18 +26,29 @@ endif()
 find_package(AWSSDK REQUIRED COMPONENTS s3)
 find_package(Python ${PYTHON_VERSION} REQUIRED COMPONENTS Interpreter)
 
+
+execute_process(COMMAND python3-config --libs OUTPUT_VARIABLE PYTHON3_LINK_LIBRARIES_FLAG OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE)
+separate_arguments(PYTHON3_LINK_LIBRARIES_FLAGS UNIX_COMMAND "${PYTHON3_LINK_LIBRARIES_FLAG}")
+
+execute_process(COMMAND git describe --abbrev=4 --always --tags OUTPUT_VARIABLE GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND python3-config --extension-suffix OUTPUT_VARIABLE EXT_NAME_SUFFIX)
+execute_process(COMMAND python3 -m pybind11 --includes OUTPUT_VARIABLE EXT_INCLUDE_FLAG)
+separate_arguments(EXT_INCLUDE_FLAGS UNIX_COMMAND "${EXT_INCLUDE_FLAG}")
+
 option(WITH_RELEASE "release build" OFF)
 if (WITH_RELEASE)
-	SET(CMAKE_CXX_FLAGS "-O2 -Wall -Werror")
+	SET(CMAKE_CXX_FLAGS "-O2 -Wall -Werror ${PYTHON3_LINK_LIBRARIES_FLAG}")
 else ()
-	SET(CMAKE_CXX_FLAGS "-O0 -g3 -Wall -Werror")
+	SET(CMAKE_CXX_FLAGS "-O0 -g3 -Wall -Werror ${PYTHON3_LINK_LIBRARIES_FLAG}")
 endif()
+#message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS}")
 
 set(SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/dss_client.cpp)
 
 set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
+#message(STATUS " FLAGS: ${CMAKE_CXX_FLAGS}")
 add_executable(test_dss ${SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/dss_test.cpp)
 add_library(${DSS_LIB} SHARED ${SOURCES})
 
@@ -50,11 +64,12 @@ target_include_directories(${DSS_LIB} PUBLIC
 
 target_link_libraries(test_dss ${AWSSDK_LINK_LIBRARIES})
 target_link_libraries(${DSS_LIB} ${AWSSDK_LINK_LIBRARIES})
+target_link_libraries(test_dss ${EXT_INCLUDE_FLAGS})
+target_link_libraries(${DSS_LIB} ${EXT_INCLUDE_FLAGS})
 
-execute_process(COMMAND git describe --abbrev=4 --always --tags OUTPUT_VARIABLE GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND python3-config --extension-suffix OUTPUT_VARIABLE EXT_NAME_SUFFIX)
-execute_process(COMMAND python3 -m pybind11 --includes OUTPUT_VARIABLE EXT_INCLUDE_FLAG)
-separate_arguments(EXT_INCLUDE_FLAGS UNIX_COMMAND "${EXT_INCLUDE_FLAG}")
+
+target_compile_options(${DSS_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
+target_compile_options(test_dss PRIVATE ${EXT_INCLUDE_FLAGS})
 
 string(REGEX REPLACE "\\.[^.]*$" "" PYTHON_LIB_SUFFIX ${EXT_NAME_SUFFIX})
 string(CONCAT DSS_PYTHON_LIB ${DSS_LIB} ${PYTHON_LIB_SUFFIX})
@@ -66,11 +81,12 @@ target_include_directories(${DSS_PYTHON_LIB}  PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
+target_link_libraries(${DSS_PYTHON_LIB} PUBLIC ${DSS_LIB})
+
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE "-fvisibility=hidden")
 target_link_options(${DSS_PYTHON_LIB} PUBLIC "-Wl,--disable-new-dtags" "-Wl,-rpath,/usr/lib/x86_64-linux-gnu/")
 
-target_link_libraries(${DSS_PYTHON_LIB} ${DSS_LIB})
 set_target_properties(${DSS_PYTHON_LIB} PROPERTIES PREFIX "")
 
 # Installation

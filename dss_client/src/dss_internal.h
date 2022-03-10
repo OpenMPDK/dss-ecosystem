@@ -57,6 +57,8 @@ private:
 
 struct Request {
 	typedef Result (Cluster::*Handler) (Request* r);
+	typedef Result (Cluster::*Handler_with_buffer) (Request* r, unsigned char* resp_buff, long long buffer_size);
+
 
 	Request(const char* k) :
 		key(k) {}
@@ -70,6 +72,7 @@ struct Request {
 		done_arg(cb_arg) {}
 
 	Result Submit(Handler h);
+    Result Submit_with_buffer(Handler_with_buffer handler, unsigned char* resp_buff, long long buffer_size);
 
 	const std::string	key;
 	const std::string	file;
@@ -91,9 +94,13 @@ public:
 		r_err_type(e.GetErrorType()),
 		r_err_msg("Exception: " + e.GetExceptionName() +
 				  " Details: " + e.GetMessage()) {}
+    Result(bool success, long long content_length):
+        r_success(success), r_content_length(content_length) {}
 
 	bool IsSuccess() { return r_success; }
 	Aws::IOStream& GetIOStream() { return r_object.GetBody(); }
+	long long GetContentLength() { return r_object.GetContentLength();}
+	long long GetContentLengthValue() { return r_content_length;}
 	Aws::S3::S3Errors GetErrorType() { return r_err_type; }
 	Aws::String& GetErrorMsg() { return r_err_msg; }
 
@@ -101,6 +108,7 @@ private:
 	bool				r_success;
 	Aws::S3::S3Errors 	r_err_type;
 	Aws::String			r_err_msg;
+	long long           r_content_length;
 	Aws::S3::Model::GetObjectResult	r_object;
 };
 
@@ -110,6 +118,9 @@ public:
 
 	Result GetObject(const Aws::String& bn, Request* req);
     Result GetObject(const Aws::String& bn, const Aws::String& objectName);
+	Result GetObject(const Aws::String& bn, Request* req, unsigned char* res_buff, long long buffer_size);
+	Result PutObject(const Aws::String& bn, Request* req, unsigned char* res_buff, long long buffer_size);
+
     Result GetObjectAsync(const Aws::String& bn, Request* req);
 	Result PutObject(const Aws::String& bn, Request* req);
     Result PutObject(const Aws::String& bn, const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream);
@@ -142,6 +153,9 @@ public:
 	Endpoint* GetEndpoint(Request* r) { return m_endpoints[r->key_hash % m_endpoints.size()]; }
 
     Result GetObject(const Aws::String& objectName);
+	Result GetObject(Request* req, unsigned char* res_buff, long long buffer_size);
+	Result PutObject(Request* req, unsigned char* res_buff, long long buffer_size);
+
     Result PutObject(const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream);
     Result DeleteObject(const Aws::String& objectName);
 
@@ -170,8 +184,8 @@ private:
 
 
 /* Not using __attribute__((destructor)) b/c it is only called
-   after global var is destructed, so if options is declared
-   global, ShutdownAPI() would crash */
+ * after global var is destructed, so if options is declared
+ * global, ShutdownAPI() would crash */
 class DSSInit {
 public:
 	DSSInit(): m_local_config(nullptr), m_options()
@@ -281,3 +295,4 @@ private:
 }
 
 #endif // DSS_INTERNAL_H
+
