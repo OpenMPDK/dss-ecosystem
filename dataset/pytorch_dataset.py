@@ -255,7 +255,7 @@ class RandomAccessDataset(Dataset):
         if self.s3_config["client_lib"]["name"] == "dss_client":
             from dss_client import DssClientLib
             for i in range(max_s3_client_count):
-                s3_client = DssClientLib(credentials=self.credentials,config=self.s3_config["client_lib"]["dss_client"],
+                s3_client = DssClientLib(credentials=self.credentials,config=self.s3_config["client_lib"].get("dss_client",{}),
                                          logger=self.logger)
                 self.s3_clients.append(s3_client)
         elif self.s3_config["client_lib"]["name"] == "boto3":

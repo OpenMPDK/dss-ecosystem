@@ -40,7 +40,7 @@ from minio.error import BucketAlreadyOwnedByYou
 class DssClientLib(object):
     def __init__(self, **kwargs):
         self.credentials = kwargs["credentials"]
-        self.config = kwargs["config"]
+        self.config = kwargs.get("config",{})
         self.logger = kwargs["logger"]
         self.s3_endpoint = self.credentials["endpoint"]
         self.access_key = self.credentials["access_key"]
@@ -48,7 +48,7 @@ class DssClientLib(object):
         self.status = False
         self.dss_client_options = None
         self.dss_client = self.create_client(self.s3_endpoint, self.access_key, self.secret_key)
-
+        self.object_keys_per_page_count = self.config.get("object_keys_per_page_count", 1000)
 
     def set_dss_client_options(self):
         """
@@ -57,12 +57,12 @@ class DssClientLib(object):
         """
         try:
             self.dss_client_options = dss.clientOption()
-            self.dss_client_options.requestTimeoutMs = self.config["request_timeout_ms"]  # 10 sec
-            self.dss_client_options.maxConnections = self.config["max_connections"]
-            self.dss_client_options.httpRequestTimeoutMs = self.config["http_request_timeout_ms"]
-            self.dss_client_options.connectTimeoutMs = self.config["connect_timeout_ms"] # 1000
-            self.dss_client_options.enableTcpKeepAlive = self.config["enable_tcp_keep_alive"]
-            self.dss_client_options.tcpKeepAliveIntervalMs = self.config["tcp_keep_alive_interval_ms"]  # 10 sec
+            self.dss_client_options.requestTimeoutMs = self.config.get("request_timeout_ms",10000)  # 10 sec
+            self.dss_client_options.maxConnections = self.config.get("max_connections",25)
+            self.dss_client_options.httpRequestTimeoutMs = self.config.get("http_request_timeout_ms",0)
+            self.dss_client_options.connectTimeoutMs = self.config.get("connect_timeout_ms",1000) # 1000
+            self.dss_client_options.enableTcpKeepAlive = self.config.get("enable_tcp_keep_alive", True)
+            self.dss_client_options.tcpKeepAliveIntervalMs = self.config.get("tcp_keep_alive_interval_ms",30000)  # 10 sec
         except Exception as e:
             self.logger.excep(f"DSS_CLIENT_OPTIONS: {e}")
 
@@ -333,7 +333,7 @@ class DssClientLib(object):
         :return: List of object keys.
         """
         try:
-            objects = self.dss_client.getObjects(prefix, delimiter, True, 10000)
+            objects = self.dss_client.getObjects(prefix, delimiter, True, self.object_keys_per_page_count)
             while True:
                 try:
                     object_keys = []
@@ -344,6 +344,7 @@ class DssClientLib(object):
                     break
                 except Exception as e:
                     self.logger.info("ListObjects {} - {}".format(prefix, e))
+
         except dss.FileIOError as e:
             self.logger.execp("FileIOError - key:{}, {}".format(object_key, e))
         except dss.NoIterator as e:
