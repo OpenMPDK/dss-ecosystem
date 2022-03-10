@@ -911,7 +911,7 @@ int Client::PutObjectBuffer(const Aws::String& objectName, py::buffer buffer, in
 	Result r;
 	std::unique_ptr<Request> req_guard(new Request(objectName.c_str()));
 	m_cluster_map->GetCluster(req_guard.get());
-    r = std::move(req_guard->Submit_with_buffer(&Cluster::PutObject, ptr, content_length));
+    r = req_guard->Submit_with_buffer(&Cluster::PutObject, ptr, content_length);
 
     if (r.IsSuccess()) {
         return 0;

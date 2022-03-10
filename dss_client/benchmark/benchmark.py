@@ -202,7 +202,7 @@ class DSSClient(object):
         self.endpoint = endpoint
         self.region = region
         self.logger = logger
-        self.buffer = bytearray(1024*1024)
+        self.buffer = bytearray(object_data_size)
         try:
             option = dss.clientOption()
             option.maxConnections = 1
@@ -528,9 +528,9 @@ if __name__ == '__main__':
         print('Invalid usage. Need a valid directory for integrity check')
         sys.exit(-1)
 
+    object_data_size = args.object_size * 1024
     if args.op_type in [0, 1, 8]:
         object_data = os.urandom(args.object_size * 1024)
-        object_data_size = args.object_size * 1024
         object_data_md5 = hashlib.md5(object_data).hexdigest()
         with open(data_file_ref, 'wb') as f:
             f.write(object_data)
