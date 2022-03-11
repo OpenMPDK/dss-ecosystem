@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC1090
+# shellcheck disable=SC1090,SC1091
 # The Clear BSD License
 #
 # Copyright (c) 2022 Samsung Electronics Co., Ltd.
@@ -54,8 +54,8 @@ then
 fi
 
 # Build Client Library
-mkdir -p "$DSS_CLIENT_DIR/build"
-pushd "$DSS_CLIENT_DIR/build"
+mkdir -p "$BUILD_DIR"
+pushd "$BUILD_DIR"
     CXX=g++ cmake3 ../
     make -j
 popd
