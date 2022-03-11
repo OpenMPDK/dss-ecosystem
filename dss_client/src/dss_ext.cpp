@@ -37,7 +37,6 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "dss.h"
 
 using namespace dss;
-namespace py = pybind11;
 
 class AsyncCtx;
 using PyCallback = std::function<void(AsyncCtx& pct)>;
