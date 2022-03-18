@@ -5,25 +5,25 @@
                 },
                 "PyTorch": {
                   "DataLoader": {
-                    "shuffle": false,
-                    "num_workers": 20,
-                    "persistent_workers": true,
+                    "shuffle": true,
+                    "num_workers": 64,
+                    "persistent_workers": false,
                     "prefetch_factor": 2,
                     "pin_memory": false,
                     "drop_last": false
                   },
                   "distributed_data_parallel": false
                 },
-                "batch_size": 200,
-                "max_batch_size": 100,
+                "batch_size": 100,
+                "max_batch_size": 10000,
                 "max_object_size": 1048576 ,
-                "epochs": 2
+                "epochs": 1
                 },
   
   "execution":{
     "workers": 10,
     "steps":{
-      "model": true,
+      "model": false,
       "training": true,
       "inference": false,
       "metrics": true
@@ -35,13 +35,13 @@
     "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
   },
   "training":{
-    "name": "RandomAccessDatasetTrain"
+    "name": "PythonReadTrain"
   },
   "dataset" : {
-               "name": "TorchImageClassificationDataset",
+               "name": "PythonReadDatasetToDevNull",
                "access": {"random": true, "sequential":  false},
                "type":  "image",
-               "label": ["daisy"],
+               "label": ["shard_1TB_0","shard_1TB_1","shard_1TB_2","shard_1TB_3","shard_1TB_4","shard_1TB_5","shard_1TB_6","shard_1TB_7","shard_1TB_8","shard_1TB_9","shard_1TB_10","shard_1TB_11"],
                "image_dimension": [32,32]
               },
   "storage": {
@@ -49,10 +49,10 @@
       "name": "dss",
       "s3": {
         "bucket": "dss0",
-        "prefix": ["flower_photos1/"],
+        "prefix": ["10.1.50.210/data/"],
         "client_lib": {
           "name": "dss_client",
-          "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
+          "dss_client": {"max_connections":1, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
                          "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
                          "tcp_keep_alive_interval_ms":  1000, "object_keys_per_page_count":  1000}
         },
@@ -65,7 +65,7 @@
         },
         "dss": {
           "credentials": {
-            "endpoint": "http://202.0.0.137:9000",
+            "endpoint": "http://msl-dpe-da9-tcp-0:9000",
             "access_key": "minio",
             "secret_key": "minio123"
           }
