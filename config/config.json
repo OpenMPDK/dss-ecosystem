@@ -5,19 +5,19 @@
                 },
                 "PyTorch": {
                   "DataLoader": {
-                    "shuffle": false,
-                    "num_workers": 20,
-                    "persistent_workers": true,
+                    "shuffle": true,
+                    "num_workers": 64,
+                    "persistent_workers": false,
                     "prefetch_factor": 2,
                     "pin_memory": false,
                     "drop_last": false
                   },
                   "distributed_data_parallel": false
                 },
-                "batch_size": 200,
-                "max_batch_size": 100,
+                "batch_size": 100,
+                "max_batch_size": 10000,
                 "max_object_size": 1048576 ,
-                "epochs": 2
+                "epochs": 1
                 },
   
   "execution":{
@@ -41,7 +41,7 @@
                "name": "TorchImageClassificationDataset",
                "access": {"random": true, "sequential":  false},
                "type":  "image",
-               "label": ["daisy"],
+               "label": ["daisy", "dandelion", "roses", "sunflowers", "tulips"],
                "image_dimension": [32,32]
               },
   "storage": {
@@ -49,9 +49,9 @@
       "name": "dss",
       "s3": {
         "bucket": "dss0",
-        "prefix": ["flower_photos1/"],
+        "prefix": ["flower_photos/"],
         "client_lib": {
-          "name": "dss_client",
+          "name": "boto3",
           "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
                          "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
                          "tcp_keep_alive_interval_ms":  1000, "object_keys_per_page_count":  1000}
@@ -65,7 +65,7 @@
         },
         "dss": {
           "credentials": {
-            "endpoint": "http://202.0.0.137:9000",
+            "endpoint": "http://10.1.51.107:9000",
             "access_key": "minio",
             "secret_key": "minio123"
           }
