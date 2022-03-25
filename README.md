@@ -30,11 +30,13 @@ Additionally, there is support for `RESUME` operation to upload additional files
 
 The following are custom benchmark tools developed to measure performance of DSS Object storage.
 
-### DSS PyTorch
+### DSS AI-Benchmark
 
-A benchmark tool developed to showcase the read access performance of the DSS Object storage.
+A benchmark tool developed based on machine leaning (ML) framework such as PyTorch and TensorFlow to evaluate
+the read access performance of the DSS Object storage through ML model training.
 
-[DSS PyTorch README](./dss_PyTorch/README.md)
+
+[DSS AI_benhcmark README](./dss_ai_benchmark/README.md)
 
 ### DSS s3-benchmark
 
