@@ -1,4 +1,4 @@
-# dss_dnn_benchmark
+# dss_ai_benchmark
 A custom benchmark tool to evaluate read access of DSS Object storage through deep neural networks such as PyTorch , TensorFlow.
 The tool gives the flexibility to the user to add their custom dataset, training and neural network based model.These classes
 can be written into the respective files and can be configured through configuration file. This tool is specifically meant
@@ -86,7 +86,7 @@ But, "dss_client" only works for stock minio and dss-minio storage.
         }
       },
       "fs": {
-         "data_dir": ["/home/somnath.s/.keras/datasets/flower_photos","/home/somnath.s/.keras/datasets/flower_photos2"]
+         "data_dir": ["/data/datasets/flower_photos","/data/datasets/flower_photos2"]
       }
 ```
 ### Create a CustomData class at  the following file
@@ -275,7 +275,7 @@ Enable metrics collection and path.
 "metrics": {
       "format": "csv",
       "graph": {"name": "SampleGraph", "enabled": false},
-      "path": "/home/somnath.s/work/dss_dnn_benchmark"
+      "path": "/usr/dss/dss_ai_benchmark"
   },
 ```
 
