@@ -71,9 +71,6 @@ class Master(object):
         self.task_lock = Lock()
         self.dryrun = config.get("dryrun", False)
 
-        self.index_data_json_file = '/var/log/prefix_index_data.json'
-        self.resume_prefix_dir_keys_file = '/var/log/dss/dm_resume_prefix_dir_keys.txt'
-
         if "environment" in config:
             self.dir_path = config["environment"].get("target_dir", "/usr/dss/nkv-datamover")
         else:
@@ -100,6 +97,9 @@ class Master(object):
         self.logger_lock = Lock()
 
         self.lock = Lock()
+        # Metadata files
+        self.index_data_json_file = '{}/prefix_index_data.json'.format(self.logging_path)
+        self.resume_prefix_dir_keys_file = '{}/dm_resume_prefix_dir_keys.txt'.format(self.logging_path)
 
         # Operation PUT/GET/DEL/LIST
         self.index_data_queue = Queue()  # Index data stored by workers
