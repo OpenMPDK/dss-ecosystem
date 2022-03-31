@@ -500,7 +500,8 @@ class Master(object):
             command = target_compaction_source + " --ip_address " + target_ip
             command += " --logdir " + self.config["logging"]["path"]
             command += " --user_id " + self.client_user_id
-            command += " --password " + self.client_password
+            if self.client_password:
+                command += " --password " + self.client_password
 
             if type(self.config["dss_targets"]) is dict:
                 subsystem_nqn_str = (",").join(self.config["dss_targets"][target_ip])
