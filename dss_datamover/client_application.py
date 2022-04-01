@@ -31,7 +31,6 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-
 import os
 from utils.config import Config, ClientApplicationArgumentParser
 from utils.utility import exception, OPERATION_STATUS
@@ -432,7 +431,8 @@ class ClientApplication(object):
 
         processed_objects_success_count = 0
         processed_objects_failure_count = 0
-        received_status_message_count = 0  # Received from workers / status messages sent to master
+        received_status_message_count = 0  # Received from workers
+        sent_status_message_count = 0 # status messages sent to master
         start_time_not_receiving_status_message = 0  # Time, monitor not receiving any status message from workers.
         debug_message_timer = datetime.now()
 
@@ -450,8 +450,9 @@ class ClientApplication(object):
                 # Send response after adding data to operation data_queue as success
                 if status_message:
                     self.logger.debug("PUSH - Sending message - {}".format(status_message))
-                    socket.send_json(status_message)
                     received_status_message_count += 1
+                    if socket.send_json(status_message):
+                        sent_status_message_count += 1
                     if self.operation.upper() != "LIST":
                         processed_objects_success_count += status_message["success"]
                         processed_objects_failure_count += status_message["failure"]
@@ -479,8 +480,9 @@ class ClientApplication(object):
                 self.logger.info("All operation status sent to Master. Closing Monitor-StatusHandler !")
                 self.operation_status_send_completed.value = 1
                 break
-        self.logger.info("Total status message sent to master : {}".format(received_status_message_count))
         # Processing status
+        self.logger.info("Total status message received from workers: {}".format(received_status_message_count))
+        self.logger.info("Total status message sent to master : {}".format(sent_status_message_count))
         self.logger.info("Total operation success count = {}".format(processed_objects_success_count))
         self.logger.info("Total operation failure count = {}".format(processed_objects_failure_count))
 

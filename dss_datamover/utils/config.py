@@ -31,7 +31,6 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-
 import os, sys
 import json
 import argparse
@@ -269,3 +268,23 @@ class CommandLineArgument:
 
     def get_operation(self):
         return sys.argv[1:2][0]
+
+
+def TargetCompactionArgumentParser():
+    parser = argparse.ArgumentParser(description='DSS Target compaction!')
+    parser.add_argument("--ip_address", "-ip", type=str, required=True,
+                        help='Specify Target Node IP address')
+    parser.add_argument("--user_id", "-u", type=str, required=True,
+                        help='Userid')
+    parser.add_argument("--password", "-p", type=str, required=False,
+                        help='Password for userid')
+    parser.add_argument("--subsystem_nqn", "-nqn", type=str, required=False, help='Specify subsystem-nqn in comma separated form')
+    parser.add_argument("--logdir", "-log", type=str, default="/var/log/dss",required=False,
+                        help='A path where compaction log gets created')
+    parser.add_argument("--dryrun", "-dr", required=False, action='store_true',
+                        help='Dry run - Just check operation is working , but does not actual upload')
+    parser.add_argument("--debug", "-d", required=False, action='store_true',
+                        help='Run DataMover compaction in debug mode')
+
+    options = vars(parser.parse_args())
+    return options

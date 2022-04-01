@@ -117,13 +117,16 @@ class NFSCluster:
         nfs_share_already_mounted = False
 
         # Create local directory
-        if not os.path.isdir(nfs_share_mount):
+        if os.path.isdir(nfs_share_mount):
+            nfs_share_already_mounted = True
+        else:
             # os.mkdir(nfs_share)
             command = "mkdir -p {}".format(nfs_share_mount)
             ret, console = exec_cmd(command, True, True, self.user_id)
-        if os.path.ismount(nfs_share_mount):
+        if nfs_share_already_mounted or os.path.ismount(nfs_share_mount):
             self.logger.warn("NFS share {} already mounted to {}".format(nfs_share, nfs_share_mount))
             nfs_share_already_mounted = True
+            ret = 0
         else:
             command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share_mount)
             ret, console = exec_cmd(command, True, True, self.user_id)
@@ -140,7 +143,7 @@ class NFSCluster:
             else:
                 self.local_mounts[cluster_ip].append(nfs_share)
             self.mounted = True
-            ret = 0
+
         return ret,console
 
     @exception
