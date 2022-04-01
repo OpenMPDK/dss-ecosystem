@@ -452,7 +452,7 @@ class ClientApplication(object):
                     self.logger.debug("PUSH - Sending message - {}".format(status_message))
                     received_status_message_count += 1
                     if socket.send_json(status_message):
-                        sent_status_message_count +=1
+                        sent_status_message_count += 1
                     if self.operation.upper() != "LIST":
                         processed_objects_success_count += status_message["success"]
                         processed_objects_failure_count += status_message["failure"]

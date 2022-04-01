@@ -67,13 +67,13 @@ class Compaction:
     def get_logger(self):
         if not os.path.exists(self.logdir):
             command = "mkdir -p {}".format(self.logdir)
-            ret, console = exec_cmd(command, True,True, self.user_id)
+            ret, console = exec_cmd(command, True, True, self.user_id)
             if ret:
                 print("ERROR: Unable to create log directory {}".format(self.logdir, console))
         target_log_fh = None
         log_file_name = self.logdir + "/target_compaction.log"
         try:
-            target_log_fh = open(log_file_name,"w")
+            target_log_fh = open(log_file_name, "w")
         except Exception as e:
             print("EXCEPTION: {}".format(e))
 
@@ -97,10 +97,10 @@ class Compaction:
                     if compaction_start_status["result"] == "STARTED":
                         self.logger.write("INFO: Compaction started for NQN - {}, StartTime-{}\n".format(nqn, nqn_compaction_start_time))
                     else:
-                         self.logger.write("INFO: Compaction Status:{} for NQN - {}".format(compaction_start_status["result"], nqn)) 
+                        self.logger.write("INFO: Compaction Status:{} for NQN - {}".format(compaction_start_status["result"], nqn)) 
                     self.status[nqn] = False
                 else:
-                    self.logger.write("ERROR: Failed to start compaction for NQN - {} \n {}\n".format(nqn, console))
+                    self.logger.write("ERROR: Failed to start compaction for NQN - {}\n {}\n".format(nqn, console))
             else:
                 self.logger.write("ERROR: failed to start compaction for NQN - {}".format(nqn))
         
@@ -109,7 +109,7 @@ class Compaction:
         subsystem_nqn_list = []
         if subsystem_nqn_str:
             subsystem_nqn_list = subsystem_nqn_str.split(",")
-            self.logger.write("INFO: Compaction should be initiated for the following NQNs \n {}\n".format(subsystem_nqn_list))
+            self.logger.write("INFO: Compaction should be initiated for the following NQNs\n {}\n".format(subsystem_nqn_list))
         else:
             self.logger.write("INFO: Using \"nvme list-subsys\" command for getting subsystem-nqn of {}\n".format(self.target_ip))
             subsystem_nqn_list = self.get_subsystem_nqn_from_command()
@@ -136,7 +136,7 @@ class Compaction:
         command = "sudo " + TARGET_SRC_PATH + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact --get_status -n "
         for nqn in self.nqn:
             status_command = command + nqn
-            ret,console = exec_cmd(status_command, True, True)
+            ret, console = exec_cmd(status_command, True, True)
             if ret == 0 and console:
                 status = json.loads(console)
                 if "result" in status and status["result"] == "IDLE":
