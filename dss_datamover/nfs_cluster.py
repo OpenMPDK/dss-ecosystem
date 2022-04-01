@@ -40,19 +40,19 @@ from multiprocessing import Manager
 class NFSCluster:
     manager = Manager()
     def __init__(self, config={}, user_id="ansible", password="password", logger=None):
-        self.config = config
+        self.config = config.get("nfs", {})
         self.local_mounts = {}
         self.mounted_nfs_shares = []
         self.nfs_cluster = []
-        self.mounted = False
+        self.mounted = config.get("mounted", False)
         self.logger = logger
         self.user_id = user_id
-        self.password = password
+        self.password = password     
 
 
     def __del__(self):
         # Unmount all the mounted local NFS paths.
-        if self.mounted:
+        if self.mounted and self.mounted_nfs_shares:
             self.umount_all()
 
     @exception
@@ -116,33 +116,41 @@ class NFSCluster:
         nfs_share_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
         nfs_share_already_mounted = False
 
-        # Create local directory
-        if os.path.isdir(nfs_share_mount):
-            nfs_share_already_mounted = True
+        # Already File System path is mounted
+        if self.mounted:
+            if os.path.isdir(nfs_share):
+                nfs_share_already_mounted = True
+            else:
+                self.logger.error("FS path {} doesn't exist ".format(nfs_share))
         else:
-            # os.mkdir(nfs_share)
-            command = "mkdir -p {}".format(nfs_share_mount)
-            ret, console = exec_cmd(command, True, True, self.user_id)
-        if nfs_share_already_mounted or os.path.ismount(nfs_share_mount):
-            self.logger.warn("NFS share {} already mounted to {}".format(nfs_share, nfs_share_mount))
-            nfs_share_already_mounted = True
-            ret = 0
-        else:
-            command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share_mount)
-            ret, console = exec_cmd(command, True, True, self.user_id)
+            if os.path.isdir(nfs_share_mount):
+                nfs_share_already_mounted = True
+            else:
+                # os.mkdir(nfs_share)
+                command = "mkdir -p {}".format(nfs_share_mount)
+                dir_ret, console = exec_cmd(command, True, True, self.user_id)
+                if dir_ret:
+                    self.logger.fatal("Faild to create the directory {} for mount".format(nfs_share_mount))
+                    return dir_ret, console  
 
-        if ret == 0:
-            self.mounted_nfs_shares.append(nfs_share)
-            self.logger.info("NFS mounting {}:{} => {} successful".format(cluster_ip, nfs_share, nfs_share_mount))
-        elif ret:
-            self.logger.error("NFS mounting {}:{} failed \n {}".format(cluster_ip, nfs_share, console))
+            if nfs_share_already_mounted:
+                self.logger.warn("NFS share {} already mounted to {}".format(nfs_share, nfs_share_mount))
+            else:
+                command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share_mount)
+                ret, console = exec_cmd(command, True, True, self.user_id)
+
+                if ret == 0:
+                    self.mounted_nfs_shares.append(nfs_share)
+                    self.logger.info("NFS mounting {}:{} => {} successful".format(cluster_ip, nfs_share, nfs_share_mount))
+                elif ret:
+                    self.logger.error("NFS mounting {}:{} failed \n {}".format(cluster_ip, nfs_share, console))
 
         if ret == 0 or nfs_share_already_mounted:
             if cluster_ip not in self.local_mounts:
                 self.local_mounts[cluster_ip] = [nfs_share]
             else:
                 self.local_mounts[cluster_ip].append(nfs_share)
-            self.mounted = True
+            #self.mounted = True
 
         return ret,console
 

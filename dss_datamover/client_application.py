@@ -67,6 +67,7 @@ class ClientApplication(object):
         self.dryrun = config["dryrun"]
         self.debug = config.get("debug", False)
         self.ip_address_family = config.get("ip_address_family", "IPV4")
+        self.fs_config = config.get("fs_config", {})
 
         # Message communication
         self.operation_data_queue = Queue()  # Hold file index data
@@ -145,7 +146,7 @@ class ClientApplication(object):
         # Start messaging service
         self.start_logging()
         self.logger.info("Started Client Application for id:{} on node {}".format(self.id, self.host_name))
-        self.nfs_cluster = NFSCluster({}, "root", self.password, self.logger)
+        self.nfs_cluster = NFSCluster(self.fs_config, "root", self.password, self.logger)
         if not self.start_workers():
             self.stop_logging()
             sys.exit("Workers were not started.")
