@@ -19,8 +19,8 @@
   "ip_address_family" : "IPV6",
   "fs_config":{
                "mounted": false,
-               "nfs" {
-                    "202.0.0.103": ["/dir1","/dir2"]
+               "nfs": {
+                    "202.0.0.103": ["/dir1", "/dir2"]
                 }
               },
   "s3_storage": {
