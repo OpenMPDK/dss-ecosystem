@@ -81,7 +81,7 @@ class Master(object):
         self.client_password = config["client"]["password"]
 
         self.s3_config = config.get("s3_storage", {})
-        self.nfs_config = self.config.get("nfs_config", {})
+        self.fs_config = self.config.get("fs_config", {})
 
         self.standalone = config.get("standalone", False)
 
@@ -377,7 +377,7 @@ class Master(object):
                 return
 
         # Create NFS cluster object
-        self.nfs_cluster_obj = NFSCluster(self.config.get("nfs_config", {}), "root", "", self.logger)
+        self.nfs_cluster_obj = NFSCluster(self.fs_config, "root", "", self.logger)
 
         if self.resume_flag:
             self.prefixes = self.dir_prefixes_to_resume
@@ -402,7 +402,7 @@ class Master(object):
                     self.task_queue.put(task)
         else:
             self.nfs_cluster_obj.mount_all()
-            if not self.nfs_cluster_obj.mounted:
+            if not self.nfs_cluster_obj.local_mounts:
                 self.logger.fatal("Mounting failed, EXIT indexing!")
                 self.indexing_started_flag.value = -1
                 return
@@ -414,7 +414,10 @@ class Master(object):
                 self.nfs_shares.extend(nfs_shares)
                 for nfs_share in nfs_shares:
                     # print("DEBUG: Creating task for {}".format(nfs_share))
-                    nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share)
+                    if  self.nfs_cluster_obj.mounted:
+                        nfs_share_mount = nfs_share
+                    else:
+                        nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share)
                     task = Task(operation="indexing",
                                 data=nfs_share_mount,
                                 nfs_cluster=ip_address,
@@ -470,7 +473,7 @@ class Master(object):
                                 )
                     self.task_queue.put(task)
             else:
-                for prefix in get_s3_prefix(self.logger, self.config.get("nfs_config", {}), self.prefix):
+                for prefix in get_s3_prefix(self.logger, self.fs_config.get("nfs", {}), self.prefix):
                     bad_prefix_no_listing = False
                     with self.listing_progress.get_lock():
                         self.listing_progress.value += 1
