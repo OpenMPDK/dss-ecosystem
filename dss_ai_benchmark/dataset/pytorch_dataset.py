@@ -158,6 +158,9 @@ class RandomAccessDataset(Dataset):
         if not self.image_queue:
             self.logger.fatal("Couldn't list files, exit application")
             sys.exit()
+        #shuffle keys
+        random.shuffle(self.images)
+        #print("shuffle keys")
         self.listing_time = "{:0.4f}".format(end_listing_time - start_listing_time)
         self.logger.info("Total files listed: {}, Time: {} seconds".format(total_listed_file, self.listing_time))
 
@@ -334,7 +337,7 @@ class PythonReadDatasetToDevNull(RandomAccessDataset):
         object_key = image[0]
         self.s3_clients[worker_id].getObjectToFile(bucket=self.s3_config["bucket"], key=object_key, dest_file_path="/dev/null")
         with self.dataset_size_in_bytes.get_lock():
-            self.dataset_size_in_bytes.value += 1024
+            self.dataset_size_in_bytes.value += 1
         return torch.FloatTensor(3, 2)
 
 
