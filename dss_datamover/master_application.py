@@ -499,23 +499,34 @@ class Master(object):
         compaction_status = {}
         start_time = datetime.now()
 
-        for target_ip in self.config["dss_targets"]:
+        # Check if subsystem-nqn are specified
+        if "dss_targets" not in self.config:
+            self.logger.fatal("Target information are not specified!")
+            return
+        if "subsystem_nqn" not in self.config["dss_targets"]:
+            self.logger.fatal("Target subsystem nqn information not specified!")
+            return
+
+        for target_ip in self.config["dss_targets"]["subsystem_nqn"]:
             command = target_compaction_source + " --ip_address " + target_ip
             command += " --logdir " + self.config["logging"]["path"]
             command += " --user_id " + self.client_user_id
             if self.client_password:
                 command += " --password " + self.client_password
 
-            if type(self.config["dss_targets"]) is dict:
-                subsystem_nqn_str = (",").join(self.config["dss_targets"][target_ip])
-                command += " --subsystem_nqn " + subsystem_nqn_str
+            subsystem_nqn_str = (",").join(self.config["dss_targets"]["subsystem_nqn"][target_ip])
+            command += " --subsystem_nqn " + subsystem_nqn_str
 
-            self.logger.info("Started Compaction for target-ip:{}".format(target_ip))
+            # Add target installation path
+            if "installation_path" in self.config["dss_targets"]:
+                command += " --installation_path " + self.config["dss_targets"]["installation_path"]
+
+            self.logger.info("Started Compaction for target-ip:{}-{}".format(target_ip, command))
             ssh_client_handler, stdin, stdout, stderr = remoteExecution(target_ip, self.client_user_id,
                                                                         self.client_password, command)
             compaction_status[target_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout": stdout,
                                             "stderr": stderr}
-
+        # Wait for target compaction to finish.
         while True:
             is_compaction_done = True
             progress_bar("Compaction in Progress")

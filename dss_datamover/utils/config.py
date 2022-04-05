@@ -281,6 +281,8 @@ def TargetCompactionArgumentParser():
     parser.add_argument("--subsystem_nqn", "-nqn", type=str, required=False, help='Specify subsystem-nqn in comma separated form')
     parser.add_argument("--logdir", "-log", type=str, default="/var/log/dss",required=False,
                         help='A path where compaction log gets created')
+    parser.add_argument("--installation_path", "-i", type=str, default="/usr/dss/nkv-target", required=False,
+                        help='Target software installation path')
     parser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                         help='Dry run - Just check operation is working , but does not actual upload')
     parser.add_argument("--debug", "-d", required=False, action='store_true',

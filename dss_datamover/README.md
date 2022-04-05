@@ -1,239 +1,251 @@
-# DSS Data Mover
+# dss-datamover
+A command line tool to interact with DSS object storage. It supports the following operations.
 
-## (I) Datamover Deployment Using Ansible
+**PUT:** Uploads posix based file system data to DSS object storage.
 
-### Configuration
+**LIST:** List object keys from the object storage. 
 
-The default configuration for the data mover is being set in *deploy/roles/create_datamover_conf/defaults/main.yml*. To customize the datamover configuration, user should uncomment and set the parameters at *deploy/group_var/all.yml* file under __### Datamover Settings__ block.
-Below as example of shown.
+**GET:** Download objects and store in the shared / local file system.
 
-```
-### Datamover Settings                                                     
-# datamover_conf_dir: /etc/dss/datamover                   
-# datamover_master_workers: 5                             
-# datamover_master_max_index_size: 500                      
-# datamover_master_size: 1GB
-# datamover_client_workers: 5
-# datamover_client_max_index_size: 500
-# datamover_client_user_id: ansible
-# datamover_client_password: ansible
-# datamover_message_port_index: 4000
-# datamover_message_port_status: 4001
-# datamover_nfs_shares:
-#   - ip: 192.168.200.199
-#     shares:
-#       - /mnt/nfs_share/5gb
-#       - /mnt/nfs_share/10gb
-#       - /mnt/nfs_share/15gb
-#   - ip: 192.168.200.200
-#     shares:
-#       - /mnt/nfs_share/5gb-B
-#       - /mnt/nfs_share/10gb-B
-#       - /mnt/nfs_share/15gb-B
-# datamover_master_size: bucket
-# datamover_client_lib: dss_client
-# datamover_logging_path: /var/log/dss
-# datamover_logging_level: INFO
-```
+**DEL:** Remove objects from DSS object storage.
 
-In these parameters,  ```datamover_logging_path , datamover_conf_dir ``` are used to set the path to the datamover config and log files. 
+**DataIntegrity:** Perform data-integrity with md5sum enabled.
 
-It is also required to keep ```datamover_client_lib: dss_client``` as is. 
-
-```datamover_message_port_index , datamover_message_port_status``` can be modified based on the machine's available port, the default port is 4000. 
-
-Parameters such as ```datamover_master_size``` is not needed to be set.
-
-Table below shows the tunable parameters.
-
-| Parameter                       | Description   |
-| --------------------------------|-------------- |
-| datamover_master_workers        | Number of workers does parallel indexing and listing. Based on the core available on data mover master, tune the number of master workers to improve the performance |
-| datamover_master_max_index_size | Per each master worker how many file indexes can be handled simultaneously, on a physical server this value can be >= 1000, meaning each client worker can process maximum 1000 files sequentially to S3 storage|
-| datamover_client_workers        | Number of client workers performing parallel I/O operation on a single node, the value can be tuned based on available cores on each client|
-| datamover_client_max_index_size | Maximum number of file index can be passed through an index message to the different client-application, on a physical system this value can be >= 1000 |
-| datamover_nfs_shares:           | The ip address of the NFS server and their share directories are set, respectively.|
-| datamover_logging_level: INFO   | The log level INFO, DEBUG, WARNING of data mover is specified.|
-
-### Deployment
-
-After Deploying the DSS software using the ansible playbook, Datamover is already deployed
-
-```
-ansible-playbook -i inv_file  playbooks/deploy_dss_software.yml 
-```
-
-In case you change datamover configuration after deployment of the dss_software, datamover should be deployed again.
-
-```
-ansible-playbook -i inv_file  playbooks/deploy_datamover.yml 
-```
-
-### Start DataMover
-
-Start DataMover using start_start_datamover.yml playbook to move the data from NFS server and PUT it to DSS storage servers.
-
-```
-ansible-playbook -i inv_file  playbooks/start_datamover.yml 
-```
-
-to test that the data is moved from NFS to DSS storage on client/storage server
-data is generally stored under dss<em>i</em> bucket which *i* specifies the cluster's index and *dss* bucket will keep the datamover configuration file.
-
-```
-cd /usr/dss/nkv-datamover
-./mc ls autominio 
-./mc ls autominio/dss0
-```
-
-### I/O Operations
-
-Using the start_datamover playbook we can execute I/O operations (GET, DEL, LIST):
-
-```
-ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=GET"
-
-ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=DEL"
-
-ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=LIST"
-```
-
-To test DM uploaded the files into S3 storage can be checked as below.
-- Data mover LIST operation to indicate how many objects have been uploaded
-- Checking Dry Run datamover I/O operation without uploading files.
-- Checking Data Integrity that the file uploaded on S3 is the same as data on NFS. 
-
-### Dry Run
-
-Dry Run option is to exercises the data mover I/O operation without actually calling the s3 functions. Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance. Dry run in PUT operation access the data on the NFS server copy it to the buffer and then without writing the data to DSS Storage will skip the s3 call and delete the buffer content. Dry run GET/DEL is dependent on parallel listing operation. It performs listing and exercise all the part of code except calling S3 download / remove object.
-
-```
-ansible-playbook -i your_inventory playbooks/start_datamover.yml -e "datamover_dryrun=true"
-```
-
-### Data Integrity Test
-
-The Data Integrity test is to make sure the data uploaded on DSS is the same as the data on the NFS. When the option is enabled, data mover performs a checksum validation test of all objects on object store. It also performs data-integrity check for uploaded data when “—skip_upload” option is specified.
-
-```
-ansible-playbook -i inv_file playbooks/start_datamover.yml -e "datamover_operation=TEST"
-```
-
-## (II) Data Mover Mannual Deployment
-
-### NFS Cluster Setup
-
-#### NFS Server Setup
-
-Install NFS Lib on NFS server and enable then start the rpcbind and nfs-server services.
-
-```
-yum –y install nfs-utils libnfsidmap
-systemctl enable rpcbind
-systemctl enable nfs-server
-systemctl start rpcbind
-systemctl start nfs-server
-
-```
-
-The NFS server provides access of NFS shares to the client nodes via “/etc/exports” file with the following format:
-``` <NFS Shared Directory> <Client IP>(opt1,opt2…) ```
-
-for example:
-
-```
-/bird 10.1.51.2(rw,sync,no_subtree_check) 10.1.51.91(rw,sync,no_subtree_check) 10.1.51.132(rw,sync,no_subtree_check) 10.1.51.107(rw,sync,no_subtree_check) 10.1.51.238(rw,sync,no_subtree_check)
-/dog 10.1.51.2(rw,sync,no_subtree_check) 10.1.51.91(rw,sync,no_subtree_check) 10.1.51.132(rw,sync,no_subtree_check) 10.1.51.107(rw,sync,no_subtree_check) 10.1.51.238(rw,sync,no_subtree_check)
-```
-
-Restart the export file
-
-``` exportfs –r ```
-
-verify shared mount paths
-
-``` exportfs -v ```
-
-#### NFS Client Setup
-
-Install the NFS lib
-
-``` yum –y install nfs-utils libnfsidmap ```
-
-enable and start the rpcbind service
-
-```
-systemctl enable rpcbind
-systemctl start rpcbind
-```
-all client should mount NFS shared directory before accessing them.
-
-```
-sudo mkdir /nfs-shared1     # Create local directory to be mapped to remote directory.(optional)           
-mount <nfs node ip address>:/<nfs Shared Directory>  /nfs-shared1”           
-```
-
-verify mounted shared directory
-
-```df –kh```
-
-### I/O Operations
-- Running PUT operation with compaction option, optimizes the performance for GET and LIST of objects on DSS.
-- LIST/GET/DEL operations can be performed either recursively for the whole data on DSS or only for a specific prefix. 
-- In case of PUT failure, with warning ```WARNING: DataMover RESUME operation is required!```, please retry the put operation again.  
-- The default path for Data mover config file ```/usr/dss/nkv-datamover/config/config.json``` to specify the config path use --config option. 
+The tool works in a distributed and standalone mode ( single node execution ).
+In the distributed version, it uses a master node to initiate overall process and
+a set of client nodes to perform in parallel. The remote ClientApp are spawns using 
+ssh connection from __paramiko__ library. The "ClientApplication" running on the client node interact with "MasterApplication" running on master node via TCP socket communication.
  
- ```--config {{ datamover_conf_dir }}/config.json```
-
+# Dependency:
+Install following packages on the client nodes before launching client application to those nodes.
 ```
-cd /usr/dss/nkv-datamover
+python3 -m pip install paramiko
+python3 -m pip install boto3
+python3 -m pip install pyminio
+python3 -m pip install ntplib
 
+Use isntall.sh on each master/client node.
+OR
+pip3 install requirements.txt
+```
+
+# Execution command:
+As a non-root user, please run the below commands with '''sudo''' and make sure the non-root user
+is part of sudoers file.
+```
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  '
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  --compaction'
-
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
-
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL '
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
-
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <Destination Path>'
 sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --prefix bird/ --dest_path <Destination Path>'
-```
 
-### Data Integrity Test and Dry Run
+Dry Run:
+- Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --dryrun' 
+- It performa every steps involved in DELETE operation except actual DELETE from S3 storage.
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --dryrun'
+- It performs every steps involved in GET operation except actual S3 GET operation
+sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <"Destination File Path"> --dryrun' 
+NFS Cluster: 10.1.51.2
 
-Here are the examples to run data mover with integrity test and dry run options:
+Debug:
+- Use "--debug/-d" switch to run DataMover in debug mode.
 
+Testing:
+  DataIntegrity:
+  - This functionality and testing checks data integrity. First DM upload data for each prefix, subsequently
+   run GET and perform md5sum. During the upload process it collect md5sum hash key from each file and store them in 
+   temporary buffer and during GET call it uses that to check data integrity.
+   python3 master_application.py TEST --data_integrity --dest_path <Destination Path> --debug 
 ```
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path>'
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity –skip_upload --dest_path <destiniation path>'
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --dryrun'
+# TESS Master Node and Client Nodes
+## Master Node
+   The master node is the node where, the master_application starts. 
+   It does indexing for PUT operation and distribute the file index to the ClientNodes evenly.
+   The master_Application uses multiple workers to perform indexing.
+   The MasterApplication also consist three monitors such as IndexMonitor, StatusPoller, StatusProgressCalculation.
+   IndexMonitor: Distribute the file or object_key indexes  to the client nodes through message queue.
+   StatusPoller: Read status messages from each clients and add them to a status queue.
+   StatusProgress: Read all status data from status queue and calculate the progress.
+                   Display the result.
+   The file upload is performed by the ClientApplication running in each TESS client node.
+### MasterApplication configuration
+Update master section in the config.json
+```
+ "master": {
+    "ip_address": "202.0.0.135", # Make sure master IP address is sepcified correctly
+    "workers": <Specify no of workers>,
+    "max_index_size": <Maximum no of indexes to be sent through a Message>,
+    "size": <Overall Size of each set of message, say 1GB. Thats mean the message to be sent with 
+    x number of file name of size 1GB>
+  },
+  
+  Default is file count based indexing. 
+  #TODO:
+  - Incorporate size based indexing too. Support size based indexing if specified.
+``` 
+## Client Nodes:
+   The ClientApplication running in each client node performs the actual operation PUT/DEL/GET.
+   Further, the received indexes are in divided in small tasks and added to TaskQ. Multiple workers 
+   running on that client node, process each task independently and update status in a shared queue.
+   
+### How to configure ClientApplication
+Specify TESS client nodes, ip address or DNS name
+```
+"tess_clients_ip":["10.1.51.91", "10.1.51.132", "10.1.51.107"],
+```
+Update client section in config.json
+``` 
+ "client": {
+    "workers": <Specifiy Workers>,
+    "max_index_size": <Maximum indexes to be processed by each worker in a Task>,
+    "user_id": "root",
+    "password": "msl-ssg"
+  },
+  
+```
+## Message Communication
+   The data-mover application uses REQ/REP message pattern to distribute the indexing data to the
+   N ClientApplications running on the N client nodes. The operation status is sent back from the 
+   ClientNodes to MasterNode through PUSH/PULL message pattern. 
+### Message Communication Configuration:
+If the default message port doesn't work, then change it to some other ports.
+```
+"message": {
+    "port_index": 6000,
+    "port_status": 6001
+  },
+```   
+# NFS Cluster information
+Specify NFS cluster information from configuration file.
+```
+"nfs_config":{
+               "<NFS Cluster DNS/IP address>":[ "NFS share1", "NFS share2"]
+             },
+```
+# S3 Client Library
+The supported S3 client libraries minio-python-lib, dss-client-lib or boto3.
+minio-python-lib => "minio"
+dss-client-lib => "dss_client"
+boto3 => "boto3" 
+Update the client library in the following location of configuration file.
+```
+"s3_storage": {
+    "minio": {"url": "202.0.0.103:9000", "access_key": "minio", "secret_key": "minio123"},
+    "bucket": "bucket",
+    "client_lib": "dss_client" <<== Update client library, supported values [ "minio" | "dss_clint" | "boto3" ]
+  },
+```
+# Operation
+Supported operations are PUT/DEL/GET
+## Operation PUT
+  The PUT operation upload files into S3 storage for all NFS shares. The indexing is done in MasterNode.
+  The actual upload is performed in client nodes. The index distribution is done through a IndexMonitor.
+  It distribute indexes in round-robin fashion in all the clients. The actual file upload is done at the
+  client node.
+### Target Compaction
+  The DSS target compaction can be initiated after actual upload is done. Use the "--compaction" switch
+  along with regular upload command.
+  ```
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction'
+  ``` 
+### Partial upload of data from a NFS share
+  The partial data can be uploaded to S3 with proper prefix. A valid prefix should have following signature.
+  A prefix should start with "NFS" server "ip_address" and end with a forward slash "/".
+  <nfs_server_ip>/<prefix>/
+  ```
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction 
+              --prefix <nfs_server_ip>/<prefix path>/ '
+  ``` 
+#### Configuration: 
+  Include IP address of the DSS targets from the DataMover configuration file.
+  ```
+  "dss_targets": ["202.0.0.104"]  # Here "202.0.0.104" is the ip address of the DSS target.
+  ```
+## Operation LIST
+  The LIST operation list all keys under a provided prefix. It is performed by MasterApplication
+  only. Each prefix is processed by independent workers. Results are en-queued to IndexQueue for
+  DEL/GET operation. Else, gets dumped into a local file.
+  ```
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
+  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
+  ```
+## Operation DEL
+  The DEL operation is dependent on LIST operation. The object keys from the LISTing operation gets 
+  among the client-nodes in round-robin fashion. The actual DELETE operation is performed by ClientApplication.
+  If a prefix is specified from command line, then object_keys under that prefix should be removed.
+  The object prefix should be ended with forward slash (/) such as bird/ , bird/bird1/
+  ```
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL ' 
+  ```
+## Operation GET
+  The GET operation is dependent on LIST operation. The object keys from the LISTing operation gets 
+  among the client-nodes in round-robin fashion. The actual GET operation is performed by ClientApplication.
+  The destination path should be provided from command line as sub-command along with GET. 
+  ```
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <destiniation path>'
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <destiniation path> --prefix bird/'
+  ```
+  If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
+## Operation TEST
+  The DataMover test can be initiated with TEST operation. The data integrity test can be initiated as below.
+  ```
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path>'
+  ```
+  The DataIntegrity test, first start indexing and start uploading data for each prefix through a worker from a client
+  node. During that process, it keep track of file and corresponding md5sum hash in a buffer. Subsequently, a GET 
+  operation is initiated with same prefix and object keys which downloads files in the temporary destination path and compares md5sum 
+  with corresponding file key in buffer.
+  
+  A prefix based data_integrity test should be executed as below. One need to provide prefix from a object-key.
+  A prefix should start as <nfs_server_ip>/<prefix path>/.
+  ```
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --prefix <prefix/>'
+  ```
+  Data-integrity can be performed on pre-existing S3 data uploaded through DataMover. If \"--skip_upload" switch is 
+  specified then , DM skip uploading files under the prefix.
+  ```
+    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --skip_upload'
+  ```
+ # NFS Cluster Setup
+ ## Server Setup:
+ ```
+# NFS lib Installation 
+    yum –y install nfs-utils libnfsidmap
+    
+# Start the services:
+        systemctl enable rpcbind
+        systemctl enable nfs-server
+        systemctl start rpcbind
+        systemctl start nfs-server
+# The NFS server require to provide access of NFS shares to the client nodes.
+	“/etc/exports” file has to be updated as below.
+<NFS Shared Directory> <Client IP>(opt1,opt2…)
 
-```
+/bird 10.1.51.2(rw,sync,no_subtree_check) 10.1.51.91(rw,sync,no_subtree_check) 10.1.51.132(rw,sync,no_subtree_check) 10.1.51.107(rw,sync,no_subtree_check) 10.1.51.238(rw,sync,no_subtree_check)
+/dog 10.1.51.2(rw,sync,no_subtree_check) 10.1.51.91(rw,sync,no_subtree_check) 10.1.51.132(rw,sync,no_subtree_check) 10.1.51.107(rw,sync,no_subtree_check) 10.1.51.238(rw,sync,no_subtree_check)
+/cat 10.1.51.2(rw,sync,no_subtree_check) 10.1.51.91(rw,sync,no_subtree_check) 10.1.51.132(rw,sync,no_subtree_check) 10.1.51.107(rw,sync,no_subtree_check) 10.1.51.238(rw,sync,no_subtree_check)
 
-### NFS Share Guideline
-- For a better perfromance, it is advised to put the number of files per directory, same or slightly more than master max index. For example, if there are 10,000 files under a directory , and that directory get processed by a worker W1, you should be getting 10 message if mas_index_size is set to 1000. 
-You may chose to set 2000, which 'll send out 5 message and that may speed up process further. 
-On another note make sure that in nested directory each directory has reasonable number of files (same or slightly more than master max index).
 
-- Here is an example mounted multiple NFS share on client server and one of its NFS server
+o  Restart export “exportfs –r”
+o  Show shared mount paths “exportfs -v”
+Client Setup:
+o  NFS lib Installation:
+	yum –y install nfs-utils libnfsidmap
+o  Start the service
+    systemctl enable rpcbind
+	systemctl start rpcbind
+o  All client node should mount them before accessing shared directory.
+   Create local directory to be mapped to remote directory.(optional)
+   sudo mkdir /nfs-shared1”
+o Mount the remote shared paths as below.
+    mount <nfs node ip address>:/<nfs Shared Directoyr>  /nfs-shaed1”
+o Show the remote mounts “df –kh”
 ```
-[ansible@client]$ df -h
-Filesystem                                   Size  Used Avail Use% Mounted on
-nfs.srv1.ip:/mnt/nfs_share/5gb           985G  224G  711G  24% /srv1/mnt/nfs_share/5gb
-nfs.srv2.ip:/mnt/nfs_share/10gb-B        246G  207G   27G  89% /srv2/mnt/nfs_share/10gb-B
-nfs.srv2.ip:/mnt/nfs_share/5gb-B         246G  207G   27G  89% /srv2/mnt/nfs_share/5gb-B
-nfs.srv1.ip:/mnt/nfs_share/15gb          985G  224G  711G  24% /srv1/mnt/nfs_share/15gb
-nfs.srv1.ip:/mnt/nfs_share/10gb          985G  224G  711G  24% /srv1/mnt/nfs_share/10gb
-nfs.srv2.ip:/mnt/nfs_share/15gb-B        246G  207G   27G  89% /srv2/mnt/nfs_share/15gb-B
-```
-
-```
-[ansible@nfs.srv1.ip ~]$ ls /mnt/nfs_share/
-10gb  15gb   5gb  
-[ansible@nfs.srv1.ip ~]$ls /mnt/nfs_share/5gb
-0_0  1MB_0001.dat  1MB_0003.dat  1MB_0005.dat  1MB_0007.dat  1MB_0009.dat  1MB_0011.dat  1MB_0013.dat  1MB_0015.dat  1MB_0017.dat  1MB_0019.dat
-0_1  1MB_0002.dat  1MB_0004.dat  1MB_0006.dat  1MB_0008.dat  1MB_0010.dat  1MB_0012.dat  1MB_0014.dat  1MB_0016.dat  1MB_0018.dat  1MB_0020.dat
-```
+ 
+  
 
