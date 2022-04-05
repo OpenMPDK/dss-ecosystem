@@ -87,11 +87,11 @@ class Compaction:
         :return: None
         """
         command = "sudo " + self.target_source + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact -n "
-        self.compaction_start_time =  datetime.now()
+        self.compaction_start_time = datetime.now()
         for nqn in self.nqn:
             compaction_command = command + nqn.strip()
-            nqn_compaction_start_time =  datetime.now()
-            ret, console  = exec_cmd(compaction_command, True, True)
+            nqn_compaction_start_time = datetime.now()
+            ret, console = exec_cmd(compaction_command, True, True)
             if ret == 0 and console:
                 compaction_start_status = json.loads(console)
                 if "result" in compaction_start_status:
@@ -104,8 +104,7 @@ class Compaction:
                     self.logger.write("ERROR: Failed to start compaction for NQN - {}\n {}\n".format(nqn, console))
             else:
                 self.logger.write("ERROR: failed to start compaction for NQN - {}".format(nqn))
-        
- 
+
     def get_subsystem_nqn(self, subsystem_nqn_str):
         subsystem_nqn_list = []
         if subsystem_nqn_str:
@@ -126,13 +125,12 @@ class Compaction:
                 line =  line.decode('utf-8')
                 if line.startswith('NQN'):
                     subsystem_nqn = line.split("=")[-1]
-                    fields  = subsystem_nqn.split(":")
+                    fields = subsystem_nqn.split(":")
                     if fields[-1].startswith(HOSTNAME):
                         nqn.append(subsystem_nqn)
         self.logger.write("INFO: Compaction should be initiated for the following NQNs \n {}\n".format(nqn))
         return nqn
 
-    
     def get_status(self):
         command = "sudo " + self.target_source + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact --get_status -n "
         for nqn in self.nqn:
@@ -143,7 +141,6 @@ class Compaction:
                 if "result" in status and status["result"] == "IDLE":
                     self.status[nqn] = True
                     self.finished_nqn_compaction +=1
-
 
 
 if __name__ == "__main__":
@@ -157,5 +154,3 @@ if __name__ == "__main__":
             break
         time.sleep(1)
 
-        
-      
