@@ -44,7 +44,7 @@ import socket
 The target_compaction script start the compaction on each target node and wait for its completion.
 """
 
-TARGET_SRC_PATH="/usr/dss/nkv-target"
+
 HOSTNAME = socket.gethostname()
 
 class Compaction:
@@ -53,6 +53,7 @@ class Compaction:
         self.target_ip = params.get("ip_address", None)
         self.user_id = params.get("user_id", None)
         self.password = params.get("password", None)
+        self.target_source = params["installation_path"]
         self.logger = self.get_logger()
         self.nqn = self.get_subsystem_nqn(params.get("subsystem_nqn", None))
         self.status = {}
@@ -85,7 +86,7 @@ class Compaction:
         Start the compaction process in a target node when subsystem nqn are specified
         :return: None
         """
-        command = "sudo " + TARGET_SRC_PATH + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact -n "
+        command = "sudo " + self.target_source + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact -n "
         self.compaction_start_time =  datetime.now()
         for nqn in self.nqn:
             compaction_command = command + nqn.strip()
@@ -133,7 +134,7 @@ class Compaction:
 
     
     def get_status(self):
-        command = "sudo " + TARGET_SRC_PATH + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact --get_status -n "
+        command = "sudo " + self.target_source + "/scripts/dss_rpc.py -s /var/run/spdk.sock rdb_compact --get_status -n "
         for nqn in self.nqn:
             status_command = command + nqn
             ret, console = exec_cmd(status_command, True, True)

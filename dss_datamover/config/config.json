@@ -30,10 +30,13 @@
   },
   "operations": ["PUT","GET","DEL","LIST"],
   "logging": { "path": "/var/log/dss", "level": "INFO"},
-  "dss_targets": {"msl-ssg-vm21.msl.lab":["nqn.2021-10.io:msl-ssg-vm21-kv_data1"],
+  "dss_targets": {
+    "subsystem_nqn":{"msl-ssg-vm21.msl.lab":["nqn.2021-10.io:msl-ssg-vm21-kv_data1"],
                   "msl-ssg-vm22.msl.lab":["nqn.2021-10.io:msl-ssg-vm22-kv_data1"],
                   "msl-ssg-vm23.msl.lab":["nqn.2021-10.io:msl-ssg-vm23-kv_data1"],
                   "msl-ssg-vm24.msl.lab":["nqn.2021-10.io:msl-ssg-vm24-kv_data1"]
+    },
+    "installation_path": "/usr/dss/nkv-target"
   },
   "environment": {
     "gcc" : {
