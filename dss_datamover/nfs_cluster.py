@@ -123,19 +123,17 @@ class NFSCluster:
             else:
                 self.logger.error("FS path {} doesn't exist ".format(nfs_share))
         else:
-            if os.path.isdir(nfs_share_mount):
+            if os.path.ismount(nfs_share_mount) :
                 nfs_share_already_mounted = True
-            else:
-                # os.mkdir(nfs_share)
+                self.logger.warn("NFS share {} already mounted to {}".format(nfs_share, nfs_share_mount))
+            elif not os.path.isdir(nfs_share_mount): 
                 command = "mkdir -p {}".format(nfs_share_mount)
                 dir_ret, console = exec_cmd(command, True, True, self.user_id)
                 if dir_ret:
                     self.logger.fatal("Faild to create the directory {} for mount".format(nfs_share_mount))
                     return dir_ret, console  
-
-            if nfs_share_already_mounted:
-                self.logger.warn("NFS share {} already mounted to {}".format(nfs_share, nfs_share_mount))
-            else:
+            # Mount FS
+            if not nfs_share_already_mounted:
                 command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share_mount)
                 ret, console = exec_cmd(command, True, True, self.user_id)
 

@@ -102,13 +102,14 @@ class Monitor(object):
         self.listing_aggregation_status = kwargs.get("listing_aggregation_status", None)
         self.listing_objectkey_queue = kwargs.get("listing_objectkey_queue", None)
         # Monitor termination
-        self.monitor_index_data_sender = Value('i', 0)
-        self.monitor_status_poller = Value('i', 0)
-        self.monitor_progress_status = Value('i', 0)
+        self.monitor_index_distributor_status = Value('i', 0)
+        self.monitor_status_poller_status = Value('i', 0)
+        self.monitor_operation_progress_status = Value('i', 0)
 
         # Process
-        self.process_index = None
+        self.process_index_distributor = None
         self.process_listing_aggregator = None
+        self.process_status_poller = None
 
         # Unit Testcase
         self.testcase_passed = kwargs.get("testcase", False)
@@ -120,32 +121,32 @@ class Monitor(object):
         self.resume_flag = kwargs.get("resume_flag", False)
 
     def start(self):
-
+        self.logger.info("Staring monitors!")
         if self.operation.upper() == "LIST":
             if self.config.get("dest_path", None):
                 self.process_listing_aggregator = Process(target=self.object_keys_aggregator)
                 self.process_listing_aggregator.start()
             if self.config.get("distributed", False):
                 # Start LISTing prefix distributor
-                self.process_index = Process(target=self.message_handler_index)
-                self.process_index.start()
+                self.process_index_distributor = Process(target=self.monitor_index_distributor)
+                self.process_index_distributor.start()
                 # Start status_poller  process
-                self.process_status = Process(target=self.message_handler_poller)
-                self.process_status.start()
+                self.process_status_poller = Process(target=self.monitor_status_poller)
+                self.process_status_poller.start()
         else:
             if not self.standalone:
                 # Start index process
-                self.process_index = Process(target=self.message_handler_index)
-                self.process_index.start()
+                self.process_index_distributor = Process(target=self.monitor_index_distributor)
+                self.process_index_distributor.start()
 
                 # Start status_poller  process
-                self.process_status = Process(target=self.message_handler_poller)
-                self.process_status.start()
+                self.process_status_poller = Process(target=self.monitor_status_poller)
+                self.process_status_poller.start()
             else:
                 self.logger.info('Running Monitor in standalone mode')
 
             # Start operation_progress process
-            self.process_operation_progress = Process(target=self.operation_progress)
+            self.process_operation_progress = Process(target=self.monitor_operation_progress)
             self.process_operation_progress.start()
 
     def stop(self):
@@ -164,25 +165,26 @@ class Monitor(object):
                 self.logger.excep("Unable to terminate Listing Aggregator {}".format(e))
 
         if not self.standalone:
-            if self.process_index and self.process_index.is_alive():
+            if self.process_index_distributor and self.process_index_distributor.is_alive():
                 time.sleep(1)
                 try:
-                    self.process_index.terminate()
+                    self.process_index_distributor.terminate()
                 except Exception as e:
                     self.logger.excep("Unable to terminate MessageHandler - IndexSender {}".format(e))
 
-            if self.process_status and self.process_status.is_alive():
+            if self.process_status_poller and self.process_status_poller.is_alive():
                 time.sleep(1)
                 try:
-                    self.process_status.terminate()
+                    self.process_status_poller.terminate()
                 except Exception as e:
                     self.logger.excep("Unable to terminate MessageHandler - StatusPoller ...\n {}".format(e))
 
         self.logger.warn("Terminated all running monitor processes ... ")
 
-    def message_handler_index(self):
+    def monitor_index_distributor(self):
         """
-        The "message_handler_index" function send index information to all the clients in round-robin fashion.
+        The "monitor_index_distributor" function send index information to all of the
+        ClientApplications evenly using modulo function.
         message data = {"dir":"/bird/bird1", "files":[], "nfs_cluster":"10.1.51.54"}
         Stop Processing:
           Gracefully shut down monitor
@@ -195,7 +197,7 @@ class Monitor(object):
               and stop all other processes to shutdown DM.
         :return: None
         """
-        name = "DM_monitor_message_handler_index"
+        name = "DM_monitor_monitor_index_distributor"
         prctl.set_name(name)
         prctl.set_proctitle(name)
 
@@ -205,12 +207,12 @@ class Monitor(object):
                 client.socket_index = ClientSocket(self.logger, self.ip_address_family)
                 client.socket_index.connect(client.ip_address, client.port_index)
                 successful_socket_connection +=1
-                self.logger.info("Connecting to INDEX MessageHandler {}:{}".format(client.ip_address, client.port_index))
+                self.logger.info("Monitor-Index-Distributor: Connected to Monitor-Index-MessageHandler of ClientApp-{}:{}".format(client.id, client.port_index))
             except ConnectionError as e:
-                self.logger.excep("Socket Connection error for ClientApp-{} : {}".format(client.id, e))
+                self.logger.excep("Monitor-Index-Distributor: Socket Connection error for ClientApp-{} : {}".format(client.id, e))
                 client.socket_index = None
         if successful_socket_connection == 0:
-            self.logger.fatal("Monitor-Index: Socket connection was not established with any client. Exit!")
+            self.logger.fatal("Monitor-Index-Distributor: Socket connection was not established with any client. Exit!")
             # TODO Need to terminate master and along with all client-apps.
         # Buffer to store prefix index and file count  {"prefix":<file count>}
         first_index_distribution = 0
@@ -223,10 +225,11 @@ class Monitor(object):
         while True:
             # Forcefully stop the process
             if self.stop_status_poller.value :
-                self.logger.error("Forcefully shutting down Monitor-index!")
+                self.logger.error("Monitor-Index-Distributor: Shutting down forcefully!")
                 end_message = {"indexing_done": 1}
-                self.logger.warn("Sending Termination message to all ClientApp!")
+                self.logger.warn("Monitor-Index-Distributor: Sending termination message to all ClientApp!")
                 self.send_message_to_all_clients(end_message)
+                time.sleep(1)
                 break
 
             previous_client_operation_status = 1
@@ -265,7 +268,7 @@ class Monitor(object):
                         first_index_distribution = 1
                 else:  # Re-send once again
                     previous_client_operation_status = 0
-                    self.logger.error("Failed to send message to Client-{} ".format(client.id))
+                    self.logger.error("Monitor-Index-Distributor: Failed to send message to Client-{} ".format(client.id))
 
                 # Debug message , for success
                 if previous_client_operation_status == 1:
@@ -276,19 +279,18 @@ class Monitor(object):
                     object_count += object_count_under_prefix
             # Debug message
             if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
-                self.logger.info("Messages distributed to clients-{}, Objects Count: {}".format(message_count,
+                self.logger.info("Monitor-Index-Distributor: Messages distributed to clients-{}, Objects Count: {}".format(message_count,
                                                                                                 object_count))
                 debug_message_timer = datetime.now()
 
             if self.index_data_generation_complete.value == 1 and (self.index_msg_count.value == message_count):
-                self.logger.info("Indexed data distribution is completed!")
-                self.logger.info("Index Distribution FINISHED, time - {} Sec".format(
+                self.logger.info("Monitor-Index-Distributor: Indexed-msg distribution is completed! Time:{} sec".format(
                     (datetime.now() - index_distribution_start_time).seconds))
                 self.logger.info(
-                    "Total distributed messages- {}, Objects Count-{}".format(message_count, object_count))
+                    "Monitor-Index-Distributor: Total distributed messages- {}, Objects Count-{}".format(message_count, object_count))
 
                 # Inform all the client applications running on different nodes
-                self.logger.info("Notifying all ClientApplication".format())
+                self.logger.info("Monitor-Index-Distributor: Notifying all ClientApplications".format())
                 end_message = {"indexing_done": 1}
                 self.send_message_to_all_clients(end_message)
                 # Intimidated all the clients, exit the loop.
@@ -305,8 +307,8 @@ class Monitor(object):
         if self.operation.upper() == "PUT" and not self.resume_flag:
             self.persist_index_data()
         self.all_index_data_distributed.value = 1
-        self.monitor_index_data_sender.value = 1
-        self.logger.info("Monitor-Index-Distribution is terminated gracefully! ")
+        self.monitor_index_distributor_status.value = 1
+        self.logger.info("Monitor-Index-Distributor is terminated gracefully! ")
 
     def persist_index_data(self):
         prefix_storage_file = self.index_data_json_file
@@ -379,13 +381,14 @@ class Monitor(object):
 
         return ret
 
-    def message_handler_poller(self):
+    def monitor_status_poller(self):
         """
         Monitor: Status Poller
-        Collect the status from all the clients and add status to status_queue
+        Collect the status from all the ClientApplications running on different nodes and
+        add status to status_queue.
         :return:
         """
-        name = "DM_monitor_message_handler_poller"
+        name = "DM_monitor_status_poller"
         prctl.set_name(name)
         prctl.set_proctitle(name)
 
@@ -394,12 +397,11 @@ class Monitor(object):
             try:
                 client.socket_status = ClientSocket(self.logger, self.ip_address_family)
                 client.socket_status.connect(client.ip_address, client.port_status)
-                self.logger.info("Monitor-Status-Poller Connecting to client-app-{} tcp://{}:{}".format(client.id,
-                                                                                                    client.ip_address,
-                                                                                                    client.port_status))
+                self.logger.info("Monitor-Status-Poller: Connected to ClientApp-{}:{}".format(client.id,
+                                                                                    client.port_status))
                 successful_socket_connection +=1
             except Exception as e:
-                self.logger.excep("Monitor-Status-Poller: Socket connection error for ClientApp-{}".format(client.id, e))
+                self.logger.excep("Monitor-Status-Poller: Socket connection error for ClientApp-{}, {}".format(client.id, e))
                 client.socket_status = None
 
         if successful_socket_connection == 0:
@@ -479,11 +481,11 @@ class Monitor(object):
         except Exception as e:
             self.logger.excep("Minitor-Poller {}".format(e))
 
-        self.monitor_status_poller.value = 1
+        self.monitor_status_poller_status.value = 1
         self.logger.info("Monitor-Status-Poller terminated gracefully! ")
 
     @exception
-    def operation_progress(self):
+    def monitor_operation_progress(self):
         """
         Monitor: Operation Progress
         Process the status result coming from different client nodes and update the progress.
@@ -509,7 +511,7 @@ class Monitor(object):
             if self.standalone:
                 if self.index_data_generation_complete.value == 1:
                     if self.all_index_data_distributed.value != 1:
-                        self.logger.debug("Index generation completed")
+                        self.logger.debug("Monitor-Operation-Progress: Index generation is completed")
                     self.all_index_data_distributed.value = 1
 
             # Stop the monitor when status-poller is stopped and status_queue is empty.
@@ -574,7 +576,7 @@ class Monitor(object):
                 # Remove the resume dir keys file as it is already part of prefix_index_data
                 self.resume_prefix_dir_keys_file_handle.close()
             except Exception as e:
-                self.logger.fatal("Exception in persisting final index data - {}".format(str(e)))
+                self.logger.fatal("Monitor-Operation-Progress: Exception in persisting final index data - {}".format(str(e)))
 
         total_operation_time = (datetime.now() - self.operation_start_time).seconds
 
@@ -649,7 +651,7 @@ class Monitor(object):
             "Operation {} completed in {} seconds for {:.2f} GiB ".format(self.operation, total_operation_time,
                                                                           operation_size_in_gb))
         self.logger.info("Operation {} BandWidth = {:.2f} MiB/sec ".format(self.operation, bandwidth))
-        self.monitor_progress_status.value = 1
+        self.monitor_operation_progress_status.value = 1
         # Check if TestCase has passed
         if self.index_data_count.value == operation_success_count:
             self.testcase_passed.value = True
