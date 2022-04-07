@@ -97,7 +97,7 @@ class RandomAccessDatasetTrain(DNNTrain):
         bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value /1024) / total_time
         train_summary = "** Train Summary **\n"
         train_summary += "\t Epochs:{}, BatchSize:{}, MaxBatchSize:{}\n".format(self.epochs, self.batch_size,self.max_batch_size)
-        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec".format(total_time,
+        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} MBytes, BW:{:.2f} MiB/Sec".format(total_time,
                                                 self.train_dataloader.dataset.dataset_size_in_bytes.value,  bw)
         self.logger.info(train_summary)
 
@@ -117,7 +117,8 @@ class PythonReadTrain(DNNTrain):
                 if batch_index == self.max_batch_size - 1:
                     break
         dataload_time = round((time.monotonic() - start),2)
-        dataset_size_mb = round((self.train_dataloader.dataset.dataset_size_in_bytes.value / 1024), 2)
+        #dataset_size_mb = round((self.train_dataloader.dataset.dataset_size_in_bytes.value / 1024), 2)
+        dataset_size_mb = self.train_dataloader.dataset.dataset_size_in_bytes.value
         bw = round((dataset_size_mb / dataload_time),2)
         self.metrics.append([str(dataload_time), str(dataset_size_mb), str(bw)])
         train_summary = "** Train Summary **\n"
