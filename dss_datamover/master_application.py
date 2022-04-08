@@ -521,7 +521,7 @@ class Master(object):
             if "installation_path" in self.config["dss_targets"]:
                 command += " --installation_path " + self.config["dss_targets"]["installation_path"]
 
-            self.logger.info("Started Compaction for target-ip:{}-{}".format(target_ip, command))
+            self.logger.info("Started Compaction for target-ip:{}".format(target_ip))
             ssh_client_handler, stdin, stdout, stderr = remoteExecution(target_ip, self.client_user_id,
                                                                         self.client_password, command)
             compaction_status[target_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout": stdout,
@@ -829,16 +829,16 @@ def process_put_operation(master):
 
             # Check for Monitors status
             master.monitor.status_lock.acquire()
-            if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
-                    master.monitor.monitor_status_poller.value and \
-                    master.monitor.monitor_progress_status.value:
+            if not monitors_stopped and master.monitor.monitor_index_distributor_status.value and \
+                    master.monitor.monitor_status_poller_status.value and \
+                    master.monitor.monitor_operation_progress_status.value:
                 monitors_stopped = 1
                 master.logger.info("All monitors belongs to Master terminated!")
             master.monitor.status_lock.release()
 
         if master.standalone:
             all_clients_completed = 1
-            if not monitors_stopped and master.monitor.monitor_progress_status.value:
+            if not monitors_stopped and master.monitor.monitor_operation_progress_status.value:
                 monitors_stopped = 1
                 master.logger.info('Monitor progress is completed')
                 master.logger.info('Stopping all the workers')
@@ -854,7 +854,7 @@ def process_put_operation(master):
             unmounted_nfs_shares = 1
 
         # Bring down workers.
-        if not master.standalone and not workers_stopped and master.monitor.monitor_index_data_sender.value:
+        if not master.standalone and not workers_stopped and master.monitor.monitor_index_distributor_status.value:
             master.stop_workers()
             workers_stopped = 1
 
@@ -902,7 +902,7 @@ def process_list_operation(master):
                         client.remote_client_exit_status()
                     else:
                         all_clients_completed = 0
-            if all_clients_completed and master.monitor.monitor_status_poller.value == 1:
+            if all_clients_completed and master.monitor.monitor_status_poller_status.value == 1:
                 listing_time = (datetime.now() - master.operation_start_time).seconds
                 master.logger.info("Distributed LISTing is completed {} seconds".format(listing_time))
                 if dump_object_keys_path:
@@ -964,14 +964,14 @@ def process_del_operation(master):
 
         # Check for Monitors status
         master.monitor.status_lock.acquire()
-        if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
-                master.monitor.monitor_status_poller.value and \
-                master.monitor.monitor_progress_status.value:
+        if not monitors_stopped and master.monitor.monitor_index_distributor_status.value and \
+                master.monitor.monitor_status_poller_status.value and \
+                master.monitor.monitor_operation_progress_status.value:
             monitors_stopped = 1
         master.monitor.status_lock.release()
 
         # Bring down workers.
-        if not workers_stopped and master.monitor.monitor_index_data_sender.value:
+        if not workers_stopped and master.monitor.monitor_index_distributor_status.value:
             master.stop_workers()
             workers_stopped = 1
 
@@ -1025,14 +1025,14 @@ def process_get_operation(master):
 
         # Check for Monitors status
         master.monitor.status_lock.acquire()
-        if not monitors_stopped and master.monitor.monitor_index_data_sender.value and \
-                master.monitor.monitor_status_poller.value and \
-                master.monitor.monitor_progress_status.value:
+        if not monitors_stopped and master.monitor.monitor_index_distributor_status.value and \
+                master.monitor.monitor_status_poller_status.value and \
+                master.monitor.monitor_operation_progress_status.value:
             monitors_stopped = 1
         master.monitor.status_lock.release()
 
         # Bring down workers.
-        if not workers_stopped and master.monitor.monitor_index_data_sender.value:
+        if not workers_stopped and master.monitor.monitor_index_distributor_status.value:
             master.stop_workers()
             workers_stopped = 1
 

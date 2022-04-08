@@ -80,12 +80,14 @@ class ClientSocket:
             try:
                 self.socket.connect((host, int(port)))
             except ConnectionRefusedError as e:
-                self.logger.warn("ConnectionRefusedError - retrying to connect {}".format(time_to_sleep))
+                self.logger.warn(f"ConnectionRefusedError - retrying to connect {time_to_sleep}")
                 is_connection_refused = True
             except ConnectionError as e:
-                self.logger.excep("ConnectionError -- {}".format(e))
+                self.logger.excep(f"{host}:{port}-ConnectionError - {e}")
             except socket.error as e:
-                self.logger.excep("GenericException - {}".format(e))
+                self.logger.excep(f"{host}:{port}-GenericException - {e}")
+            except Exception as e:
+                self.logger.error(f"{host}:{port}->{e}")
             # Add a delay in increasing order of 2 sec.
             time.sleep(time_to_sleep)
             time_to_sleep += CONNECTION_DELAY_INTERVAL
