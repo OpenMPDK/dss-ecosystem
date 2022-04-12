@@ -105,10 +105,12 @@ Update client section in config.json
  "client": {
     "workers": <Specifiy Workers>,
     "max_index_size": <Maximum indexes to be processed by each worker in a Task>,
-    "user_id": "root",
+    "user_id": "user-id",
     "password": "msl-ssg"
   },
-  
+ **Passwordless lauch of ClientApp:** User doesn't require to specify password to launch ClientApp
+  on differ nodes as long as ssh-key is coppied to all the nodes where ClientApp will be launched.
+  Keep the "password" section blank.  
 ```
 ## Message Communication
    The DataMover uses TCP socket for the communication between MasterApp and ClientApps.
