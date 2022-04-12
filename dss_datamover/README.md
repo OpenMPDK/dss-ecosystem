@@ -33,22 +33,22 @@ pip3 install requirements.txt
 As a non-root user, please run the below commands with '''sudo''' and make sure the non-root user
 is part of sudoers file.
 ```
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  '
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  --compaction'
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL '
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <Destination Path>'
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --prefix bird/ --dest_path <Destination Path>'
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  '
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  --compaction'
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL '
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <Destination Path>'
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --prefix bird/ --dest_path <Destination Path>'
 
 Dry Run:
 - Read files from NFS shares, but skip the upload operation. Show RAW NFS read performance
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --dryrun' 
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --dryrun' 
 - It performa every steps involved in DELETE operation except actual DELETE from S3 storage.
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --dryrun'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --dryrun'
 - It performs every steps involved in GET operation except actual S3 GET operation
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <"Destination File Path"> --dryrun' 
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <"Destination File Path"> --dryrun' 
 NFS Cluster: 10.1.51.2
 
 Debug:
@@ -63,13 +63,15 @@ Testing:
 ```
 # TESS Master Node and Client Nodes
 ## Master Node
-   The master node is the node where, the master_application starts. 
-   It does indexing for PUT operation and distribute the file index to the ClientNodes evenly.
-   The master_Application uses multiple workers to perform indexing.
-   The MasterApplication also consist three monitors such as IndexMonitor, StatusPoller, StatusProgressCalculation.
-   IndexMonitor: Distribute the file or object_key indexes  to the client nodes through message queue.
-   StatusPoller: Read status messages from each clients and add them to a status queue.
-   StatusProgress: Read all status data from status queue and calculate the progress.
+   The master node is the node where, the DataMover starts. 
+   It does indexing for PUT operation and distribute the file index to the ClientApps
+   running on client nodes evenly. It has MasterApp running multiple workers to perform indexing.
+   The MasterApp also consist three monitors such as IndexDistribution, StatusPoller,
+   OperationProgress monitors.
+   **IndexDistributionMonitor**: Distribute the file-indices or object_keys to the client nodes
+   for PUT or LIST operation respectively.
+   **StatusPollerMonitor**: Read status messages from each clients and add them to a status queue.
+   **OperationProgressMonitor**: Read all status data from status queue and calculate the progress.
                    Display the result.
    The file upload is performed by the ClientApplication running in each TESS client node.
 ### MasterApplication configuration
@@ -88,9 +90,10 @@ Update master section in the config.json
   - Incorporate size based indexing too. Support size based indexing if specified.
 ``` 
 ## Client Nodes:
-   The ClientApplication running in each client node performs the actual operation PUT/DEL/GET.
-   Further, the received indexes are in divided in small tasks and added to TaskQ. Multiple workers 
-   running on that client node, process each task independently and update status in a shared queue.
+   The ClientApplication (ClientApp) running in each client node performs the actual operation PUT/DEL/GET.
+   Further, the received messages are enqueued to a TaskQ. Multiple workers 
+   running on that client node, process each task independently and
+   add send the operation status to MasterApp for aggregation of status.
    
 ### How to configure ClientApplication
 Specify TESS client nodes, ip address or DNS name
@@ -108,17 +111,21 @@ Update client section in config.json
   
 ```
 ## Message Communication
-   The data-mover application uses REQ/REP message pattern to distribute the indexing data to the
-   N ClientApplications running on the N client nodes. The operation status is sent back from the 
-   ClientNodes to MasterNode through PUSH/PULL message pattern. 
+   The DataMover uses TCP socket for the communication between MasterApp and ClientApps.
+   The communication channel is established between the apps after they were launched.
+   The indices are distributed through IndexDistributionMonitor and operation status 
+   are aggregated through StatusPollerMonitor. 
 ### Message Communication Configuration:
-If the default message port doesn't work, then change it to some other ports.
+   The "port_index" is used by the IndexDistributionMonitor of MasterApp and message_server_index of ClientApp.
+   The "port_status" is used by the StatusPoller of MasterApp and message_server_status of ClientApp.
 ```
 "message": {
     "port_index": 6000,
     "port_status": 6001
   },
-```   
+```
+**Common Issues:** If the default message port doesn't work, then change it to some other ports.
+   
 # NFS Cluster information
 Specify NFS cluster information from configuration file.
 ```
@@ -150,14 +157,14 @@ Supported operations are PUT/DEL/GET
   The DSS target compaction can be initiated after actual upload is done. Use the "--compaction" switch
   along with regular upload command.
   ```
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction'
   ``` 
 ### Partial upload of data from a NFS share
   The partial data can be uploaded to S3 with proper prefix. A valid prefix should have following signature.
   A prefix should start with "NFS" server "ip_address" and end with a forward slash "/".
   <nfs_server_ip>/<prefix>/
   ```
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction 
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction 
               --prefix <nfs_server_ip>/<prefix path>/ '
   ``` 
 #### Configuration: 
@@ -170,8 +177,8 @@ Supported operations are PUT/DEL/GET
   only. Each prefix is processed by independent workers. Results are en-queued to IndexQueue for
   DEL/GET operation. Else, gets dumped into a local file.
   ```
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
-  sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
   ```
 ## Operation DEL
   The DEL operation is dependent on LIST operation. The object keys from the LISTing operation gets 
@@ -179,37 +186,37 @@ Supported operations are PUT/DEL/GET
   If a prefix is specified from command line, then object_keys under that prefix should be removed.
   The object prefix should be ended with forward slash (/) such as bird/ , bird/bird1/
   ```
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL ' 
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL --prefix bird/'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL ' 
   ```
 ## Operation GET
   The GET operation is dependent on LIST operation. The object keys from the LISTing operation gets 
   among the client-nodes in round-robin fashion. The actual GET operation is performed by ClientApplication.
   The destination path should be provided from command line as sub-command along with GET. 
   ```
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <destiniation path>'
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <destiniation path> --prefix bird/'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <destiniation path>'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py GET --dest_path <destiniation path> --prefix bird/'
   ```
   If prefix is not specified then accepts all the NFS shared mentioned in the configuration file as prefix.
 ## Operation TEST
   The DataMover test can be initiated with TEST operation. The data integrity test can be initiated as below.
   ```
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path>'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path>'
   ```
   The DataIntegrity test, first start indexing and start uploading data for each prefix through a worker from a client
   node. During that process, it keep track of file and corresponding md5sum hash in a buffer. Subsequently, a GET 
   operation is initiated with same prefix and object keys which downloads files in the temporary destination path and compares md5sum 
   with corresponding file key in buffer.
   
-  A prefix based data_integrity test should be executed as below. One need to provide prefix from a object-key.
-  A prefix should start as <nfs_server_ip>/<prefix path>/.
+  A prefix based data_integrity test should be executed as below. User should provide a prefix
+  that start without forward slash and ending with forward slash **<nfs_server_ip>/<prefix path>/**.
   ```
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --prefix <prefix/>'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --prefix <prefix/>'
   ```
   Data-integrity can be performed on pre-existing S3 data uploaded through DataMover. If \"--skip_upload" switch is 
-  specified then , DM skip uploading files under the prefix.
+  specified then, DM skip uploading files under the specified prefix.
   ```
-    sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --skip_upload'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --skip_upload'
   ```
  # NFS Cluster Setup
  ## Server Setup:
