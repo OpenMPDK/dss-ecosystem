@@ -41,6 +41,7 @@ import random
 import sys
 import threading
 import time
+import uuid
 
 from concurrent.futures import ProcessPoolExecutor
 from minio import Minio
@@ -60,6 +61,8 @@ g_end_point = None
 g_access_key = None
 g_secret_key = None
 g_logger = None
+g_instance_id = 0
+g_endpoints_per_cluster = 256
 
 
 def _set_logger(log_filename, module):
@@ -109,7 +112,7 @@ class FastWriteCounter(object):
         return value
 
 
-class FastWriteCounter_old(object):
+class FastWriteCounterOld(object):
     def __init__(self):
         self.value = 0
         self._read_lock = threading.Lock()
@@ -203,10 +206,13 @@ class DSSClient(object):
         self.region = region
         self.logger = logger
         self.buffer = bytearray(object_data_size)
+        self.uuid = str(uuid.uuid3(uuid.NAMESPACE_DNS,
+                                   str(uuid.getnode()) + str(g_instance_id)))
         try:
             option = dss.clientOption()
             option.maxConnections = 1
-            self.client = dss.createClient(self.endpoint, self.access_key, self.secret_key, option)
+            self.client = dss.createClient(self.endpoint, self.access_key, self.secret_key, option,
+                                           uuid=self.uuid, endpoints_per_cluster=g_endpoints_per_cluster)
         except dss.NetworkError as e:
             self.logger.error('Exception in instantiating client - Invalid Endpoint or Network error')
             self.client = None
@@ -275,7 +281,7 @@ def run_data_put_prepare(thr_id, key_prefix, num_ios=0, duration=0):
         filename = os.path.join(data_dir, key)
         with open(filename, 'wb') as f:
             f.write(object_data)
-    return count+1, 0
+    return count + 1, 0
 
 
 def run_data_put(thr_id, key_prefix, num_ios=0, duration=0):
@@ -325,7 +331,7 @@ def run_data_put_cleanup(thr_id, key_prefix, num_ios=0, duration=0):
         key = '%s-object-%s-%d' % (key_prefix, thr_id, count)
         filename = os.path.join(data_dir, key)
         os.unlink(filename)
-    return count+1, 0
+    return count + 1, 0
 
 
 def run_data_get(thr_id, key_prefix, num_ios=0, duration=0):
@@ -493,6 +499,11 @@ if __name__ == '__main__':
                              'If /dev/null is given, then the objects are not saved. Only applicable for GET calls '
                              '(default: ./dss_client_data)',
                         default='dss_client_data')
+    parser.add_argument('-i', '--id', dest='instance_id', help='Instance ID (default: 0)',
+                        type=int, default=0)
+    parser.add_argument('-ep', '--endpoints-per-cluster', dest='ep_per_cluster',
+                        help='Number of endpoints to pick from each logical cluster (default: 256)',
+                        type=int, default=256)
     args = parser.parse_args()
 
     logger = _set_logger(log_file, 'dss_benchmark')
@@ -509,10 +520,12 @@ if __name__ == '__main__':
     g_end_point = args.endpoint_url
     g_access_key = args.access_key
     g_secret_key = args.secret_key
+    g_instance_id = args.instance_id
+    g_endpoints_per_cluster = args.ep_per_cluster
 
     cpu_count = get_cpu_count()
-    if cpu_count < 8 and args.thr_cnt > cpu_count/2:
-        max_worker_threads = int(cpu_count/2)
+    if cpu_count < 8 and args.thr_cnt > cpu_count / 2:
+        max_worker_threads = int(cpu_count / 2)
     else:
         max_worker_threads = args.thr_cnt
 
@@ -604,7 +617,7 @@ if __name__ == '__main__':
                 if fn in [run_data_put, run_data_get]:
                     actual_ios = io_count - fail_io_count
                     total_io_size = (actual_ios * args.object_size * 1024)
-                    throughput = float(total_io_size)/(time_taken * 1024 * 1024 * 1024)
+                    throughput = float(total_io_size) / (time_taken * 1024 * 1024 * 1024)
                     logger.info('Throughput - %f GB/s', throughput)
                     if fail_io_count:
                         print('Failed IO - %s' % fail_io_count)
@@ -615,10 +628,10 @@ if __name__ == '__main__':
 
                 if fn == run_data_del:
                     actual_ios = io_count - fail_io_count
-                    logger.info('DEL Operations/sec - %f', int(actual_ios)/time_taken)
+                    logger.info('DEL Operations/sec - %f', int(actual_ios) / time_taken)
                     if fail_io_count:
                         print('Failed IO - %s' % fail_io_count)
-                    print('DEL Operations per sec - %f' % (int(actual_ios)/time_taken))
+                    print('DEL Operations per sec - %f' % (int(actual_ios) / time_taken))
 
                 if fn == run_data_list:
                     actual_ios = io_count - fail_io_count

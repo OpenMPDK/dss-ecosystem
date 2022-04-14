@@ -265,7 +265,7 @@ namespace dss {
 
 			void GetCluster(Request* req);
 			const char* GetClusterConfFromLocal() { return m_init.GetConfPath(); }
-			int AcquireClusterConf();
+			int AcquireClusterConf(const std::string& uuid, const unsigned int endpoints_per_cluster);
 			int VerifyClusterConf();
 			Status DetectClusterBuckets(bool);
 			Result TryLockClusters();
@@ -281,6 +281,11 @@ namespace dss {
 			unsigned GetCLWeight(unsigned i, char* key)
 			{
 				return m_hash(std::to_string(i) + std::string(key));
+			}
+
+			unsigned GetCLWeight(const std::string key1, const std::string key2)
+			{
+				return m_hash(key1 + key2);
 			}
 
 			unsigned GetEPWeight(unsigned i);

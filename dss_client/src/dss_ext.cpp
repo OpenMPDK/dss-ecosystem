@@ -88,7 +88,9 @@ PYBIND11_MODULE(dss, m) {
 			py::arg("url"),
 			py::arg("username"),
 			py::arg("password"),
-			py::arg("options") = SesOptions());
+			py::arg("options") = SesOptions(),
+			py::arg("uuid") = "644bb326-019a-4443-b4ef-0d5eb0e57914",
+			py::arg("endpoints_per_cluster") = 255);
 
 	py::class_<Client>(m, "Client")
 		.def("putObject", &Client::PutObject,	"Upload object to dss cluster",

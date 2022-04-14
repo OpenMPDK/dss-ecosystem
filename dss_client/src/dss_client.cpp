@@ -32,11 +32,12 @@
 
 #include <iostream>
 #include <fstream>
+#include <map>
 #include <fcntl.h>
 #include <mutex>
 #include <sys/stat.h>
 #include <unistd.h>
-
+#include <bits/stdc++.h>
 #include <linux/limits.h>
 
 #include <aws/core/Aws.h>
@@ -415,7 +416,7 @@ namespace dss {
 		}
 
 	int
-		ClusterMap::AcquireClusterConf()
+		ClusterMap::AcquireClusterConf(const std::string& uuid, const unsigned int endpoint_per_cluster)
 		{
 			//TODO: redo this function
 			Result r;
@@ -446,20 +447,45 @@ namespace dss {
 
 			try {
 				json conf;
-				if (GetClusterConfFromLocal())
+				if (GetClusterConfFromLocal()){
 					conf = json::parse(file);
-				else
+					file.close();
+				} else{
 					conf = json::parse(r.GetIOStream());
+				}
 
 				try {
 					m_wait_time = conf.at("init_time").get<unsigned>();
 				} catch (std::exception&) {}
 
 				for (auto &c : conf["clusters"]) {
+					std::vector<std::string> hash_vals = {};
+					std::map<std::string, int> hash_val_map;
+					std::string val;
+					unsigned i = 0;
+					unsigned ep_count = 0;
+
 					Cluster* cluster = InsertCluster(c["id"]);
 					pr_debug("Adding cluster %u\n", (uint32_t)c["id"]);
-					for (auto &ep : c["endpoints"])
+					for (auto &ep : c["endpoints"]){
+						pr_debug("Cluster ID: %u Endpoint %s:%u\n",
+								(uint32_t)c["id"], std::string(ep["ipv4"]), (uint32_t)ep["port"]);
+						val = GetCLWeight(uuid, std::string(ep["ipv4"]));
+						hash_vals.push_back(val);
+						push_heap(hash_vals.begin(), hash_vals.end());
+						hash_val_map[val] = ep_count;
+						ep_count++;
+					}
+					for (i = 0; i < endpoint_per_cluster && i < ep_count; i++){
+						val = hash_vals.front();
+						auto ep = c["endpoints"].at(hash_val_map[val]);
+						pr_debug("Inserting endpoint Cluster ID: %u EP %s:%u\n",
+								(uint32_t)c["id"], std::string(ep["ipv4"]), (uint32_t)ep["port"]);
 						cluster->InsertEndpoint(m_client, ep["ipv4"], ep["port"]);
+						pop_heap(hash_vals.begin(), hash_vals.end());
+						hash_vals.pop_back();
+					}
+
 				}
 			} catch (std::exception& e) {
 				throw DiscoverError("Parse conf.json error: " + Aws::String(e.what()));
@@ -699,10 +725,10 @@ namespace dss {
 		}
 
 	int
-		Client::InitClusterMap()
+		Client::InitClusterMap(const std::string& uuid, const unsigned int endpoints_per_cluster)
 		{
 			ClusterMap* map = new ClusterMap(this, dss_init);
-			if (map->AcquireClusterConf() < 0)
+			if (map->AcquireClusterConf(uuid, endpoints_per_cluster) < 0)
 				return -1;
 			if (map->VerifyClusterConf() < 0)
 				return -1;
@@ -1027,11 +1053,12 @@ namespace dss {
 	}
 
 	std::unique_ptr<Client>
-		Client::CreateClient(const std::string& ip,
-				const std::string& user, const std::string& pwd, const SesOptions& options)
+		Client::CreateClient(const std::string& ip, const std::string& user,
+				const std::string& pwd, const SesOptions& options,
+				const std::string& uuid, const unsigned int endpoints_per_cluster)
 		{
 			std::unique_ptr<Client> client(new Client(ip, user, pwd, options));
-			if (client->InitClusterMap() < 0) {
+			if (client->InitClusterMap(uuid, endpoints_per_cluster) < 0) {
 				pr_err("Failed to init cluster map\n");
 				return nullptr;
 			}
