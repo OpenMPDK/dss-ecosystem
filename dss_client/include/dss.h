@@ -169,13 +169,15 @@ namespace dss {
 			~Client();
 
 			Result GetClusterConfig();
-			int InitClusterMap();
+			int InitClusterMap(const std::string& uuid, const unsigned int max_endpoints);
 			Result TryLockClusters();
 			Result UnlockClusters();
 			static std::unique_ptr<Client> CreateClient(const std::string& url,
 					const std::string& user,
 					const std::string& pwd,
-					const SesOptions& opts = SesOptions());
+					const SesOptions& opts = SesOptions(),
+					const std::string& uuid = "644bb326-019a-4443-b4ef-0d5eb0e57914",
+					const unsigned int max_endpoints = 255);
 
 			Config ExtractOptions(const SesOptions& opts);
 			Credentials& GetCredential() { return m_cred; }
