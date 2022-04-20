@@ -140,9 +140,10 @@ namespace dss {
 
 	class Cluster {
 		public:
-			Cluster(uint32_t id) :
+			Cluster(uint32_t id, const std::string& instance_uuid) :
 				m_id(id),
-				m_bucket(Aws::String(DATA_BUCKET_PREFIX) + Aws::String(std::to_string(id).c_str())) {}
+				m_bucket(Aws::String(DATA_BUCKET_PREFIX) + Aws::String(std::to_string(id).c_str())),
+                                m_instance_uuid(instance_uuid) {}
 
 			~Cluster()
 			{
@@ -151,6 +152,7 @@ namespace dss {
 			}
 
 			Endpoint* GetEndpoint(Request* r) { return m_endpoints[r->key_hash % m_endpoints.size()]; }
+                        Endpoint* GetEndpoint(std::size_t key_hash) { return m_endpoints[key_hash % m_endpoints.size()]; }
 
 			Result GetObject(const Aws::String& objectName);
 			Result GetObject(Request* req, unsigned char* res_buff, long long buffer_size);
@@ -180,6 +182,7 @@ namespace dss {
 			std::vector<Endpoint*> m_endpoints;
 
 			static constexpr char* DATA_BUCKET_PREFIX = (char*)"dss";
+                        std::string m_instance_uuid;
 	};
 
 
@@ -253,9 +256,9 @@ namespace dss {
 					delete c;
 			}
 
-			Cluster* InsertCluster(uint32_t id)
+			Cluster* InsertCluster(uint32_t id, const std::string& instance_uuid)
 			{
-				Cluster* c = new Cluster(id);
+				Cluster* c = new Cluster(id, instance_uuid);
 				if (m_clusters.size() < (id + 1))
 					m_clusters.resize(id + 1);
 				m_clusters.at(id) = c;
