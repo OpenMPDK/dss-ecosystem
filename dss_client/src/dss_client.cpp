@@ -465,7 +465,7 @@ namespace dss {
 					unsigned i = 0;
 					unsigned ep_count = 0;
 
-					Cluster* cluster = InsertCluster(c["id"]);
+					Cluster* cluster = InsertCluster(c["id"], uuid);
 					pr_debug("Adding cluster %u\n", (uint32_t)c["id"]);
 					for (auto &ep : c["endpoints"]){
 						pr_debug("Cluster ID: %u Endpoint %s:%u\n",
@@ -684,7 +684,8 @@ namespace dss {
 	Result
 		Cluster::ListObjects(Objects *objs)
 		{
-			return m_endpoints[0]->ListObjects(m_bucket, objs);
+                        std::size_t p_hash = std::hash<std::string> {}(std::to_string(m_id) + m_instance_uuid + std::string(objs->GetPrefix()));
+                        return GetEndpoint(p_hash)->ListObjects(m_bucket, objs);
 		}
 
 	Result
