@@ -148,7 +148,7 @@ class NFSCluster:
                 self.local_mounts[cluster_ip] = [nfs_share]
             else:
                 self.local_mounts[cluster_ip].append(nfs_share)
-            #self.mounted = True
+            ret = 0 # Fix issue MIN-1238
 
         return ret,console
 
