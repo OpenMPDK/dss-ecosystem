@@ -161,7 +161,6 @@ class RandomAccessDataset(Dataset):
             sys.exit()
         #shuffle keys
         random.shuffle(self.images)
-        #print("shuffle keys")
         self.listing_time = "{:0.4f}".format(end_listing_time - start_listing_time)
         self.logger.info("Total files listed: {}, Time: {} seconds".format(total_listed_file, self.listing_time))
 
@@ -263,7 +262,7 @@ class RandomAccessDataset(Dataset):
             from dss_client import DssClientLib
             for i in range(max_s3_client_count):
                 client_id = str(self.instance_id) + str(i)
-                s3_client = DssClientLib(credentials=self.credentials,config=self.s3_config["client_lib"].get("dss_client",{}), uuid=client_id,
+                s3_client = DssClientLib(credentials=self.credentials, config=self.s3_config["client_lib"].get("dss_client", {}), uuid=client_id,
                                          logger=self.logger)
                 self.s3_clients.append(s3_client)
         elif self.s3_config["client_lib"]["name"] == "boto3":

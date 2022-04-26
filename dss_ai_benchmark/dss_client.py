@@ -40,10 +40,10 @@ from minio.error import BucketAlreadyOwnedByYou
 class DssClientLib(object):
     def __init__(self, **kwargs):
         self.credentials = kwargs["credentials"]
-        self.config = kwargs.get("config",{})
+        self.config = kwargs.get("config", {})
         self.uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS,
-                                   str(uuid.getnode()) + str(kwargs.get("uuid", 
-                                   "AI_bench_instance_run_at" + str(time.monotonic()*10000000)))))
+                                   str(uuid.getnode()) +
+                                   str(kwargs.get("uuid", "AI_bench_instance_run_at" + str(time.monotonic() * 10000000)))))
         self.endpoints_per_cluster = self.config.get("endpoints_per_cluster", 256)
         self.logger = kwargs["logger"]
         self.s3_endpoint = self.credentials["endpoint"]
@@ -84,7 +84,7 @@ class DssClientLib(object):
 
         try:
             if self.dss_client_options:
-                dss_client =  dss.createClient(endpoint, access_key, secret_key, self.dss_client_options, uuid=self.uuid,
+                dss_client = dss.createClient(endpoint, access_key, secret_key, self.dss_client_options, uuid=self.uuid,
                                                endpoints_per_cluster=self.endpoints_per_cluster)
             else:
                 dss_client = dss.createClient(endpoint, access_key, secret_key)
