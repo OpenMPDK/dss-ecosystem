@@ -89,7 +89,7 @@ class RandomAccessDatasetTrain(DNNTrain):
                 if batch_index % self.max_batch_size == 0:
                     self.logger.info(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
                     running_loss = 0.0
-            dataload_time = round((time.monotonic() - epoch_start_time) ,2)
+            dataload_time = round((time.monotonic() - epoch_start_time), 2)
             dataset_size_mb = round((self.train_dataloader.dataset.dataset_size_in_bytes.value /1024), 2)
             epoch_bw = round((dataset_size_mb / dataload_time), 2)
             self.metrics.append([str(dataload_time),str(dataset_size_mb), str(epoch_bw)])
@@ -122,8 +122,9 @@ class PythonReadTrain(DNNTrain):
         self.metrics.append([str(dataload_time), str(dataset_size_mb), str(bw)])
         train_summary = "** Train Summary **\n"
         train_summary += "\t Epochs:{}, BatchSize:{}, MaxBatchSize:{}\n".format(self.epochs, self.batch_size, self.max_batch_size)
-        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec".format( dataload_time,
-                         self.train_dataloader.dataset.dataset_size_in_bytes.value, bw)
+        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec".format(dataload_time,
+                                                                                                self.train_dataloader.dataset.dataset_size_in_bytes.value,
+                                                                                                bw)
         self.logger.info(train_summary)
 
 

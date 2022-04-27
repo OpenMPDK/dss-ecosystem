@@ -159,7 +159,6 @@ class RandomAccessDataset(Dataset):
         if not self.image_queue:
             self.logger.fatal("Couldn't list files, exit application")
             sys.exit()
-        #shuffle keys
         random.shuffle(self.images)
         self.listing_time = "{:0.4f}".format(end_listing_time - start_listing_time)
         self.logger.info("Total files listed: {}, Time: {} seconds".format(total_listed_file, self.listing_time))
