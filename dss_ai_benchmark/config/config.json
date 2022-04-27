@@ -17,7 +17,8 @@
                 "batch_size": 100,
                 "max_batch_size": 10000,
                 "max_object_size": 1048576 ,
-                "epochs": 1
+                "epochs": 1,
+                "instance_id": 1
                 },
   
   "execution":{
@@ -54,7 +55,8 @@
           "name": "boto3",
           "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
                          "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
-                         "tcp_keep_alive_interval_ms":  1000, "object_keys_per_page_count":  1000}
+                         "tcp_keep_alive_interval_ms":  1000, "object_keys_per_page_count":  1000,
+                         "endpoints_per_cluster": 256}
         },
         "aws": {
           "credentials": {
