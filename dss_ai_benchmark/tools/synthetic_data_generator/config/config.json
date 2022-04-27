@@ -1,0 +1,56 @@
+{
+  "workers": 5,
+  "replication": {
+    "factor": 3,
+    "max_size": 1024
+  },
+  "source": {
+    "type": "s3",
+    "storage": {
+      "fs": {
+        "name": "nfs",
+        "paths": ["/home/somnath.s/work/Testing/dir1", "/home/somnath.s/work/Testing/dir2", "/home/somnath.s/work/Testing/dir3"]
+      },
+      "s3": {
+        "name": "dss",
+        "bucket": "dss0",
+        "credentials": {
+          "endpoint": "http://204.0.0.137:9000",
+          "access_key": "minio",
+          "secret_key": "minio123" },
+        "client_lib": {
+          "name": "boto3",
+          "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
+                         "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
+                         "tcp_keep_alive_interval_ms":  1000, "object_keys_per_page_count":  1000}
+        },
+        "prefixes": ["data1/"]
+      }
+    }
+  },
+  "destination": {
+    "type": "fs",
+    "storage": {
+      "fs": {
+        "name": "nfs",
+        "paths": ["/var/log/dss/data1", "/var/log/dss/data2"]
+      },
+      "s3": {
+        "name": "dss",
+        "bucket": "dss0",
+        "credentials": {
+          "endpoint": "http://204.0.0.137:9000",
+          "access_key": "minio",
+          "secret_key": "minio123" },
+        "client_lib": {
+          "name": "boto3",
+          "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
+                         "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
+                         "tcp_keep_alive_interval_ms":  1000, "object_keys_per_page_count":  1000}
+        },
+        "prefixes": ["data1/","data2/"]
+      }
+    }
+  },
+  "logging": { "path": "/var/log/dss", "level": "INFO"}
+}
