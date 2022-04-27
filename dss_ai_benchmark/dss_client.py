@@ -42,7 +42,7 @@ class DssClientLib(object):
         self.credentials = kwargs["credentials"]
         self.config = kwargs.get("config", {})
         self.uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS,
-                                   str(uuid.getnode()) + str(kwargs.get("uuid", 
+                                   str(uuid.getnode()) + str(kwargs.get("uuid",
                                                                         "AI_bench_instance_run_at" + str(time.monotonic() * 10000000)))))
         self.endpoints_per_cluster = self.config.get("endpoints_per_cluster", 256)
         self.logger = kwargs["logger"]
