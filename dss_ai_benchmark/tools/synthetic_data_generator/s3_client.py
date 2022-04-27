@@ -139,7 +139,7 @@ class S3:
       return contents , data["ContentLength"]
 
 
-  def getObjectToFile(self,**kwargs):
+  def getObjectToFile(self, **kwargs):
       """
       Download an object from S3 to a file.
       :param bucket: bucket name to read from
@@ -157,7 +157,7 @@ class S3:
               os.makedirs(directory)
       self.s3_client.download_file(Bucket=bucket, Key=object_key, Filename=dest_file_path)
 
-  def deleteObject(self, bucket=None,prefix=None):
+  def deleteObject(self, bucket=None, prefix=None):
       """
       Remove a object based on object key.
       :param bucket: Bucket name required
@@ -198,13 +198,4 @@ class S3:
               self.logger.error("{}".format(e))
 
       return False
-
-
-
-
-
-
-
-
-
 

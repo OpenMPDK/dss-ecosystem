@@ -1,5 +1,39 @@
+#!/usr/bin/python
+"""
+ *   BSD LICENSE
+ *
+ *   Copyright (c) 2021 Samsung Electronics Co., Ltd.
+ *   All rights reserved.
+ *
+ *   Redistribution and use in source and binary forms, with or without
+ *   modification, are permitted provided that the following conditions
+ *   are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in
+ *       the documentation and/or other materials provided with the
+ *       distribution.
+ *     * Neither the name of Samsung Electronics Co., Ltd. nor the names of
+ *       its contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ *   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ *   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ *   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ *   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ *   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ *   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
 import sys
 import time
+import prctl
 from logger import MultiprocessingLogger
 from utils.config import Config, ArgumentParser
 from multiprocessing import Queue, Value
@@ -66,7 +100,7 @@ class  GenerateData(object):
         Stop the tool
         :return:
         """
-        #Very end
+        # Very end
         self.stop_logger()
 
     def configure(self):
@@ -169,6 +203,7 @@ class  GenerateData(object):
         wait for all of them to stop
         :return:
         """
+        self.start_copy_time = time.monotonic()
         self.logger.info(f"Started Copy Operation for source:{self.source_data_type}"
                          f", destination:{self.destination_data_type}")
         total_files_in_a_set = int(self.total_listed_file / self.max_workers)
@@ -225,20 +260,23 @@ class  GenerateData(object):
             progress_string = f"File Copied:{self.file_copy_count.value}"
             progress_bar(progress_string)
             #time.sleep(0.01)
+        self.end_copy_time = time.monotonic()
 
     def summary(self):
         """
         It writes the summary of file copy operations.
         :return:
         """
-        time.sleep(1)
+        total_copy_time = "{:0.4f}".format(self.end_copy_time - self.start_copy_time)
         self.logger.info("\n****************** Summary *******************")
+        time.sleep(1)
         self.logger.info(f"FileCopy: Source:{self.source_data_type}, Destination:{self.destination_data_type}")
         self.logger.info(f"Total Source Files: {self.total_listed_file}")
-        self.logger.info(f"Overall Listing/Indexing Time: {self.listing_time}")
+        self.logger.info(f"Overall Listing/Indexing Time: {self.listing_time} sec")
         self.logger.info(f"Replication Factor: {self.replication_factor}")
         self.logger.info(f"Destination dirs/prefixes count: {len(self.destination_data_dirs)}")
         self.logger.info(f"Total Copied Files: {self.file_copy_count.value}")
+        self.logger.info(f"Total Copy Time: {total_copy_time} sec")
 
     def start_logger(self):
         """
@@ -264,6 +302,11 @@ class  GenerateData(object):
 
 
 if __name__ == "__main__":
+    # Process Name
+    name = "SDG_Main"
+    prctl.set_name(name)
+    prctl.set_proctitle(name)
+    # Start tool
     params = ArgumentParser()
     config_obj = Config(params)
     config = config_obj.get_config()

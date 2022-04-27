@@ -83,11 +83,8 @@ def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="
     ret = 0
     console_output = ""
     std_out_default = sys.stdout
-    #if not cmd.startswith('sudo'):
-    #        cmd = 'sudo -u {} '.format(user_id) + cmd
 
     try:
-        # print("INFO: Execution Cmd - {}".format(cmd))
         if blocking:
             if output:
                 result = subprocess.check_output(cmd.split(), shell=False, stderr=subprocess.STDOUT,
@@ -117,7 +114,7 @@ def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="
 @exception
 def epoch(ts):
     """
-    Get epoche from timestamp
+    Get epoch from timestamp
     :param ts:
     :return:
     """
@@ -141,7 +138,6 @@ def get_file_path(base_dir, file_name):
 def get_s3_prefix(path1, path2):
     """
     Validate prefix for minio S3 and return the same.
-    :param logger
     :param path1: first part of prefix
     :param path2: second part of prefix
     :return: a valid s3 prefix
@@ -186,38 +182,6 @@ def progress_bar(prefix=""):
             sys.stdout.write("\r{} --".format(prefix))
         time.sleep(0.1)
 
-def get_hash_key(**kwargs):
-    """
-    Generate a 32 byte md5 hash key for a string or object or file content.
-    :param type: Type of arguments are being passed ["string", "object", "file"]
-    :param data: Pass string content, object or file
-    :return: A 32 byte hash_key
-    """
-    type = kwargs.get("type", None)
-    logger = kwargs["logger"]
-    hash_key= None
-    if type:
-      if type == "file":
-        file_path = kwargs["data"]
-        if file_path and os.path.exists(file_path):
-          with open(file_path, "rb") as fh:
-            data = fh.read()
-            hash_key = hashlib.md5(data).hexdigest()
-            #logger.debug("HashKey - {}".format(hash_key))
-        else:
-            logger.error("File {} doesn't exist!".format(file_path))
-      elif type == "object":
-        object = kwargs["data"]
-        hash_key = hashlib.md5(object).hexdigest()
-      elif type == "str":
-        data = kwargs["data"]
-        hash_key = hashlib.md5(data).hexdigest()
-      else:
-        logger.error("Unknown Type {} for hashkey generation.\n Supported types are string/object/file".format(type))
-
-    return hash_key
-
-
 def create_file_path(path1, path2):
     """
     Create a complete file path
@@ -231,9 +195,6 @@ def create_file_path(path1, path2):
         path2 = "/" + path2
 
     return path1 + path2
-
-
-
 
 @exception
 def is_queue_empty(mp_queue=None):
@@ -397,6 +358,7 @@ class File:
         Read all the lines from 
         :return:
         """
+        pass
     
     
 

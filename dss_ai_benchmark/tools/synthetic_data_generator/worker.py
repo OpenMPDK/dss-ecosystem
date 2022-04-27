@@ -46,8 +46,8 @@ class Worker(object):
     def __init__(self, **kwargs):
         # Worker details
         self.id = kwargs.get("id", None)
-        self.status = Value('i',0)
-        self.worker_pid = Value('i',0)
+        self.status = Value('i', 0)
+        self.worker_pid = Value('i', 0)
 
         # Configuration
         self.operation = kwargs["operation"].lower()
@@ -58,7 +58,7 @@ class Worker(object):
         self.finished = kwargs["worker_finished"]
 
         # Copy operation.
-        self.file_paths = kwargs.get("file_paths",[])
+        self.file_paths = kwargs.get("file_paths", [])
         self.replication_factor = kwargs.get("replication_factor", 1)
         self.file_copy_count = kwargs.get("file_copy_count", 0)
         # S3 configuration
@@ -115,10 +115,12 @@ class Worker(object):
                 client_library = self.source_s3_config["client_lib"]["name"].lower()
                 credentials = self.source_s3_config["credentials"]
                 dss_client_options = self.source_s3_config["client_lib"].get("dss_client", {})
+                self.source_s3_bucket = self.source_s3_config["bucket"]
             else:
                 client_library = self.destination_s3_config["client_lib"]["name"].lower()
                 credentials = self.destination_s3_config["credentials"]
                 dss_client_options = self.destination_s3_config["client_lib"].get("dss_client", {})
+                self.destination_s3_bucket = self.destination_s3_config["bucket"]
 
             if client_library == "dss_client":
                 from dss_client import DssClientLib
@@ -148,7 +150,7 @@ class Worker(object):
         Run the actual process
         :return:
         """
-        name = "DNN_worker_" + str(self.id)
+        name = f"SDG_worker_{self.id}"
 
         # Set S3 client
         if self.source_storage_type == "s3":
@@ -262,11 +264,12 @@ class Worker(object):
         if self.source_storage_type == "fs" and self.destination_storage_type == "s3":
             destination = get_s3_prefix(destination_basepath, destination_file)
             self.logger.debug(f"Object Copy:{source}, Destination:{destination}")
-            self.destination_s3_client.putObject("dss0", source, destination)
+            self.destination_s3_client.putObject(self.destination_s3_bucket, source,
+                                                 destination)
         elif self.source_storage_type == "s3" and self.destination_storage_type == "fs":
             # Download from DSS S3 to FS
             destination_file_path = create_file_path(destination_basepath, destination_file)
-            self.source_s3_client.getObjectToFile(bucket="dss0",
+            self.source_s3_client.getObjectToFile(bucket=self.source_s3_bucket,
                                                   key=source,
                                                   dest_file_path=destination_file_path)
         elif self.source_storage_type == "s3" and self.destination_storage_type == "s3":
@@ -278,7 +281,7 @@ class Worker(object):
     def file_copy(self, source_file, destination_file_path):
         """
         Copy file from a source path to a destination path.
-        :return:
+        :return: None
         """
         try:
             dest_dir = os.path.dirname(destination_file_path)

@@ -113,3 +113,17 @@ python3 generate_data.py -cfg <configuration fle>
 # To run with dss_cleint lib use thw following command
 sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 generate_data.py '
 ```
+
+## Check all running process
+```
+[user@node]$ ps -e | grep SDG
+ 1410 pts/0    00:00:00 SDG_logger
+ 1421 pts/0    00:00:17 SDG_worker_0
+ 1422 pts/0    00:00:17 SDG_worker_1
+ 1423 pts/0    00:00:17 SDG_worker_2
+ 1424 pts/0    00:00:17 SDG_worker_3
+ 1425 pts/0    00:00:17 SDG_worker_4
+ 
+ # Kill running process
+ [user@node]$ sudo pkill SDG*
+```

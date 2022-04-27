@@ -32,7 +32,7 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import os,sys
-#import prctl
+import prctl
 import time
 from utils.utility import  exception, is_queue_empty
 from multiprocessing import Process, Queue, Value
@@ -78,7 +78,7 @@ class MultiprocessingLogger(object):
         file_name = file_name.replace("py", "log")
         return os.path.abspath(self.path + "/" + file_name)
 
-    def set_logging_level(self,level):
+    def set_logging_level(self, level):
         """
         Set LOG Level , default is INFO mode
         :param level: INFO|DEBUG|WARN|ERROR|EXCEPTION
@@ -138,9 +138,9 @@ class MultiprocessingLogger(object):
         :param stop_logging: A atomic shared variable to stop the loop.
         :return: None
         """
-        name = "DM_logger"
-        #prctl.set_name(name)
-        #prctl.set_proctitle(name)
+        name = "SDG_logger"
+        prctl.set_name(name)
+        prctl.set_proctitle(name)
 
         try:
             print("Log file:{}".format(self.logfile))
@@ -157,7 +157,7 @@ class MultiprocessingLogger(object):
                 while not is_queue_empty(queue):
                     message = queue.get()
                     if type(message) == tuple:
-                        (message_level,message_value) = message
+                        (message_level, message_value) = message
                         print("{}: {}".format(LOGGING_LEVEL[message_level], message_value))
                         fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
                     else:

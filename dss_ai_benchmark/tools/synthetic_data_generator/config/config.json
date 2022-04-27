@@ -5,7 +5,7 @@
     "max_size": 1024
   },
   "source": {
-    "type": "s3",
+    "type": "fs",
     "storage": {
       "fs": {
         "name": "nfs",
@@ -29,7 +29,7 @@
     }
   },
   "destination": {
-    "type": "fs",
+    "type": "s3",
     "storage": {
       "fs": {
         "name": "nfs",
