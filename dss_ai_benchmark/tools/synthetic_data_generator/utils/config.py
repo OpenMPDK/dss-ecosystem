@@ -31,7 +31,8 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-import os, sys
+import os
+import sys
 import json
 import argparse
 
@@ -104,7 +105,5 @@ def ArgumentParser():
     parser.add_argument("--debug", "-d", required=False, action='store_true',
                         help='Run benchmark tool in debug mode')
 
-
     options = vars(parser.parse_args())
     return options
-

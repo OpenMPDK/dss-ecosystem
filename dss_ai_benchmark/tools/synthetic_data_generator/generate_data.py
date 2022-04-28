@@ -43,7 +43,7 @@ from utils.utility import progress_bar
 from utils import __VERSION__
 
 
-class  GenerateData(object):
+class GenerateData(object):
     def __init__(self, config={}):
         self.config = config
 
@@ -69,7 +69,7 @@ class  GenerateData(object):
         self.list_queue = Queue()
 
         # File copy count
-        self.file_paths = [] # List of files with complete path
+        self.file_paths = []  # List of files with complete path
         self.total_listed_file = 0
         self.file_copy_count = Value('i', 0)
 
@@ -122,7 +122,6 @@ class  GenerateData(object):
                 self.source_data_dirs = self.config["source"]["storage"]["s3"]["prefixes"]
                 self.source_s3_config = self.config["source"]["storage"]["s3"]
 
-
             # Destination
             self.destination_s3_config = None
             if self.destination_data_type == "fs":
@@ -133,7 +132,6 @@ class  GenerateData(object):
 
             self.replication_factor = self.config["replication"]["factor"]
             self.replication_size = self.config["replication"]["max_size"]  # Desired size
-
 
         except Exception as e:
             self.logger.fatal(e)
@@ -147,7 +145,7 @@ class  GenerateData(object):
         :return:
         """
         index = 0
-        paths = [] # List of List - A list of set of paths
+        paths = []  # List of List - A list of set of paths
         list_workers_count = self.max_workers
         if self.max_workers > len(self.source_data_dirs):
             list_workers_count = len(self.source_data_dirs)
@@ -190,11 +188,8 @@ class  GenerateData(object):
         self.listing_time = "{:0.4f}".format(end_listing_time - start_listing_time)
         self.logger.info("Total files listed: {}, Time: {} seconds".format(self.total_listed_file, self.listing_time))
         # Clear all workers
-        #self.workers = []
         for w in self.workers:
             w.__del__()
-        #self.logger.info(self.file_paths)
-
 
     def copy(self):
         """
@@ -210,7 +205,7 @@ class  GenerateData(object):
         index = 0
 
         # Default variables
-        s3_client =None
+        s3_client = None
         finished_distribution = False
         # Create workers and assign list of files.
         # Distribute load among the max_workers.
@@ -244,7 +239,6 @@ class  GenerateData(object):
             if finished_distribution:
                 break
 
-
     def progress(self):
         """
         Track the progress of copy operation
@@ -259,7 +253,7 @@ class  GenerateData(object):
         while self.workers_finished.value < copy_workers_count:
             progress_string = f"File Copied:{self.file_copy_count.value}"
             progress_bar(progress_string)
-            #time.sleep(0.01)
+
         self.end_copy_time = time.monotonic()
 
     def summary(self):
@@ -300,7 +294,6 @@ class  GenerateData(object):
         """
         self.logger.stop()
 
-
 if __name__ == "__main__":
     # Process Name
     name = "SDG_Main"
@@ -313,4 +306,3 @@ if __name__ == "__main__":
     gd = GenerateData(config)
     gd.start()
     gd.stop()
-

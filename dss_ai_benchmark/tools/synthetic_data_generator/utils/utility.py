@@ -52,6 +52,7 @@ OPERATION_STATUS = [
     "FINISHED"
 ]
 
+
 def exception(func):
     """
     Implementation of nested function for decorator.
@@ -109,8 +110,6 @@ def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="
 
     return ret, console_output
 
-
-
 @exception
 def epoch(ts):
     """
@@ -149,8 +148,7 @@ def get_s3_prefix(path1, path2):
     if path2.startswith("/"):
         path2 = path2[1:]
 
-    return path1+path2
-
+    return path1 + path2
 
 
 def validate_s3_prefix(prefix):
@@ -182,6 +180,7 @@ def progress_bar(prefix=""):
             sys.stdout.write("\r{} --".format(prefix))
         time.sleep(0.1)
 
+
 def create_file_path(path1, path2):
     """
     Create a complete file path
@@ -195,6 +194,7 @@ def create_file_path(path1, path2):
         path2 = "/" + path2
 
     return path1 + path2
+
 
 @exception
 def is_queue_empty(mp_queue=None):
@@ -214,6 +214,7 @@ def is_queue_empty(mp_queue=None):
     else:
         print("Multi-processing Queue is not passed")
     return queue_empty
+
 
 def decode(bytes=None):
     result = None
@@ -264,6 +265,7 @@ def file_open(file_path, mode="r", logger=None):
         else:
             print("ERROR: {}".format(e))
     return FH
+
 
 def file_close(file_handle, logger=None):
     try:
@@ -359,9 +361,3 @@ class File:
         :return:
         """
         pass
-    
-    
-
-    
-
-
