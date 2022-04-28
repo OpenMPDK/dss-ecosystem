@@ -42,6 +42,7 @@ import time
 from utils.utility import validate_s3_prefix
 from utils.utility import exec_cmd, create_file_path, get_s3_prefix
 
+
 class Worker(object):
     def __init__(self, **kwargs):
         # Worker details
@@ -52,7 +53,7 @@ class Worker(object):
         # Configuration
         self.operation = kwargs["operation"].lower()
         self.source_storage_type = kwargs.get("source_storage_type", None)
-        self.destination_storage_type =  kwargs.get("destination_storage_type", None)
+        self.destination_storage_type = kwargs.get("destination_storage_type", None)
         self.list_queue = kwargs.get("list_queue", None)
         self.logger = kwargs.get("logger", None)
         self.finished = kwargs["worker_finished"]
@@ -69,7 +70,7 @@ class Worker(object):
         self.destination_s3_config = kwargs.get("destination_s3_config", {})
         self.destination_dirs = kwargs.get("destination_dirs", [])
         self.destination_s3_client = None
-        self.process =None
+        self.process = None
 
     def __del__(self):
         self.stop()

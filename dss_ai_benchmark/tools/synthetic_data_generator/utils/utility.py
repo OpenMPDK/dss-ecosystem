@@ -110,6 +110,7 @@ def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="
 
     return ret, console_output
 
+
 @exception
 def epoch(ts):
     """
@@ -133,6 +134,7 @@ def get_file_path(base_dir, file_name):
     file_path = os.path.abspath(base_dir + "/" + file_name)
 
     return file_path
+
 
 def get_s3_prefix(path1, path2):
     """
@@ -250,7 +252,7 @@ def first_delimiter_index(data_str, delimiter):
         if data_str[index] == delimiter:
             delimiter_index = index
             break
-        index +=1
+        index += 1
 
     return delimiter_index
 
@@ -281,12 +283,12 @@ def file_close(file_handle, logger=None):
 class File:
     def __init__(self, **kwargs):
         self.file = kwargs.get("path", None)
-        self.mode = (kwargs.get("mode","r")).lower()
+        self.mode = (kwargs.get("mode", "r")).lower()
         self.handler = None
         self.logger = kwargs.get("logger", None)
         self.size = 0
         self.flush = kwargs.get("flush", False)
-        
+
     def __del__(self):
         self.close()
 
@@ -302,6 +304,7 @@ class File:
                 self.logger.error(e)
             else:
                 print("ERROR: {}".format(e))
+
     def close(self):
         """
         Close a file
@@ -334,7 +337,6 @@ class File:
         elif self.mode == "w":
             size = self.size
         return size
-            
 
     def write(self, data=""):
         """

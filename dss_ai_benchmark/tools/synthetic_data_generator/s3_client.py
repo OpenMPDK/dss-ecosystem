@@ -47,9 +47,9 @@ class S3:
     def get_s3_client(self):
 
         self.s3_client = boto3.client('s3',
-                                       endpoint_url=self.credentials["endpoint"],
-                                       aws_access_key_id=self.credentials["access_key"],
-                                       aws_secret_access_key=self.credentials["secret_key"])
+                                      endpoint_url=self.credentials["endpoint"],
+                                      aws_access_key_id=self.credentials["access_key"],
+                                      aws_secret_access_key=self.credentials["secret_key"])
 
     def create_bucket(self, bucket=None):
         """
@@ -180,7 +180,7 @@ class S3:
                 response = self.s3_client.delete_object(Bucket=bucket, Key=prefix)
                 """
                 {'ResponseMetadata': {'RequestId': '16646EFF2BD0F3CB',
-                'HostId': '', 'HTTPStatusCode': 204, 
+                'HostId': '', 'HTTPStatusCode': 204,
                 'HTTPHeaders': {'accept-ranges': 'bytes', 'content-security-policy': 'block-all-mixed-content',
                 'server': 'MinIO', 'vary': 'Origin', 'x-amz-request-id': '16646EFF2BD0F3CB', 'x-xss-protection': '1;
                 mode=block', 'date': 'Wed, 17 Feb 2021 04:36:48 GMT'}, 'RetryAttempts': 0}}

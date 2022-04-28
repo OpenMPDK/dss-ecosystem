@@ -32,7 +32,5 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-
-
 # SyntheticDataGenerator version
 __VERSION__ = "1.0.0"
