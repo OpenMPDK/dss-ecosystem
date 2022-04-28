@@ -71,7 +71,6 @@ class MultiprocessingLogger(object):
 
     @exception
     def get_log_file(self, file_name):
-        #print("Log File Name: {}".format(file_name))
         file_name = file_name.split('/')[-1]
         if not self.path:
             self.path = "/var/log"

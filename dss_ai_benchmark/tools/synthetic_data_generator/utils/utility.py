@@ -342,12 +342,13 @@ class File:
         :param data: byte of chars to write into file.
         :return: None
         """
-        if data and self.mode in ["w","a"]:
+        if data and self.mode in ["w", "a"]:
             if type(data) is not str:
                 data = str(data)
             self.size += self.handler.write(data)
         if self.flush:
             self.handler.flush()
+
     def read(self):
         """
         Return bytes of char read from file.
@@ -357,7 +358,7 @@ class File:
 
     def readlines(self):
         """
-        Read all the lines from 
+        Read all the lines from
         :return:
         """
         pass

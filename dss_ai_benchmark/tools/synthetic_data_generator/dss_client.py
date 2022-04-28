@@ -269,7 +269,7 @@ class DssClientLib(object):
             self.logger.excep("OtherException - {} , {}".format(object_key, e))
         return ret
 
-    def get_object_buffer(self, object_key, buffer ):
+    def get_object_buffer(self, object_key, buffer):
         """
         Download the objects from S3 storage and store into a bytearray buffer.
         :param object_key:  A object key is unique in S3 storage and doesn't start with forward slash "/"

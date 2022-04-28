@@ -294,6 +294,7 @@ class GenerateData(object):
         """
         self.logger.stop()
 
+
 if __name__ == "__main__":
     # Process Name
     name = "SDG_Main"

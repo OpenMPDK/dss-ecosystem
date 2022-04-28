@@ -47,9 +47,9 @@ class S3:
     def get_s3_client(self):
 
         self.s3_client = boto3.client('s3',
-                                    endpoint_url=self.credentials["endpoint"],
-                                    aws_access_key_id=self.credentials["access_key"],
-                                    aws_secret_access_key=self.credentials["secret_key"])
+                                       endpoint_url=self.credentials["endpoint"],
+                                       aws_access_key_id=self.credentials["access_key"],
+                                       aws_secret_access_key=self.credentials["secret_key"])
 
     def create_bucket(self, bucket=None):
         """
@@ -79,11 +79,11 @@ class S3:
         # object_key = source_file_path[1:]
         if not object_key:
             object_key = source_file_path[1:]
-        if os.path.exists(source_file_path) and os.path.isfile(source_file_path)  and not object_key.startswith("/"):
+        if os.path.exists(source_file_path) and os.path.isfile(source_file_path) and not object_key.startswith("/"):
             with open(source_file_path, "rb") as fh:
                 ret = self.s3_client.upload_fileobj(Fileobj=fh,
-                                            Bucket=bucket,
-                                            Key=object_key)
+                                                    Bucket=bucket,
+                                                    Key=object_key)
         else:
             return False
         return True
@@ -135,7 +135,7 @@ class S3:
         data = self.s3_client.get_object(Bucket=bucket, Key=object_key)
         contents = data['Body'].read()
 
-        return contents , data["ContentLength"]
+        return contents, data["ContentLength"]
 
     def getObjectToFile(self, **kwargs):
         """
@@ -145,9 +145,9 @@ class S3:
         :param dest_file_path: store the file in the mentioned path, by default "/dev/null"
         :return:
         """
-        bucket= kwargs["bucket"]
-        object_key=kwargs["key"]
-        dest_file_path=kwargs["dest_file_path"]
+        bucket = kwargs["bucket"]
+        object_key = kwargs["key"]
+        dest_file_path = kwargs["dest_file_path"]
         if dest_file_path:
             # Create local directory structure
             directory = os.path.dirname(dest_file_path)
@@ -178,7 +178,7 @@ class S3:
         if bucket and prefix:
             try:
                 response = self.s3_client.delete_object(Bucket=bucket, Key=prefix)
-                """ 
+                """
                 {'ResponseMetadata': {'RequestId': '16646EFF2BD0F3CB',
                 'HostId': '', 'HTTPStatusCode': 204, 
                 'HTTPHeaders': {'accept-ranges': 'bytes', 'content-security-policy': 'block-all-mixed-content',

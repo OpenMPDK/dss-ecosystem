@@ -177,7 +177,7 @@ class Worker(object):
             self.logger.excep("{}".format(e))
 
         with self.finished.get_lock():
-            self.finished.value +=1
+            self.finished.value += 1
 
     def list(self, s3_client=None):
         """
@@ -207,7 +207,6 @@ class Worker(object):
         self.logger.info("Worker-{}, Listed Images:{}".format(self.id, len(images)))
         self.list_queue.put(images)
 
-
     def copy(self):
         """
         Copy the files to the respective path with matching replication factor.
@@ -231,10 +230,10 @@ class Worker(object):
                             file_extension = fields[-1]
                             file_name = f"{file_name_temp}_{index}.{file_extension}"
                         else:
-                            file_name = f"{file_name}_{index}" # File without any extension
+                            file_name = f"{file_name}_{index}"  # File without any extension
 
                         file_path = os.path.dirname(source_file)
-                        destination_file =  file_path + "/" +  file_name
+                        destination_file = file_path + "/" + file_name
 
                     # Perform file copy operation.
                     try:
@@ -249,7 +248,7 @@ class Worker(object):
                         self.logger.error(f"FileCopy:{e}")
 
                     with self.file_copy_count.get_lock():
-                        self.file_copy_count.value +=1
+                        self.file_copy_count.value += 1
 
     def object_copy(self, **kwargs):
         """
@@ -276,8 +275,6 @@ class Worker(object):
             # Move data S3 to S3
             raise NotImplementedError("This feature is not supported")
 
-
-
     def file_copy(self, source_file, destination_file_path):
         """
         Copy file from a source path to a destination path.
@@ -301,7 +298,3 @@ class Worker(object):
                                   f"\n{copy_console}")
         except Exception as e:
             self.logger.error(f"FileCopy: {e}")
-
-
-
-
