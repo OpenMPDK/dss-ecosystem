@@ -32,7 +32,6 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-from multiprocessing import Process, Queue, Value, Lock
 import os
 import sys
 import subprocess
@@ -43,6 +42,7 @@ import hashlib
 import paramiko
 import socket
 import queue
+from multiprocessing import Process, Queue, Value, Lock
 
 """
 Contains list of utility functions...

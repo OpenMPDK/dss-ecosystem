@@ -32,10 +32,11 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-from master_application import Master, process_put_operation, process_list_operation, process_get_operation, process_del_operation
 import os
 import sys
 import unittest
+from master_application import Master, process_put_operation, process_list_operation, process_get_operation, process_del_operation
+
 DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.abspath(DIR + "/../")
 sys.path.append(BASE_DIR)

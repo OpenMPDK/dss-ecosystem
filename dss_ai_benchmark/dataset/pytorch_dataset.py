@@ -1,6 +1,3 @@
-from utils.utility import validate_s3_prefix, exec_cmd
-from multiprocessing import Queue, Value
-from worker import Worker
 import os
 import sys
 import time
@@ -17,6 +14,10 @@ import glob
 import torch
 from torch.utils.data import Dataset
 import torch.multiprocessing
+from utils.utility import validate_s3_prefix, exec_cmd
+from multiprocessing import Queue, Value
+from worker import Worker
+
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 torch.manual_seed(3704)
