@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -31,8 +31,6 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-
-
 
 # DataMover version
 __VERSION__ = "1.0.1"

@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
-import os,sys
+import os
+import sys
 from utils.config import Config, ArgumentParser
 from utils import __VERSION__
 
@@ -16,7 +17,7 @@ from multiprocessing import Queue, Value
 class Benchmarking(object):
     def __init__(self, config={}):
         self.config = config
-        self.computation = config.get("computation","CPU")
+        self.computation = config.get("computation", "CPU")
         self.framework = config.get("framework", {})
         self.execution_config = config["execution"]
         self.framework_name = self.framework.get("name", None)
@@ -32,16 +33,16 @@ class Benchmarking(object):
         if config.get("debug", False):
             self.logging_level = "DEBUG"
         self.logger = None
-        self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
+        self.logger_status = Value('i', 0)  # 0=NOT-STARTED,1=RUNNING,2=STOPPED
         self.logger_queue = Queue()
 
         # Metrics
-        self.metric =None
+        self.metric = None
 
     def start(self):
         """
-        Start the DNN process with dataset creation, training and sample inference.
-        The above three steps can be controlled with switches.
+        Start the DNN process with dataset creation, training and sample
+        inference. The above three steps can be controlled with switches.
         "Initialization": Create dataset always. (default)
         "Training": Optional. In future, we can load saved trained model
         "Inference": Optional
@@ -51,14 +52,15 @@ class Benchmarking(object):
         self.start_logging()
         # Create a FrameWork
         if self.framework_name == "TensorFlow":
-            self.dnn_framework =  TensorFlow(self.config, self.logger)
+            self.dnn_framework = TensorFlow(self.config, self.logger)
         elif self.framework_name == "PyTorch":
             self.dnn_framework = PyTorch(config=self.config,
                                          logger=self.logger)
         else:
             pass
 
-        self.logger.info(f"Starting DNN benchmark with {self.framework_name} framework")
+        self.logger.info(f"Starting DNN benchmark with {self.framework_name} \
+                          framework")
         self.dnn_framework.initialize()
 
         # Create model
@@ -75,11 +77,8 @@ class Benchmarking(object):
         if self.execution_config["steps"]["metrics"]:
             self.metrics_collection()
 
-
-
     def stop(self):
         pass
-
 
     def metrics_collection(self):
         """
@@ -105,7 +104,8 @@ class Benchmarking(object):
                            self.logging_level)
         self.logger.start()
         self.logger.info("** DSS_DNN_Bench VERSION:{} **".format(__VERSION__))
-        self.logger.info("Started Logger with {} mode!".format(self.logging_level))
+        self.logger.info("Started Logger with {} \
+                         mode!".format(self.logging_level))
 
     def stop_logging(self):
         """
@@ -117,21 +117,15 @@ class Benchmarking(object):
 
 if __name__ == "__main__":
 
-
-
-    #train_image()
-    #sys.exit()
+    # train_image()
+    # sys.exit()
     # Process arguments
     params = ArgumentParser()
-    #print(params)
+    # print(params)
     config_obj = Config(params)
     config = config_obj.get_config()
-    #print(config)
+    # print(config)
 
     bench = Benchmarking(config)
     bench.start()
     bench.stop_logging()
-
-
-
-

@@ -31,7 +31,8 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-import os,sys
+import os
+import sys
 import dss
 from datetime import datetime
 from minio.error import BucketAlreadyOwnedByYou
@@ -61,15 +62,14 @@ class DssClientLib(object):
         """
         try:
             self.dss_client_options = dss.clientOption()
-            self.dss_client_options.requestTimeoutMs = self.config.get("request_timeout_ms",10000)  # 10 sec
-            self.dss_client_options.maxConnections = self.config.get("max_connections",25)
-            self.dss_client_options.httpRequestTimeoutMs = self.config.get("http_request_timeout_ms",0)
-            self.dss_client_options.connectTimeoutMs = self.config.get("connect_timeout_ms",1000) # 1000
+            self.dss_client_options.requestTimeoutMs = self.config.get("request_timeout_ms", 10000)  # 10 sec
+            self.dss_client_options.maxConnections = self.config.get("max_connections", 25)
+            self.dss_client_options.httpRequestTimeoutMs = self.config.get("http_request_timeout_ms", 0)
+            self.dss_client_options.connectTimeoutMs = self.config.get("connect_timeout_ms", 1000)  # 1000
             self.dss_client_options.enableTcpKeepAlive = self.config.get("enable_tcp_keep_alive", True)
-            self.dss_client_options.tcpKeepAliveIntervalMs = self.config.get("tcp_keep_alive_interval_ms",30000)  # 10 sec
+            self.dss_client_options.tcpKeepAliveIntervalMs = self.config.get("tcp_keep_alive_interval_ms", 30000)  # 10 sec
         except Exception as e:
             self.logger.excep(f"DSS_CLIENT_OPTIONS: {e}")
-
 
     def create_client(self, endpoint, access_key, secret_key):
         """
@@ -92,7 +92,7 @@ class DssClientLib(object):
                 self.logger.error("Failed to create s3 client from - {}".format(endpoint))
             else:
                 self.status = True
-        except BucketAlreadyOwnedByYou as e: # Do nothing
+        except BucketAlreadyOwnedByYou as e:  # Do nothing
             self.logger.info("Bucket already Owned by you! ..")
             self.status = True
         except dss.DiscoverError as e:
@@ -101,14 +101,14 @@ class DssClientLib(object):
             self.logger.excep("NetworkError - {} , {}".format(endpoint, e))
         return dss_client
 
-    def putObject(self, bucket=None,file=""):
+    def putObject(self, bucket=None, file=""):
         """
         A wrapper function of actual dss_client S3 upload function
         :param bucket:
         :param file:
         :return:
         """
-        if file :
+        if file:
             object_key = file
             if file.startswith("/"):
                 object_key = file[1:]
@@ -123,7 +123,7 @@ class DssClientLib(object):
 
         return False
 
-    def put_object(self,object_key, file=""):
+    def put_object(self, object_key, file=""):
         """
         Upload a object to S3
         On success return 0,
@@ -206,20 +206,18 @@ class DssClientLib(object):
         :return:
         """
         object_key = kwargs["key"]
-        buffer =  kwargs["memory"]
+        buffer = kwargs["memory"]
         buffer_length = 0
         if object_key:
             if type(buffer) == bytearray:
                 buffer_length = self.get_object_buffer(object_key, buffer)
             else:
                 buffer_length = self.get_object_numpy_buffer(object_key, buffer)
-            #if not buffer:
-            #    self.logger.error("Retry downloading object for key - {}".format(object_key))
-            #    buffer_length = self.get_object_buffer(object_key, buffer)
+            # if not buffer:
+            #     self.logger.error("Retry downloading object for key - {}".format(object_key))
+            #     buffer_length = self.get_object_buffer(object_key, buffer)
 
         return buffer_length
-
-
 
     def getObjectToFile(self, **kwargs):
         """
@@ -229,9 +227,9 @@ class DssClientLib(object):
         :param dest_file_path: file path in which object should be copied.
         :return:
         """
-        bucket= kwargs["bucket"]
+        bucket = kwargs["bucket"]
         object_key = kwargs["key"]
-        dest_file_path= kwargs["dest_file_path"]
+        dest_file_path = kwargs["dest_file_path"]
         if dest_file_path == "/dev/null":
             file_path = dest_file_path
         else:
@@ -260,7 +258,7 @@ class DssClientLib(object):
         ret = -1
         try:
             if self.dss_client.getObject(object_key, dest_file_path) == 0:
-                ret =  0
+                ret = 0
             else:
                 self.logger.error("Download Failed for Object-Key - {}".format(object_key))
         except dss.FileIOError as e:
@@ -277,8 +275,7 @@ class DssClientLib(object):
             self.logger.excep("OtherException - {} , {}".format(object_key, e))
         return ret
 
-
-    def get_object_buffer(self, object_key, buffer ):
+    def get_object_buffer(self, object_key, buffer):
         """
         Download the objects from S3 storage and store into a bytearray buffer.
         :param object_key:  A object key is unique in S3 storage and doesn't start with forward slash "/"
@@ -302,8 +299,7 @@ class DssClientLib(object):
             self.logger.excep("OtherException - {} , {}".format(object_key, e))
         return buffer_length
 
-
-    def get_object_numpy_buffer(self, object_key, buffer ):
+    def get_object_numpy_buffer(self, object_key, buffer):
         """
         Download the objects from S3 storage and store that into numpy object buffer.
         :param object_key:  A object key is unique in S3 storage and doesn't start with forward slash "/"
@@ -327,9 +323,9 @@ class DssClientLib(object):
             self.logger.excep("OtherException - {} , {}".format(object_key, e))
         return buffer_length
 
-    def listObjects(self, bucket=None,  prefix="", delimiter="/"):
+    def listObjects(self, bucket=None, prefix="", delimiter="/"):
         """
-        List object-keys under a specified prefix . 
+        List object-keys under a specified prefix .
         The getObjects function has 3rd argument common_prefix should be True
         The forth argument is used to specify number of object keys are to be returned in a single page. (10000)
         :param bucket: None ( for dss_client ) , For minio and boto3 there should be an bucket already created.

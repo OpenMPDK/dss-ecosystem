@@ -6,9 +6,10 @@ import torch.optim as optimization
 import torchvision.transforms as transforms
 import time
 
+
 class DNNTrain(object):
 
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         self.config = kwargs["config"]
         self.model = kwargs["model"]
         self.device = kwargs["device"]
@@ -33,28 +34,26 @@ class DNNTrain(object):
         elif self.framework_name == "tensorflow":
             pass
 
-
     @abstractmethod
     def train(self):
         self.logger.error("Create your own train method!")
 
-#### TensorFlow ####
-#class TFTrain(DNNTrain):
-#    def __init__(self,config):
-#        super(TFTrain,self).__init__(config)
+# ### TensorFlow ####
+# class TFTrain(DNNTrain):
+#     def __init__(self,config):
+#         super(TFTrain,self).__init__(config)
 
-#    def train(self):
-#        self.model.fit(self.features, self.labels, batch_size=self.batch_size, epochs=self.epochs)
+#     def train(self):
+#         self.model.fit(self.features, self.labels, batch_size=self.batch_size, epochs=self.epochs)
 
 
-
-#### PyTorch  ####
+# ### PyTorch  ####
 class RandomAccessDatasetTrain(DNNTrain):
     """
     Example of training for MapStyle dataset.
     """
-    def __init__(self,**kwargs):
-        super(RandomAccessDatasetTrain,self).__init__(**kwargs)
+    def __init__(self, **kwargs):
+        super(RandomAccessDatasetTrain, self).__init__(**kwargs)
 
     def train(self):
         """
@@ -66,7 +65,7 @@ class RandomAccessDatasetTrain(DNNTrain):
         optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
         start_time = time.monotonic()
         # Add metrics header
-        self.metrics.append(["time", "dataset_size","bw"])
+        self.metrics.append(["time", "dataset_size", "bw"])
         for epoch in range(self.epochs):
             running_loss = 0.0
             # Following line returns image, label tensor.
@@ -90,28 +89,28 @@ class RandomAccessDatasetTrain(DNNTrain):
                     self.logger.info(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
                     running_loss = 0.0
             dataload_time = round((time.monotonic() - epoch_start_time), 2)
-            dataset_size_mb = round((self.train_dataloader.dataset.dataset_size_in_bytes.value /1024), 2)
+            dataset_size_mb = round((self.train_dataloader.dataset.dataset_size_in_bytes.value / 1024), 2)
             epoch_bw = round((dataset_size_mb / dataload_time), 2)
-            self.metrics.append([str(dataload_time),str(dataset_size_mb), str(epoch_bw)])
+            self.metrics.append([str(dataload_time), str(dataset_size_mb), str(epoch_bw)])
         total_time = time.monotonic() - start_time
-        bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value /1024) / total_time
+        bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value / 1024) / total_time
         train_summary = "** Train Summary **\n"
-        train_summary += "\t Epochs:{}, BatchSize:{}, MaxBatchSize:{}\n".format(self.epochs, self.batch_size,self.max_batch_size)
+        train_summary += "\t Epochs:{}, BatchSize:{}, MaxBatchSize:{}\n".format(self.epochs, self.batch_size, self.max_batch_size)
         train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} MBytes, BW:{:.2f} MiB/Sec".format(total_time,
-                                                self.train_dataloader.dataset.dataset_size_in_bytes.value,  bw)
+                                                                                                self.train_dataloader.dataset.dataset_size_in_bytes.value, bw)
         self.logger.info(train_summary)
 
 
 class PythonReadTrain(DNNTrain):
 
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         self.train_dataloader = kwargs["dataloader"]
         super(PythonReadTrain, self).__init__(**kwargs)
 
     def train(self):
         # Add metrics header
         self.metrics.append(["time", "dataset_size", "bw"])
-        start= time.monotonic()
+        start = time.monotonic()
         for epoch in range(self.epochs):
             for batch_index, data in enumerate(self.train_dataloader):
                 if batch_index == self.max_batch_size - 1:
@@ -133,16 +132,16 @@ class SequentialDatasetTrain(DNNTrain):
     Example training for sequential dataset.
     #TODO
     """
-    def __init__(self,config):
-        super(SequentialDatasetTrain,self).__init__(config)
+    def __init__(self, config):
+        super(SequentialDatasetTrain, self).__init__(config)
 
     def train(self):
         pass
 
 
 class DDPTrain(DNNTrain):
-    def __init__(self,config):
-        super(DDPTrain,self).__init__(config)
+    def __init__(self, config):
+        super(DDPTrain, self).__init__(config)
 
     def train(self):
         pass
@@ -183,9 +182,3 @@ class CustomTrain(object):
             custom_train.train()  # Initiate training
         except Exception as e:
             self.logger.error("{}".format(e))
-
-
-
-
-
-

@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -32,18 +32,19 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os,sys
+import os
+import sys
 import signal
 from utils.utility import exception
 
-
-SIGNAL ={
-    1: "SIGHUP", # Action terminate process
-    2: "SIGINT", # Action terminate process
+SIGNAL = {
+    1: "SIGHUP",  # Action terminate process
+    2: "SIGINT",  # Action terminate process
     6: "SIGABRT",
-    9: "SIGKILL", # Terminate process
-    15: "SIGTERM" # Action termination process
+    9: "SIGKILL",  # Terminate process
+    15: "SIGTERM"  # Action termination process
 }
+
 
 class SignalHandler:
 
@@ -53,12 +54,12 @@ class SignalHandler:
     def initiate(self):
         signal.signal(signal.SIGINT, self.handler)
         signal.signal(signal.SIGABRT, self.handler)
-        #signal.signal(signal.SIGBUS, self.handler)
-        #signal.signal(signal.SIGKILL, self.handler)
+        # signal.signal(signal.SIGBUS, self.handler)
+        # signal.signal(signal.SIGKILL, self.handler)
         signal.signal(signal.SIGTERM, self.handler)
 
     @exception
-    def handler(self,signal,frame):
+    def handler(self, signal, frame):
 
         if signal in SIGNAL:
             print("INFO: Received {} Signal ... ".format(SIGNAL[signal]))

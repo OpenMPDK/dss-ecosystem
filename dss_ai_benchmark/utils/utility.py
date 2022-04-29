@@ -52,6 +52,7 @@ OPERATION_STATUS = [
     "FINISHED"
 ]
 
+
 def exception(func):
     """
     Implementation of nested function for decorator.
@@ -84,7 +85,7 @@ def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="
     console_output = ""
     std_out_default = sys.stdout
     if not cmd.startswith('sudo'):
-            cmd = 'sudo -u {} '.format(user_id) + cmd
+        cmd = 'sudo -u {} '.format(user_id) + cmd
 
     try:
         # print("INFO: Execution Cmd - {}".format(cmd))
@@ -113,7 +114,6 @@ def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="
     return ret, console_output
 
 
-
 @exception
 def epoch(ts):
     """
@@ -138,6 +138,7 @@ def get_file_path(base_dir, file_name):
 
     return file_path
 
+
 def get_s3_prefix(logger, nfs_cluster, prefix=None):
     """
     Validate prefix for minio S3 and return the same.
@@ -150,7 +151,7 @@ def get_s3_prefix(logger, nfs_cluster, prefix=None):
             prefix_fields = prefix.split("/")
             nfs_server_ip = prefix_fields[0]
             if nfs_server_ip not in nfs_cluster:
-                nfs_first_dir  = prefix_fields[0]
+                nfs_first_dir = prefix_fields[0]
                 for nfs_server_ip, nfs_shares in nfs_cluster.items():
                     for nfs_share in nfs_shares:
                         if nfs_first_dir is nfs_share.split("/")[0]:
@@ -160,6 +161,7 @@ def get_s3_prefix(logger, nfs_cluster, prefix=None):
     else:
         for nfs_server_ip in nfs_cluster:
             yield nfs_server_ip + "/"
+
 
 def validate_s3_prefix(prefix):
     """
@@ -190,6 +192,7 @@ def progress_bar(prefix=""):
             sys.stdout.write("\r{} --".format(prefix))
         time.sleep(0.1)
 
+
 def get_hash_key(**kwargs):
     """
     Generate a 32 byte md5 hash key for a string or object or file content.
@@ -199,28 +202,27 @@ def get_hash_key(**kwargs):
     """
     type = kwargs.get("type", None)
     logger = kwargs["logger"]
-    hash_key= None
+    hash_key = None
     if type:
-      if type == "file":
-        file_path = kwargs["data"]
-        if file_path and os.path.exists(file_path):
-          with open(file_path, "rb") as fh:
-            data = fh.read()
+        if type == "file":
+            file_path = kwargs["data"]
+            if file_path and os.path.exists(file_path):
+                with open(file_path, "rb") as fh:
+                    data = fh.read()
+                    hash_key = hashlib.md5(data).hexdigest()
+                    # logger.debug("HashKey - {}".format(hash_key))
+            else:
+                logger.error("File {} doesn't exist!".format(file_path))
+        elif type == "object":
+            object = kwargs["data"]
+            hash_key = hashlib.md5(object).hexdigest()
+        elif type == "str":
+            data = kwargs["data"]
             hash_key = hashlib.md5(data).hexdigest()
-            #logger.debug("HashKey - {}".format(hash_key))
         else:
-            logger.error("File {} doesn't exist!".format(file_path))
-      elif type == "object":
-        object = kwargs["data"]
-        hash_key = hashlib.md5(object).hexdigest()
-      elif type == "str":
-        data = kwargs["data"]
-        hash_key = hashlib.md5(data).hexdigest()
-      else:
-        logger.error("Unknown Type {} for hashkey generation.\n Supported types are string/object/file".format(type))
+            logger.error("Unknown Type {} for hashkey generation.\n Supported types are string/object/file".format(type))
 
     return hash_key
-
 
 
 @exception
@@ -228,7 +230,7 @@ def is_prefix_valid_for_nfs_share(logger, **kwargs):
     """
     Check if the prefix exist for a nfs share?
     :param logger:
-    :param nfs_share: nfs_share 
+    :param nfs_share: nfs_share
     :param prefix: A s3 prefix starts not with "/" and ends with "/".
     """
     nfs_share = kwargs["share"]
@@ -238,7 +240,7 @@ def is_prefix_valid_for_nfs_share(logger, **kwargs):
 
     if prefix.startswith(nfs_mount_prefix) or nfs_mount_prefix.startswith(prefix):
         return True
-    # logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete 
+    # logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete
     return False
 
 
@@ -260,6 +262,7 @@ def is_queue_empty(mp_queue=None):
     else:
         print("Multi-processing Queue is not passed")
     return queue_empty
+
 
 def decode(bytes=None):
     result = None
@@ -295,7 +298,7 @@ def first_delimiter_index(data_str, delimiter):
         if data_str[index] == delimiter:
             delimiter_index = index
             break
-        index +=1
+        index += 1
 
     return delimiter_index
 
@@ -311,6 +314,7 @@ def file_open(file_path, mode="r", logger=None):
             print("ERROR: {}".format(e))
     return FH
 
+
 def file_close(file_handle, logger=None):
     try:
         if file_handle:
@@ -325,12 +329,12 @@ def file_close(file_handle, logger=None):
 class File:
     def __init__(self, **kwargs):
         self.file = kwargs.get("path", None)
-        self.mode = (kwargs.get("mode","r")).lower()
+        self.mode = (kwargs.get("mode", "r")).lower()
         self.handler = None
         self.logger = kwargs.get("logger", None)
         self.size = 0
         self.flush = kwargs.get("flush", False)
-        
+
     def __del__(self):
         self.close()
 
@@ -346,6 +350,7 @@ class File:
                 self.logger.error(e)
             else:
                 print("ERROR: {}".format(e))
+
     def close(self):
         """
         Close a file
@@ -378,7 +383,6 @@ class File:
         elif self.mode == "w":
             size = self.size
         return size
-            
 
     def write(self, data=""):
         """
@@ -386,12 +390,13 @@ class File:
         :param data: byte of chars to write into file.
         :return: None
         """
-        if data and self.mode in ["w","a"]:
+        if data and self.mode in ["w", "a"]:
             if type(data) is not str:
                 data = str(data)
             self.size += self.handler.write(data)
         if self.flush:
             self.handler.flush()
+
     def read(self):
         """
         Return bytes of char read from file.
@@ -401,12 +406,6 @@ class File:
 
     def readlines(self):
         """
-        Read all the lines from 
+        Read all the lines from
         :return:
         """
-    
-    
-
-    
-
-

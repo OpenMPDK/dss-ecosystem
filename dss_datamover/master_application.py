@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -32,7 +32,8 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os, sys
+import os
+import sys
 from utils.utility import exception, exec_cmd, remoteExecution, get_s3_prefix, progress_bar, get_ip_address
 from utils.utility import is_prefix_valid_for_nfs_share, validate_s3_prefix
 from utils.config import Config, commandLineArgumentParser, CommandLineArgument
@@ -104,14 +105,14 @@ class Master(object):
         # Operation PUT/GET/DEL/LIST
         self.index_data_queue = Queue()  # Index data stored by workers
         self.index_data_lock = Lock()
-        self.index_data_generation_complete = Value('i', 0)  ##TODO - Set value when all indexing is done.
-        self.indexing_started_flag = Value('i', 0) # [0,1,2,-1] => ["READY", "STARTED", "COMPLETED", "FAILED"]
+        self.index_data_generation_complete = Value('i', 0)  # TODO - Set value when all indexing is done.
+        self.indexing_started_flag = Value('i', 0)  # [0,1,2,-1] => ["READY", "STARTED", "COMPLETED", "FAILED"]
 
         # Operation LIST
         self.prefix = config.get("prefix", None)
-        self.prefixes = [] # TODO need to take multiple prefix from command line and store into list.
+        self.prefixes = []  # TODO need to take multiple prefix from command line and store into list.
         self.listing_progress = Value('i', 0)
-        self.listing_status = Value('i', 0) # [0,1,2] => ['NOT STARTED', 'STARTED', 'COMPLETED']
+        self.listing_status = Value('i', 0)  # [0,1,2] => ['NOT STARTED', 'STARTED', 'COMPLETED']
         self.listing_only = Value('b', False)
         self.listing_aggregation_status = Value('i', 0)
         self.listing_objectkey_queue = Queue()
@@ -148,12 +149,9 @@ class Master(object):
 
         self.prefix_index_data = manager.dict()
 
-
         # Get the directory prefix keys that are yet to be resumed for PUT operation
         self.dir_prefixes_to_resume = list()
         self.resume_flag = False
-
-
 
     def __del__(self):
         # Stop workers
@@ -177,8 +175,8 @@ class Master(object):
         """
         self.start_logging()
         self.logger.info("Performing {} operation".format(self.operation))
-        self.load_prefix_index_data() # Load prefix metadata.
-        self.load_prefix_keys_for_resume_operation() # Check if resume operation required.
+        self.load_prefix_index_data()  # Load prefix metadata.
+        self.load_prefix_keys_for_resume_operation()  # Check if resume operation required.
         if not self.start_workers():
             self.logger.info("Exit DataMover!")
             self.stop_logging()
@@ -257,8 +255,8 @@ class Master(object):
                     s3_connection_failed = False
                 # self.logger.info("DEBUG: worker-{}, status-{}".format(w.id, w.status.value))
             if s3_connection_failed or workers_started:
-                break 
-                 
+                break
+
         if not workers_started:
             self.logger.fatal("Workers were not started exit application!")
         return workers_started
@@ -369,7 +367,7 @@ class Master(object):
         """
         # Validate S3 prefix
         if self.prefix:
-            if  validate_s3_prefix(self.logger, self.prefix):
+            if validate_s3_prefix(self.logger, self.prefix):
                 self.prefixes = [self.prefix]
             else:
                 self.logger.fatal("Bad prefix specified, exit application.")
@@ -387,9 +385,9 @@ class Master(object):
                 self.logger.info("Processing prefix:{}".format(prefix))
                 (ip_address, nfs_share, ret) = self.nfs_cluster_obj.mount_based_on_prefix(prefix)
                 if ret == 0 and is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address,
-                                                 prefix=prefix):
+                                                              prefix=prefix):
 
-                    nfs_share_prefix_path  = os.path.abspath("/" + prefix)
+                    nfs_share_prefix_path = os.path.abspath("/" + prefix)
                     task = Task(operation="indexing",
                                 data=nfs_share_prefix_path,
                                 nfs_cluster=ip_address,
@@ -414,7 +412,7 @@ class Master(object):
                 self.nfs_shares.extend(nfs_shares)
                 for nfs_share in nfs_shares:
                     # print("DEBUG: Creating task for {}".format(nfs_share))
-                    if  self.nfs_cluster_obj.mounted:
+                    if self.nfs_cluster_obj.mounted:
                         nfs_share_mount = nfs_share
                     else:
                         nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share)
@@ -448,10 +446,10 @@ class Master(object):
                 bad_prefix_no_listing = False
                 if self.prefix and not prefix.startswith(self.prefix):
                     continue
-                message = {"dir":prefix}
+                message = {"dir": prefix}
                 self.index_data_queue.put(message)
                 with self.index_msg_count.get_lock():
-                    self.index_msg_count.value +=1
+                    self.index_msg_count.value += 1
             self.index_data_generation_complete.value = 1
         else:
             # Standalone LISTing on single node.
@@ -463,7 +461,7 @@ class Master(object):
                         continue
                     bad_prefix_no_listing = False
                     with self.listing_progress.get_lock():
-                        self.listing_progress.value +=1
+                        self.listing_progress.value += 1
                     task = Task(operation="list",
                                 data={"prefix": prefix},
                                 s3config=self.config["s3_storage"],
@@ -533,8 +531,8 @@ class Master(object):
             for target_ip in compaction_status:
                 if "status" in compaction_status[target_ip] and compaction_status[target_ip]["status"]:
                     continue
-                if "ssh_remote_client" in compaction_status[target_ip] and compaction_status[target_ip][
-                    "ssh_remote_client"]:
+                if "ssh_remote_client" in compaction_status[target_ip] and \
+                        compaction_status[target_ip]["ssh_remote_client"]:
                     if "stdout" in compaction_status[target_ip] and compaction_status[target_ip]["stdout"]:
                         status = compaction_status[target_ip]["stdout"].channel.exit_status_ready()
                         if status:
@@ -553,7 +551,7 @@ class Master(object):
         if self.operation.upper() == "LIST":
             if os.path.exists(self.resume_prefix_dir_keys_file):
                 self.prefix_dirs = []
-                with open(self.resume_prefix_dir_keys_file,"r") as FH:
+                with open(self.resume_prefix_dir_keys_file, "r") as FH:
                     lines = FH.read()
                     self.prefix_dirs = lines[:-1].split("\n")
         else:
@@ -562,7 +560,8 @@ class Master(object):
                     try:
                         start_loading_existing_metadata = datetime.now()
                         self.prefix_index_data = json.load(prefix_index_data_handler)
-                        self.logger.info("Loaded the {} - {} seconds".format(self.index_data_json_file, (datetime.now() - start_loading_existing_metadata).seconds))
+                        self.logger.info("Loaded the {} - {} seconds".format(self.index_data_json_file,
+                                                                             (datetime.now() - start_loading_existing_metadata).seconds))
                     except json.JSONDecodeError as e:
                         self.logger.error("JSONDecodeError - Persistent index data - {}".format(e))
                     except MemoryError as e:
@@ -782,7 +781,9 @@ def process_put_operation(master):
     while True:
         # Check for completion of indexing, Shutdown workers
         indexing_done = True
-        # progress_bar("Object Count: {} ,Producer Msg Count: {}, Consumer Msg Count: {},  MSG-Queue Size - {}".format(master.index_data_count.value, master.index_msg_count.value, master.received_index_msg_count.value, master.index_data_queue.qsize()) )
+        # progress_bar("Object Count: {} ,Producer Msg Count: {}, Consumer Msg Count: {},
+        #              MSG-Queue Size - {}".format(master.index_data_count.value, master.index_msg_count.value,
+        #              master.received_index_msg_count.value, master.index_data_queue.qsize()))
         if master.indexing_started_flag.value == 0:
             time.sleep(1)
             continue
@@ -1096,7 +1097,5 @@ if __name__ == "__main__":
         master.compaction()
 
     # Terminate logger at the end.
-    master.stop_logging()  ## Termination5
+    master.stop_logging()  # Termination5
     print("INFO: Stopping master")
-
-

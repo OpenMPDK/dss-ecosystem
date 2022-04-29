@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -32,7 +32,8 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os,sys
+import os
+import sys
 import dss
 from datetime import datetime
 from minio.error import BucketAlreadyOwnedByYou
@@ -55,12 +56,12 @@ class DssClientLib(object):
         """
         dss_client = None
         try:
-            dss_client =  dss.createClient(endpoint, access_key,secret_key)
+            dss_client = dss.createClient(endpoint, access_key, secret_key)
             if not dss_client:
                 self.logger.error("Failed to create s3 client from - {}".format(endpoint))
             else:
                 self.status = True
-        except BucketAlreadyOwnedByYou as e: # Do nothing
+        except BucketAlreadyOwnedByYou as e:  # Do nothing
             self.logger.info("Bucket already Owned by you! ..")
             self.status = True
         except dss.DiscoverError as e:
@@ -69,14 +70,14 @@ class DssClientLib(object):
             self.logger.excep("NetworkError - {} , {}".format(endpoint, e))
         return dss_client
 
-    def putObject(self, bucket=None,file=""):
+    def putObject(self, bucket=None, file=""):
         """
         A wrapper function of actual dss_client S3 upload function
         :param bucket:
         :param file:
         :return:
         """
-        if file :
+        if file:
             object_key = file
             if file.startswith("/"):
                 object_key = file[1:]
@@ -91,7 +92,7 @@ class DssClientLib(object):
 
         return False
 
-    def put_object(self,object_key, file=""):
+    def put_object(self, object_key, file=""):
         """
         Upload a object to S3
         On success return 0,
@@ -193,7 +194,7 @@ class DssClientLib(object):
         ret = -1
         try:
             if self.dss_client.getObject(object_key, dest_file_path) == 0:
-                ret =  0
+                ret = 0
             else:
                 self.logger.error("Download Failed for Object-Key - {}".format(object_key))
         except dss.FileIOError as e:
@@ -210,9 +211,9 @@ class DssClientLib(object):
             self.logger.excep("OtherException - {} , {}".format(object_key, e))
         return ret
 
-    def listObjects(self, bucket=None,  prefix="", delimiter="/"):
+    def listObjects(self, bucket=None, prefix="", delimiter="/"):
         """
-        List object-keys under a specified prefix . 
+        List object-keys under a specified prefix.
         The getObjects function has 3rd argument common_prefix should be True
         :param bucket: None ( for dss_client ) , For minio and boto3 there should be an bucket already created.
         :param prefix: A object key prefix
