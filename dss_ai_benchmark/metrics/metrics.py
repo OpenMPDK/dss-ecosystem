@@ -4,7 +4,7 @@ from metrics.graph import CustomGraph
 
 class Metrics(object):
 
-    def __init__(self,config,data,logger):
+    def __init__(self, config, data, logger):
         self.config = config
         self.data = data
         self.logger = logger
@@ -38,9 +38,9 @@ class Metrics(object):
                 mode = "a"
                 self.data.pop(0)
 
-            with open(self.metrics_file_name,mode) as fh:
+            with open(self.metrics_file_name, mode) as fh:
                 for record in self.data:
-                    fh.write( ",".join(record) + "\n")
+                    fh.write(",".join(record) + "\n")
             self.logger.info("Metrics data stored at {}".format(self.metrics_file_name))
         except PermissionError as e:
             self.logger.excep(f"PermissionError: {e}")
@@ -48,7 +48,6 @@ class Metrics(object):
             self.logger.excep(f"IOError:{e}")
         except Exception as e:
             self.logger.excep(f"{e}")
-
 
     def graph_plot(self):
         """
@@ -78,4 +77,3 @@ class Metrics(object):
         self.graph = cg.get_graph()
         self.graph.draw()
         self.graph.save()
-

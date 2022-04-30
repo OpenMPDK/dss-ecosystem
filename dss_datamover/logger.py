@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -32,11 +32,12 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os,sys
+from utils.utility import exception, is_queue_empty
+from multiprocessing import Process, Queue, Value, Lock
+import os
+import sys
 import prctl
 import time
-from utils.utility import  exception, is_queue_empty
-from multiprocessing import Process, Queue, Value, Lock
 
 """
 Logging Level:
@@ -60,6 +61,7 @@ LOGGER_STATE = [
     "STOPPED"
 ]
 
+
 class MultiprocessingLogger(object):
 
     def __init__(self, queue, lock, status):
@@ -71,7 +73,7 @@ class MultiprocessingLogger(object):
 
     @exception
     def get_log_file(self, file_name):
-        #print("Log File Name: {}".format(file_name))
+        # print("Log File Name: {}".format(file_name))
         file_name = file_name.split('/')[-1]
         if not self.path:
             self.path = "/var/log"
@@ -80,7 +82,7 @@ class MultiprocessingLogger(object):
         file_name = file_name.replace("py", "log")
         return os.path.abspath(self.path + "/" + file_name)
 
-    def set_logging_level(self,level):
+    def set_logging_level(self, level):
         """
         Set LOG Level , default is INFO mode
         :param level: INFO|DEBUG|WARN|ERROR|EXCEPTION
@@ -98,7 +100,7 @@ class MultiprocessingLogger(object):
         self.logfile = self.get_log_file(file_name)
 
     def start(self):
-        if self.logger_status.value == 0 :
+        if self.logger_status.value == 0:
             if self.queue and self.logger_lock:
                 self.process = Process(target=self.logging, args=(self.queue, self.logger_lock, self.stop_logging))
                 self.process.start()
@@ -159,11 +161,11 @@ class MultiprocessingLogger(object):
                 while not is_queue_empty(queue):
                     message = queue.get()
                     if type(message) == tuple:
-                        (message_level,message_value) = message
+                        (message_level, message_value) = message
                         print("{}: {}".format(LOGGING_LEVEL[message_level], message_value))
                         fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
                     else:
-                        fh.write(str(time.ctime()) + ": "+ message + "\n")
+                        fh.write(str(time.ctime()) + ": " + message + "\n")
 
                 if stop_logging.value and queue.qsize() == 0:
                     break
@@ -183,30 +185,30 @@ class MultiprocessingLogger(object):
 
     @exception
     def debug(self, message):
-      if self.logging_level < len(LOGGING_LEVEL) and LOGGING_LEVEL[self.logging_level] == "DEBUG":
-        msg = (1, message)
-        self.queue.put(msg)
+        if self.logging_level < len(LOGGING_LEVEL) and LOGGING_LEVEL[self.logging_level] == "DEBUG":
+            msg = (1, message)
+            self.queue.put(msg)
 
     @exception
     def warn(self, message):
         if self.logging_level <= 2:
-          msg = (2, message)
-          self.queue.put(msg)
+            msg = (2, message)
+            self.queue.put(msg)
 
     @exception
     def error(self, message):
         if self.logging_level <= 3:
-          msg = (3, message)
-          self.queue.put(msg)
+            msg = (3, message)
+            self.queue.put(msg)
 
     @exception
     def excep(self, message):
         if self.logging_level <= 4:
-          msg = (4, message)
-          self.queue.put(msg)
+            msg = (4, message)
+            self.queue.put(msg)
 
     @exception
     def fatal(self, message):
         if self.logging_level <= 5:
-          msg = (5, message)
-          self.queue.put(msg)
+            msg = (5, message)
+            self.queue.put(msg)

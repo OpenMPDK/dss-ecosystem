@@ -1,24 +1,27 @@
-import os,sys
+import os
+import sys
+import time
 import tensorflow as tf
 import cv2
 import random
 import numpy as np
 from datetime import datetime
 from s3_client import S3
-#from dss_client import DssClientLib
+# from dss_client import DssClientLib
 import glob
-#from utils.utility import exception
+# from utils.utility import exception
 
 import torch
 from torch.utils.data import Dataset
 import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
-
 from utils.utility import validate_s3_prefix, exec_cmd
 from multiprocessing import Queue, Value
 from worker import Worker
-import time
+
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 torch.manual_seed(3704)
+
 
 class RandomAccessDataset(Dataset):
     """
@@ -51,7 +54,6 @@ class RandomAccessDataset(Dataset):
 
         self.set_data_source()
 
-
         # Parallel Listing
         self.workers_finished = Value('i', 0)
         self.workers = []
@@ -66,7 +68,7 @@ class RandomAccessDataset(Dataset):
         # Transform
 
         # Datasize calculation
-        self.dataset_size_in_bytes = Value('l', 0) # In bytes
+        self.dataset_size_in_bytes = Value('l', 0)  # In bytes
 
     def __len__(self):
         """
@@ -82,7 +84,7 @@ class RandomAccessDataset(Dataset):
         :return:
         """
         worker_info = torch.utils.data.get_worker_info()
-        #self.logger.info("WorkerID: {}, {}".format(worker_info.id,worker_info))
+        # self.logger.info("WorkerID: {}, {}".format(worker_info.id,worker_info))
         image_name_label = self.images[index]
         image_label = image_name_label[1]
         image_ndarray = self.data_source(image=image_name_label,
@@ -110,7 +112,6 @@ class RandomAccessDataset(Dataset):
         fs_share_count = len(self.data_dirs)  # N
         categoris_count = len(self.categories)  # M
 
-
         # Calculate maximum number of workers.
         if self.max_workers > fs_share_count * categoris_count:
             self.max_workers = fs_share_count * categoris_count
@@ -127,7 +128,7 @@ class RandomAccessDataset(Dataset):
                     category_paths[index].append(data_dir + "/" + category)
                 else:
                     category_paths[index].append(data_dir + category)
-                index +=1
+                index += 1
         start_listing_time = time.monotonic()
         s3_client = None
         # Distribute load among the max_workers.
@@ -149,7 +150,7 @@ class RandomAccessDataset(Dataset):
         # Aggregate all files listed by workers
         self.logger.info("Started listing with {} workers".format(self.max_workers))
         total_listed_file = 0
-        while self.workers_finished.value < self.max_workers :
+        while self.workers_finished.value < self.max_workers:
             while self.image_queue.qsize() > 0:
                 category_images = self.image_queue.get()
                 listed_files = len(category_images)
@@ -190,16 +191,16 @@ class RandomAccessDataset(Dataset):
         image_2darray = []
         try:
             if self.s3_config["client_lib"]["name"] == "dss_client":
-                #image_buffer = np.asarray(bytearray( self.max_object_size )) # Used for getObjectNumpyBuffer
+                # image_buffer = np.asarray(bytearray( self.max_object_size )) # Used for getObjectNumpyBuffer
                 image_buffer = bytearray(self.max_object_size)  # Use that for getObjectBuffer
                 buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
-                                                     memory=image_buffer)
-                #image_numpy_array = image_buffer
+                                                                     memory=image_buffer)
+                # image_numpy_array = image_buffer
                 image_numpy_array = memoryview(image_buffer)[0:buffer_length]
                 image_numpy_array = np.asarray(image_numpy_array)
             else:
-                image_buffer , buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
-                                                                                    key=object_key )
+                image_buffer, buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
+                                                                                   key=object_key)
                 image_numpy_array = np.asarray(bytearray(image_buffer))
 
         except Exception as e:
@@ -212,7 +213,6 @@ class RandomAccessDataset(Dataset):
             image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
             image_2darray = cv2.resize(image_2darray, self.image_dimension)
         return image_2darray
-
 
     def set_data_source(self):
         """
@@ -238,8 +238,8 @@ class RandomAccessDataset(Dataset):
         elif self.storage_format == "fs":
             # Empty page cache.
             command = "echo 3> /proc/sys/vm/drop_caches"
-            ret,console = exec_cmd(command, True, True)
-            if ret ==0 :
+            ret, console = exec_cmd(command, True, True)
+            if ret == 0:
                 self.logger.info("Cleared page cache ...")
             else:
                 self.logger.error("Unable to clear pagecache - ret:{},console:{}".format(ret, console))
@@ -265,15 +265,14 @@ class RandomAccessDataset(Dataset):
                                          logger=self.logger)
                 self.s3_clients.append(s3_client)
         elif self.s3_config["client_lib"]["name"] == "boto3":
-            self.s3_clients = [ S3(storage_name=self.storage_name, credentials=self.credentials, logger=self.logger) for
-                                i in range(max_s3_client_count)]
+            self.s3_clients = [S3(storage_name=self.storage_name, credentials=self.credentials, logger=self.logger) for
+                               i in range(max_s3_client_count)]
 
 
 class PythonReadDataset(RandomAccessDataset):
 
-    def __init__(self, config={},logger=None):
-        super(PythonReadDataset, self).__init__(
-                                                transform=None,
+    def __init__(self, config={}, logger=None):
+        super(PythonReadDataset, self).__init__(transform=None,
                                                 config=config,
                                                 logger=logger)
 
@@ -304,27 +303,28 @@ class PythonReadDataset(RandomAccessDataset):
         image_2darray = []
         try:
             if self.s3_config["client_lib"]["name"] == "dss_client":
-                image_buffer = bytearray( self.max_object_size )
+                image_buffer = bytearray(self.max_object_size)
                 buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
-                                                     memory=image_buffer)
+                                                                     memory=image_buffer)
             else:
-                image_buffer , buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
-                                                                                    key=object_key )
+                image_buffer, buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
+                                                                                   key=object_key)
         except Exception as e:
             self.logger.excep(f"{e}")
         if buffer_length:
             with self.dataset_size_in_bytes.get_lock():
-                self.dataset_size_in_bytes.value += int( buffer_length / 1024)
+                self.dataset_size_in_bytes.value += int(buffer_length / 1024)
 
         return torch.FloatTensor(3, 2)
+
 
 class PythonReadDatasetToDevNull(RandomAccessDataset):
 
     def __init__(self, config={}, logger=None):
-        super(PythonReadDatasetToDevNull, self).__init__(
-                transform=None,
-                config=config,
-                logger=logger)
+        super(PythonReadDatasetToDevNull, self).__init__(transform=None,
+                                                         config=config,
+                                                         logger=logger)
+
     def read_s3_object(self, **kwargs):
         """
         Read object from S3 , Any S3 compatible storage DSS, AWS-S3
@@ -341,7 +341,6 @@ class PythonReadDatasetToDevNull(RandomAccessDataset):
         return torch.FloatTensor(3, 2)
 
 
-
 class TorchImageClassificationDataset(RandomAccessDataset):
     """
     User defined dataset class. The base class has all default functionalities
@@ -349,14 +348,11 @@ class TorchImageClassificationDataset(RandomAccessDataset):
     """
 
     def __init__(self, config={}, logger=None):
-        super(TorchImageClassificationDataset, self).__init__(
-                                                              transform=None,
+        super(TorchImageClassificationDataset, self).__init__(transform=None,
                                                               config=config,
                                                               logger=logger)
 
-
-
-    #def read_file_system_data(self, image):
+    # def read_file_system_data(self, image):
         """
         Example
         :param image:
@@ -377,8 +373,7 @@ class TorchImageClassificationDataset(RandomAccessDataset):
         return img_ndarray
         """
 
-
-    #def read_s3_object(self, **kwargs):
+    # def read_s3_object(self, **kwargs):
         """
         Read object from S3 , Any S3 compatible storage DSS, AWS-S3
         :param object_key:
@@ -400,11 +395,12 @@ class TorchImageClassificationDataset(RandomAccessDataset):
         return image_2darray
         """
 
+
 class SequentialAccessDataset(Dataset):
     """
     This is Python iterator based
     """
-    def __init__(self,config, logger):
+    def __init__(self, config, logger):
         self.config = config
         self.logger = logger
 
@@ -412,17 +408,15 @@ class SequentialAccessDataset(Dataset):
         pass
 
 
-
 class CustomDataset(object):
-    def __init__(self,config, logger):
+    def __init__(self, config, logger):
         self.config = config
         self.logger = logger
         self.random_access_dataset = config["dataset"]["access"]["random"]
         self.name = config["dataset"]["name"]
         self.class_name = self.get_class_name()
         self.dataset = None
-        #self.logger.info(self.class_name)
-
+        # self.logger.info(self.class_name)
 
     def get_class_name(self):
         """
@@ -430,15 +424,15 @@ class CustomDataset(object):
         :return:
         """
         try:
-            return eval(self.name) # Convert the string to class name.
+            return eval(self.name)  # Convert the string to class name.
         except NameError as e:
             self.logger.execp("ERROR: Custom dataset doesn't exist! {}".format(e))
             sys.exit()
 
     def get_dataset(self):
-        self.logger.info("INFO: Using custom dataset - {}->{}".format(self.name,self.class_name))
-        if self.random_access_dataset :
-            return self.class_name(self.config,self.logger)
+        self.logger.info("INFO: Using custom dataset - {}->{}".format(self.name, self.class_name))
+        if self.random_access_dataset:
+            return self.class_name(self.config, self.logger)
         else:
             # This section should be for sequential read
             pass

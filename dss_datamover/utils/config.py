@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -31,7 +31,8 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-import os, sys
+import os
+import sys
 import json
 import argparse
 
@@ -76,55 +77,54 @@ def commandLineArgumentParser():
     parser = argparse.ArgumentParser(description='Distributed version of S3 CLI to perform PUT,LIST,GET,DEL operations')
     subparser = parser.add_subparsers(help="Supported Operations ... ")
 
-    put_parser=subparser.add_parser("PUT", help="Upload the files to S3 storage")
+    put_parser = subparser.add_parser("PUT", help="Upload the files to S3 storage")
     list_parser = subparser.add_parser("LIST", help="List the buckets/objects from S3 storage!")
     get_parser = subparser.add_parser("GET", help="Download the files from S3 storage bucket!")
     del_parser = subparser.add_parser("DEL", help="Remove the objects from the S3 storage bucket!")
 
     ## All arguments for PUT
     put_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
-                      help='Specify number of Jobs to be used for parallel processing. ')
+                            help='Specify number of Jobs to be used for parallel processing. ')
     put_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
     put_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
-                      help='Specify cluster name  ...')
+                            help='Specify cluster name  ...')
     put_parser.add_argument("--prefix", "-p", type=str, required=False,
-                      help='Specify operation type such as read=r write=w , wr...')
+                            help='Specify operation type such as read=r write=w , wr...')
     put_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
     ## All arguments for LIST
     list_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
-                          help='Specify number of Jobs to be used for parallel processing. ')
+                             help='Specify number of Jobs to be used for parallel processing. ')
     list_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
     list_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
-                          help='Specify cluster name  ...')
+                             help='Specify cluster name  ...')
     list_parser.add_argument("--prefix", "-p", type=str, required=False,
-                          help='Specify operation type such as read=r write=w , wr...')
+                             help='Specify operation type such as read=r write=w , wr...')
     list_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
     ## All arguments for GET
     get_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
-                          help='Specify number of Jobs to be used for parallel processing. ')
+                            help='Specify number of Jobs to be used for parallel processing. ')
     get_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
     get_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
-                          help='Specify cluster name  ...')
+                            help='Specify cluster name  ...')
     get_parser.add_argument("--prefix", "-p", type=str, required=False,
-                          help='Specify operation type such as read=r write=w , wr...')
+                            help='Specify operation type such as read=r write=w , wr...')
     get_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
     ## All arguments for DEL
     del_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
-                          help='Specify number of Jobs to be used for parallel processing. ')
+                            help='Specify number of Jobs to be used for parallel processing. ')
     del_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
-    del_parser.add_argument("--cluster", "-c", type=str, nargs=  "+", default="10.1.51.2", required=True,
-                          help='Specify cluster name  ...')
+    del_parser.add_argument("--cluster", "-c", type=str, nargs="+", default="10.1.51.2", required=True,
+                            help='Specify cluster name  ...')
     del_parser.add_argument("--prefix", "-p", type=str, required=False,
-                          help='Specify operation type such as read=r write=w , wr...')
+                            help='Specify operation type such as read=r write=w , wr...')
     del_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
-
 
     options = parser.parse_args()
 
-    return ( sys.argv[1:2][0], vars(options) )
+    return (sys.argv[1:2][0], vars(options))
 
 
 def ClientApplicationArgumentParser():
@@ -154,6 +154,7 @@ def ClientApplicationArgumentParser():
     options = vars(parser.parse_args())
     return options
 
+
 class CommandLineArgument:
     def __init__(self):
         parser = argparse.ArgumentParser(description='Distributed version of S3 CLI to perform PUT,LIST,GET,DEL operations!')
@@ -169,7 +170,6 @@ class CommandLineArgument:
             sys.exit()
 
         self.operation = sys.argv[1:2][0]
-
 
         if self.operation.upper() == "PUT":
             self.put(put_parser)
@@ -279,7 +279,7 @@ def TargetCompactionArgumentParser():
     parser.add_argument("--password", "-p", type=str, required=False,
                         help='Password for userid')
     parser.add_argument("--subsystem_nqn", "-nqn", type=str, required=False, help='Specify subsystem-nqn in comma separated form')
-    parser.add_argument("--logdir", "-log", type=str, default="/var/log/dss",required=False,
+    parser.add_argument("--logdir", "-log", type=str, default="/var/log/dss", required=False,
                         help='A path where compaction log gets created')
     parser.add_argument("--installation_path", "-i", type=str, default="/usr/dss/nkv-target", required=False,
                         help='Target software installation path')

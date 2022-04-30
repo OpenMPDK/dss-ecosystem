@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -32,7 +32,8 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os,sys
+import os
+import sys
 from utils.utility import exception, exec_cmd, File
 from utils.config import Config, TargetCompactionArgumentParser
 from datetime import datetime
@@ -44,10 +45,11 @@ import socket
 The target_compaction script start the compaction on each target node and wait for its completion.
 """
 
-
 HOSTNAME = socket.gethostname()
 
+
 class Compaction:
+
     def __init__(self, params):
         self.logdir = params["logdir"]
         self.target_ip = params.get("ip_address", None)
@@ -59,7 +61,6 @@ class Compaction:
         self.status = {}
         self.finished_nqn_compaction = 0
         self.compaction_start_time = None
-
 
     def __del__(self):
         if self.logger:
@@ -80,7 +81,6 @@ class Compaction:
 
         return target_log_fh
 
-
     def start(self):
         """
         Start the compaction process in a target node when subsystem nqn are specified
@@ -98,7 +98,7 @@ class Compaction:
                     if compaction_start_status["result"] == "STARTED":
                         self.logger.write("INFO: Compaction started for NQN - {}, StartTime-{}\n".format(nqn, nqn_compaction_start_time))
                     else:
-                        self.logger.write("INFO: Compaction Status:{} for NQN - {}".format(compaction_start_status["result"], nqn)) 
+                        self.logger.write("INFO: Compaction Status:{} for NQN - {}".format(compaction_start_status["result"], nqn))
                     self.status[nqn] = False
                 else:
                     self.logger.write("ERROR: Failed to start compaction for NQN - {}\n {}\n".format(nqn, console))
@@ -122,7 +122,7 @@ class Compaction:
         if ret == 0:
             lines = console.split()
             for line in lines:
-                line =  line.decode('utf-8')
+                line = line.decode('utf-8')
                 if line.startswith('NQN'):
                     subsystem_nqn = line.split("=")[-1]
                     fields = subsystem_nqn.split(":")
@@ -140,7 +140,7 @@ class Compaction:
                 status = json.loads(console)
                 if "result" in status and status["result"] == "IDLE":
                     self.status[nqn] = True
-                    self.finished_nqn_compaction +=1
+                    self.finished_nqn_compaction += 1
 
 
 if __name__ == "__main__":
@@ -153,4 +153,3 @@ if __name__ == "__main__":
             compaction.logger.write("INFO: Compaction is finished! Time-{} Seconds\n".format((datetime.now() - compaction.compaction_start_time).seconds))
             break
         time.sleep(1)
-

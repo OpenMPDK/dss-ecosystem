@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -205,7 +205,7 @@ class ClientApplication(object):
                 elif w.status.value != -1:
                     s3_connection_failed = False
             if s3_connection_failed or workers_started:
-                break 
+                break
         if not workers_started:
             self.logger.fatal("Workers were not started exit ClientApplication-{}!".format(self.id))
         return workers_started
@@ -289,7 +289,7 @@ class ClientApplication(object):
         prctl.set_proctitle(name)
 
         try:
-            socket =  ServerSocket(self.logger, self.ip_address_family)
+            socket = ServerSocket(self.logger, self.ip_address_family)
             socket_index_address = "{}:{}".format(self.ip_address, self.port_index)
             socket.bind(self.ip_address, self.port_index)
             self.logger.info("Client Index-Monitor listening to - {}".format(socket_index_address))
@@ -299,7 +299,7 @@ class ClientApplication(object):
             return
         socket.accept()
         objects_count = 0
-        start_time_no_response = 0 # Start time of no response from master
+        start_time_no_response = 0  # Start time of no response from master
         debug_message_timer = datetime.now()
         while True:
 
@@ -384,20 +384,20 @@ class ClientApplication(object):
         except Exception as e:
             self.logger.excep("Monitor-Index-Receiver - {}".format(e))
 
-    def add_task(self,message):
+    def add_task(self, message):
         """
         Add a task to task_queue to be consumed by a worker.
         :param message:
         :return:
         """
-        task_data = {"dir": message["dir"], "files": message.get("files",[]), "size": message.get("size", 0)}
+        task_data = {"dir": message["dir"], "files": message.get("files", []), "size": message.get("size", 0)}
         task = Task(operation=self.operation,
                     data=task_data,
                     s3config=self.s3_config,
                     dryrun=self.dryrun,
                     user_id=self.user_id,
                     password=self.password,
-                    dest_path=self.config.get("dest_path", None), # Used for GET and DataIntegrity test
+                    dest_path=self.config.get("dest_path", None),  # Used for GET and DataIntegrity test
                     distributed=self.config.get("distributed", False))  # Used for Distributed LISTing
 
         self.task_queue.put(task)  # Enqueue task to TaskQ
@@ -433,7 +433,7 @@ class ClientApplication(object):
         processed_objects_success_count = 0
         processed_objects_failure_count = 0
         received_status_message_count = 0  # Received from workers
-        sent_status_message_count = 0 # status messages sent to master
+        sent_status_message_count = 0  # status messages sent to master
         start_time_not_receiving_status_message = 0  # Time, monitor not receiving any status message from workers.
         debug_message_timer = datetime.now()
 
@@ -446,7 +446,7 @@ class ClientApplication(object):
             status_message = {}
             try:
                 if self.operation_status_queue.qsize() > 0:
-                    status_message = self.operation_status_queue.get()  ## {"success": <>, "failure":<>}
+                    status_message = self.operation_status_queue.get()  # {"success": <>, "failure":<>}
 
                 # Send response after adding data to operation data_queue as success
                 if status_message:
@@ -512,8 +512,8 @@ class ClientApplication(object):
         """
         if nfs_cluster_ip and nfs_share:
             # Don't mount if the nfs share all ready mounted.
-            if nfs_cluster_ip in self.nfs_cluster.local_mounts and nfs_share in self.nfs_cluster.local_mounts[
-                nfs_cluster_ip]:
+            if nfs_cluster_ip in self.nfs_cluster.local_mounts and \
+               nfs_share in self.nfs_cluster.local_mounts[nfs_cluster_ip]:
                 return True
 
             ret, console = self.nfs_cluster.mount(nfs_cluster_ip, nfs_share)
@@ -572,7 +572,6 @@ class ClientApplication(object):
             self.stop_message()
             return False
         return True
-
 
 
 if __name__ == "__main__":

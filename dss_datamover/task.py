@@ -8,7 +8,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -30,7 +30,8 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 """
 
-import os, sys
+import os
+import sys
 from utils.utility import exception, exec_cmd, get_hash_key
 from multiprocessing import Value, Manager, current_process
 from minio_client import MinioClient
@@ -45,7 +46,7 @@ mgr = Manager()
 ds = mgr.dict()
 
 """
-Need to be updated 
+Need to be updated
 """
 
 
@@ -81,9 +82,9 @@ def put(s3_client, **kwargs):
                 try:
                     if dryrun:
                         # Read file for the purpose of testing
-                        #with open(file, "rb") as FH:
-                        #    lines = FH.readlines()
-                        #lines = []
+                        # with open(file, "rb") as FH:
+                        #     lines = FH.readlines()
+                        # lines = []
                         success += 1
                     else:
                         if s3_client.putObject(minio_bucket, file):
@@ -109,11 +110,12 @@ def put(s3_client, **kwargs):
 
     if not data_integrity:
         # Update following section for upload status.
-        status_message = {"success": success, "failure": (len(index_data["files"]) - success) ,
-                          "dir": index_data["dir"] ,
+        status_message = {"success": success, "failure": (len(index_data["files"]) - success),
+                          "dir": index_data["dir"],
                           "failed_files": failed_files,
-                          "size" : failure_files_size}
+                          "size": failure_files_size}
         status_queue.put(status_message)
+
 
 @exception
 def list(s3_client, **kwargs):
@@ -139,7 +141,7 @@ def list(s3_client, **kwargs):
     listing_only = kwargs["listing_only"]
     listing_objectkey_queue = kwargs["listing_objectkey_queue"]
     listing_based_on_indexing = params["listing_based_on_indexing"]
-    dump_object_keys_path = params["dest_path"] # Dump object keys to the file on this specified path. 
+    dump_object_keys_path = params["dest_path"]  # Dump object keys to the file on this specified path.
     max_index_size = params["max_index_size"]
 
     prefix = None
@@ -170,8 +172,8 @@ def list(s3_client, **kwargs):
                     with listing_progress.get_lock():
                         listing_progress.value += 1
                     task = Task(operation="list", data=result, s3config=params["s3config"],
-                            max_index_size=max_index_size, listing_based_on_indexing=listing_based_on_indexing,
-                            dest_path=dump_object_keys_path)
+                                max_index_size=max_index_size, listing_based_on_indexing=listing_based_on_indexing,
+                                dest_path=dump_object_keys_path)
                     task_queue.put(task)
 
         with index_data_count.get_lock():
@@ -185,6 +187,7 @@ def list(s3_client, **kwargs):
     with listing_progress.get_lock():
         if listing_progress.value:
             listing_progress.value -= 1
+
 
 def distributed_list(s3_client, **kwargs):
     """
@@ -207,7 +210,7 @@ def distributed_list(s3_client, **kwargs):
     s3_client_library = s3config.get("client_lib", "minio_client")
 
     object_keys_iterator = s3_client.listObjects(minio_bucket, prefix)
-    object_keys_count =0
+    object_keys_count = 0
     max_index_size = sys.maxsize
     for result in list_object_keys(object_keys_iterator, max_index_size, s3_client_library):
         if "object_keys" in result:
@@ -217,6 +220,7 @@ def distributed_list(s3_client, **kwargs):
     if object_keys_count == 0:
         result = {"prefix": prefix, "object_keys": []}
         status_queue.put(result)
+
 
 def list_object_keys(object_keys_iterator, max_index_size, s3_client_lib):
     """
@@ -773,7 +777,7 @@ def iterate_dir(**kwargs):
             file_size = entry.stat().st_size
             # Eliminate zero size file.
             if file_size == 0:
-                #logger.warn("Zero Byte File - {}".format(entry.name))
+                # logger.warn("Zero Byte File - {}".format(entry.name))
                 continue
             if file_count == max_index_size:
                 yield {"dir": dir, "files": file_set, "size": file_set_size}

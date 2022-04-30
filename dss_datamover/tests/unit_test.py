@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -32,15 +32,19 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os,sys
+import os
+import sys
 import unittest
+from master_application import Master, process_put_operation, process_list_operation, process_get_operation, process_del_operation
+
 DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.abspath(DIR + "/../")
 sys.path.append(BASE_DIR)
 print(sys.path)
-from master_application import Master, process_put_operation, process_list_operation, process_get_operation, process_del_operation
+
 
 class DataMover(unittest.TestCase):
+
     config = {'clients_hosts_or_ip_addresses': ['202.0.0.135'],
               'master': {'ip_address': '202.0.0.135', 'workers': 5, 'max_index_size': 500, 'size': '1GB'},
               'client': {'workers': 5, 'max_index_size': 500, 'user_id': 'ansible', 'password': 'ansible'},
@@ -53,6 +57,7 @@ class DataMover(unittest.TestCase):
               'environment': {
                   'gcc': {'version': '5.1', 'source': '/usr/local/bin/setenv-for-gcc510.sh', 'required': True}},
               'debug': False, 'dest_path': '/var/log/dss/GET'}
+
     def test_0_put(self):
         print("################ UnitTest - PUT ################")
         operation = "PUT"

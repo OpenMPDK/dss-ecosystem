@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -32,7 +32,8 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os, sys
+import os
+import sys
 import time
 from multiprocessing import Process, Queue, Value, Lock, Manager
 from utils.utility import exception, exec_cmd, progress_bar, get_ip_address, is_queue_empty
@@ -48,14 +49,14 @@ import ast
 """
 Monitor the progress of operation.
 - Communicate to client , poll the status periodically.
-- Process result 
+- Process result
 - Display/Store result
 """
 manager = Manager()
-MONITOR_INACTIVE_WAIT_TIME = 1800 # 30 Mins
-DEBUG_MESSAGE_INTERVAL = 120 # 10 Mins
+MONITOR_INACTIVE_WAIT_TIME = 1800  # 30 Mins
+DEBUG_MESSAGE_INTERVAL = 120  # 10 Mins
 PERSIST_FLUSH_INTERVAL = 60
-MSG_SEND_RETRY_COUNT = 2  
+MSG_SEND_RETRY_COUNT = 2
 
 
 class Monitor(object):
@@ -152,9 +153,9 @@ class Monitor(object):
     def stop(self):
 
         self.logger.warn("Stopping monitors forcefully!")
-        #self.status_lock.acquire()
+        # self.status_lock.acquire()
         self.stop_status_poller.value = 1
-        #self.status_lock.release()
+        # self.status_lock.release()
         time.sleep(2)
 
         if self.process_listing_aggregator and self.process_listing_aggregator.is_alive():
@@ -206,7 +207,7 @@ class Monitor(object):
             try:
                 client.socket_index = ClientSocket(self.logger, self.ip_address_family)
                 client.socket_index.connect(client.ip_address, client.port_index)
-                successful_socket_connection +=1
+                successful_socket_connection += 1
                 self.logger.info("Monitor-Index-Distributor: Connected to Monitor-Index-MessageHandler of ClientApp-{}:{}".format(client.id, client.port_index))
             except ConnectionError as e:
                 self.logger.excep("Monitor-Index-Distributor: Socket Connection error for ClientApp-{} : {}".format(client.id, e))
@@ -224,7 +225,7 @@ class Monitor(object):
 
         while True:
             # Forcefully stop the process
-            if self.stop_status_poller.value :
+            if self.stop_status_poller.value:
                 self.logger.error("Monitor-Index-Distributor: Shutting down forcefully!")
                 end_message = {"indexing_done": 1}
                 self.logger.warn("Monitor-Index-Distributor: Sending termination message to all ClientApp!")
@@ -239,14 +240,14 @@ class Monitor(object):
                 if self.index_data_queue.qsize() > 0:
                     data = self.index_data_queue.get()
 
-            client_index  = self.received_index_msg_count.value % client_count
+            client_index = self.received_index_msg_count.value % client_count
             client = self.clients[client_index]
             # Send data to ClientApplication running on a  Client-Physical Node
             if data:
                 if self.operation.upper() == "LIST":
-                    #self.logger.info("Index-Distributor:Prefix-Dir-{}".format(data["dir"]))
-                    self.send_index_data(client,data)
-                    message_count +=1
+                    # self.logger.info("Index-Distributor:Prefix-Dir-{}".format(data["dir"]))
+                    self.send_index_data(client, data)
+                    message_count += 1
                     with self.received_index_msg_count.get_lock():
                         self.received_index_msg_count.value += 1
                     continue
@@ -280,7 +281,7 @@ class Monitor(object):
             # Debug message
             if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
                 self.logger.info("Monitor-Index-Distributor: Messages distributed to clients-{}, Objects Count: {}".format(message_count,
-                                                                                                object_count))
+                                                                                                                           object_count))
                 debug_message_timer = datetime.now()
 
             if self.index_data_generation_complete.value == 1 and (self.index_msg_count.value == message_count):
@@ -313,7 +314,7 @@ class Monitor(object):
     def persist_index_data(self):
         prefix_storage_file = self.index_data_json_file
         prefix_storage_file_new = prefix_storage_file + ".new"
-        #prefix_index_data = json.dumps(self.prefix_index_data.copy())
+        # prefix_index_data = json.dumps(self.prefix_index_data.copy())
         with self.index_data_count.get_lock():
             prefix_index_data = json.dumps(self.prefix_index_data_persist)
 
@@ -344,7 +345,7 @@ class Monitor(object):
         :param data: message
         :return: None
         """
-        if message and type(message) ==  dict:
+        if message and type(message) == dict:
             for client in self.clients:
                 index = 0
                 message_sent = False
@@ -352,13 +353,11 @@ class Monitor(object):
                     message_sent = self.send_index_data(client, message)
                     if message_sent:
                         break
-                    index +=1
+                    index += 1
                 if message_sent:
-                    self.logger.info(
-                    "Notified ClientApplication-{} -> {}".format(client.id, message))
+                    self.logger.info("Notified ClientApplication-{} -> {}".format(client.id, message))
                 else:
-                    self.logger.error(
-                    "Unable to send message-{} to ClientApplication-{}".format(client.id, message))
+                    self.logger.error("Unable to send message-{} to ClientApplication-{}".format(client.id, message))
         else:
             self.logger.error("Invalid message type - {}".format(message))
 
@@ -373,7 +372,7 @@ class Monitor(object):
         socket = client.socket_index
         ret = False
         try:
-            ret = socket.send_json(data) # Send index data
+            ret = socket.send_json(data)  # Send index data
         except RuntimeError as e:
             self.logger.excep("MSG send error - {}".format(e))
         except Exception as e:
@@ -398,8 +397,8 @@ class Monitor(object):
                 client.socket_status = ClientSocket(self.logger, self.ip_address_family)
                 client.socket_status.connect(client.ip_address, client.port_status)
                 self.logger.info("Monitor-Status-Poller: Connected to ClientApp-{}:{}".format(client.id,
-                                                                                    client.port_status))
-                successful_socket_connection +=1
+                                                                                              client.port_status))
+                successful_socket_connection += 1
             except Exception as e:
                 self.logger.excep("Monitor-Status-Poller: Socket connection error for ClientApp-{}, {}".format(client.id, e))
                 client.socket_status = None
@@ -425,7 +424,7 @@ class Monitor(object):
                 if client.socket_status is None:
                     continue
                 # ERROR Handling: If the ClientApplication abruptly gets shutdown, exit code should be non-zero,
-                #  We don't expect end message to be reached, hence the socket can be closed.
+                # We don't expect end message to be reached, hence the socket can be closed.
                 if client.status.value and client.exit_status_code.value != 0:
                     client.socket_status.close()
                     client.socket_status = None
@@ -450,9 +449,9 @@ class Monitor(object):
                                     self.index_data_count.value += len(status["object_keys"])
                             else:
                                 self.status_queue.put(status)
-                            received_status_msg_count +=1
+                            received_status_msg_count += 1
                             # Exit monitor-status-poller if all messages received back from client-app.
-                            if self.all_index_data_distributed.value and ( self.index_msg_count.value == received_status_msg_count ):
+                            if self.all_index_data_distributed.value and (self.index_msg_count.value == received_status_msg_count):
                                 self.logger.info("Monitor-Status-Poller received all the status messages = {} , Exit!".format(received_status_msg_count))
                                 self.stop_status_poller.value = 1
                                 break
@@ -461,9 +460,10 @@ class Monitor(object):
                     # Should close the receiving end socket.
                     self.logger.error("Monitor-Status-Poller: client-{}, Status - {}".format(client.id, e))
                     if client.status.value:
-                        self.logger.warn("Monitor-Status-Poller: client-{} terminated and reciving socket doesn't have any element, closing socket!".format(client.id, e))
+                        self.logger.warn("Monitor-Status-Poller: client-{} terminated and reciving socket \
+                                         doesn't have any element, closing socket!".format(client.id, e))
                         client.socket_status.close()
-                        client.socket_status = None   
+                        client.socket_status = None
                 except Exception as e:
                     self.logger.excep("Monitor-Status-Poller- client-{}, Status - {} ".format(client.id, e))
 
@@ -538,7 +538,7 @@ class Monitor(object):
                     processed_prefix[prefix]["success"] += status.get("success", 0)
                     processed_prefix[prefix]["failure"] += status.get("failure", 0)
                 else:
-                    processed_prefix[prefix] = {"success" : status.get("success", 0) , "failure" : status.get("failure", 0) }
+                    processed_prefix[prefix] = {"success": status.get("success", 0), "failure": status.get("failure", 0)}
 
                 if self.operation.upper() == "PUT" and prefix in self.prefix_index_data and prefix in processed_prefix:
                     if self.prefix_index_data[prefix]["files"] == processed_prefix[prefix]["success"]:
@@ -567,10 +567,10 @@ class Monitor(object):
                         display_percentage += 10
 
             # All index data distributed to clients and received all operation status back from clients.
-            if self.all_index_data_distributed.value and  file_index_count ==  self.index_data_count.value:
+            if self.all_index_data_distributed.value and file_index_count == self.index_data_count.value:
                 self.stop_status_poller.value = 1   # This will stop Monitor-Poller
                 self.logger.info("Monitor-Operation-Progress received status of all objects = {}".format(file_index_count))
-        
+
         if self.operation.upper() == "PUT" and self.prefix_index_data:
             try:
                 # Remove the resume dir keys file as it is already part of prefix_index_data
@@ -698,9 +698,9 @@ class Monitor(object):
                     prefix = object_keys_data["prefix"]
                     object_keys = object_keys_data["object_keys"]
                     fh.write(prefix + ":")
-                    end_object_keys = "" # Concatenate all end object_keys into a string and dump in one shot.
+                    end_object_keys = ""  # Concatenate all end object_keys into a string and dump in one shot.
                     for object_key in object_keys:
-                        end_object_keys += " " + object_key + "\n" 
+                        end_object_keys += " " + object_key + "\n"
                     fh.write(end_object_keys)
             self.logger.info("Listing ObjectKeys are dumped at - {}".format(listing_file))
         except Exception as e:
@@ -708,5 +708,3 @@ class Monitor(object):
         finally:
             if fh:
                 fh.close()
-
-

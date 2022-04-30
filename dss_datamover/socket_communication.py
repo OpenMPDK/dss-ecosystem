@@ -9,7 +9,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -31,7 +31,8 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os,sys
+import os
+import sys
 import socket
 import json
 import time
@@ -44,11 +45,13 @@ IP_ADDRESS_FAMILY = {
 }
 
 CONNECTION_DELAY_INTERVAL = 2
-CONNECTION_TIME_THRESHOLD = 300 # 5 Minutes, maximum wait time for socket connection.
-MESSAGE_LENGTH = 10 # Message length 10 bytes
-RECV_TIMEOUT = 60 # Wait to receive data from socket for 60 seconds.
+CONNECTION_TIME_THRESHOLD = 300  # 5 Minutes, maximum wait time for socket connection.
+MESSAGE_LENGTH = 10  # Message length 10 bytes
+RECV_TIMEOUT = 60  # Wait to receive data from socket for 60 seconds.
+
 
 class ClientSocket:
+
     def __init__(self, logger=None, ip_address_family="IPv4"):
         self.logger = logger
         self.socket = None
@@ -60,7 +63,7 @@ class ClientSocket:
             self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
             raise ConnectionError("Socket initialization failed! ")
 
-    def connect(self,host,port):
+    def connect(self, host, port):
         """
         Connect to a socket with the specified host and port.
         :param host:
@@ -76,7 +79,7 @@ class ClientSocket:
         connection_time_start = datetime.now()
         time_to_sleep = CONNECTION_DELAY_INTERVAL
         while is_connection_refused:
-            is_connection_refused =False
+            is_connection_refused = False
             try:
                 self.socket.connect((host, int(port)))
             except ConnectionRefusedError as e:
@@ -94,7 +97,7 @@ class ClientSocket:
             if (datetime.now() - connection_time_start).seconds > CONNECTION_TIME_THRESHOLD:
                 raise socket.timeout("Socket connection timeout=300sec !")
 
-    def send_json(self,message={}):
+    def send_json(self, message={}):
         """
         Send a JSON formatted data.
         :param message: JSON/DICT
@@ -109,7 +112,7 @@ class ClientSocket:
 
             try:
                 # sendall on success return None.
-                if self.socket.sendall(msg.encode("utf8", "ignore") ) is None:
+                if self.socket.sendall(msg.encode("utf8", "ignore")) is None:
                     return True
                 else:
                     self.logger.error("Failed to send msg - {}".format(msg))
@@ -131,14 +134,14 @@ class ClientSocket:
         This is blocking call and wait for data from socket end utill received desired
         number of bytes.
         The message contains 10 bytes header and body. Read header untill received 10 bytes or timeout.
-        Iterate to receive desired number of bytes from socket. 
-        :format: JSON/String 
+        Iterate to receive desired number of bytes from socket.
+        :format: JSON/String
         :timeout: default 60 seconds
         :return: Return received data in json format.
         """
         msg_len = None
         msg = "{}"
-        
+
         try:
             msg_len_in_bytes = b''
             received_msg_len_size = 0
@@ -188,9 +191,9 @@ class ClientSocket:
             try:
                 json_data = json.loads(msg)
             except JSONDecodeError as e:
-                self.logger.error("ClientSocket: Bad JSON data - {},{}, {}".format(msg_len, msg,e))
+                self.logger.error("ClientSocket: Bad JSON data - {},{}, {}".format(msg_len, msg, e))
             except Exception as e:
-                raise Exception("Bad formed message - {}{}, error- {}".format(msg_len,msg, e))
+                raise Exception("Bad formed message - {}{}, error- {}".format(msg_len, msg, e))
 
             return json_data
         else:
@@ -209,6 +212,7 @@ class ClientSocket:
 
 
 class ServerSocket:
+
     def __init__(self, logger=None, ip_address_family="IPv4"):
         self.socket = None
         self.logger = logger
@@ -221,8 +225,7 @@ class ServerSocket:
             self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
             raise ConnectionError("Socket initialization failed!")
 
-
-    def bind(self,host,port):
+    def bind(self, host, port):
         """
         Bind server socket
         :param host:
@@ -235,13 +238,13 @@ class ServerSocket:
             self.logger.error("ERROR: Port not specified")
         port = int(port)
         try:
-            self.socket.bind((host,port))
+            self.socket.bind((host, port))
             self.socket.listen(5)
-            self.logger.info("Client is listening for message on {}:{} ".format(host,port))
+            self.logger.info("Client is listening for message on {}:{} ".format(host, port))
         except ConnectionError as e:
             self.logger.error("Address ({}:{}) bind error - {}".format(e))
         except Exception as e:
-            self.logger.error("Not able to bind to host={}:{}, {}".format(host,port, e))
+            self.logger.error("Not able to bind to host={}:{}, {}".format(host, port, e))
 
     def accept(self):
         """
@@ -251,7 +254,7 @@ class ServerSocket:
         self.client_socket, address = self.socket.accept()
         self.logger.info("Connected to {}".format(str(address)))
 
-    def send_json(self,message=None,format="JSON"):
+    def send_json(self, message=None, format="JSON"):
         """
         Send data to a client
         :param message: STRING|DICT|JSON ,
@@ -269,7 +272,7 @@ class ServerSocket:
             msg = msg_len + msg_body
             try:
                 # sendall on success return None.
-                if self.client_socket.sendall(msg.encode("utf8", "ignore") ) is None:
+                if self.client_socket.sendall(msg.encode("utf8", "ignore")) is None:
                     return True
                 else:
                     self.logger.error("Failed to send msg - {}".format(msg_body))
@@ -291,8 +294,8 @@ class ServerSocket:
         This is blocking call and wait for data from socket end utill received desired
         number of bytes.
         The message contains 10 bytes header and body. Read header untill received 10 bytes or timeout.
-        Iterate to receive desired number of bytes from socket. 
-        :format: JSON/String 
+        Iterate to receive desired number of bytes from socket.
+        :format: JSON/String
         :timeout: default 60 seconds
         :return: Return received data in json format.
         """
@@ -339,9 +342,9 @@ class ServerSocket:
             if msg_body == b'':
                 raise RuntimeError("Empty message for message length -{}".format(msg_len))
 
-            if msg_body :
+            if msg_body:
                 if len(msg_body) == msg_len:
-                    msg = msg_body.decode("utf8","ignore")
+                    msg = msg_body.decode("utf8", "ignore")
                 else:
                     self.logger.error("ServerSocket: Received incomplete message.")
         if format.upper() == "JSON":
@@ -370,5 +373,3 @@ class ServerSocket:
             self.socket.close()
         except Exception as e:
             self.logger.error("Closing Socket - {}".format(e))
-
-

@@ -10,7 +10,7 @@
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -42,7 +42,7 @@ import time
 
 WORKER_OPERATION_STATUS = {
     "PUT": ["NFS_READ", "S3_UPLOAD"],
-    "LIST": ["S3_LIST","STATUS_SEND"],
+    "LIST": ["S3_LIST", "STATUS_SEND"],
     "GET": ["S3_READ", "STATUS_SEND"],
     "DEL": ["S3_DELETE", "STATUS_SEND"],
     "TEST": ["NFS_READ", "S3_UPLOAD", "S3_READ", "MD5SUM_COMPARE", "STATUS_SEND", "DELETE_TEMP_FILES"]
@@ -85,7 +85,7 @@ class Worker(object):
         self.index_data_queue_size = kwargs.get("index_data_queue_size")
 
         # Testing
-        self.skip_upload =  kwargs.get("skip_upload", False)
+        self.skip_upload = kwargs.get("skip_upload", False)
         self.prefix_index_data = kwargs.get("prefix_index_data", {})
         self.standalone = kwargs.get("standalone", False)
 
@@ -129,7 +129,7 @@ class Worker(object):
 
     def get_s3_client(self):
         """
-        Return s3_client 
+        Return s3_client
         """
         return self.s3_client
 
@@ -139,13 +139,13 @@ class Worker(object):
         :return: None
         """
         try:
-            #self.create_s3_client()
-            #if not self.s3_client.status:
-            #    self.status.value = 0
-            #    self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
-            #    return
+            # self.create_s3_client()
+            # if not self.s3_client.status:
+            #     self.status.value = 0
+            #     self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
+            #     return
 
-            self.process = Process(target=self.run, args=( ))
+            self.process = Process(target=self.run, args=())
             self.process.name = "Worker-{}".format(self.id)
             self.process.start()
         except Exception as e:
@@ -182,26 +182,28 @@ class Worker(object):
 
     def is_hung(self, operation):
         try:
-            # self.logger.info("worker-{}=> {}:{}".format(self.id, self.operation_progress_counter_previous_value, self.operation_progress_status_counter.value))
+            # self.logger.info("worker-{}=> {}:{}".format(self.id, self.operation_progress_counter_previous_value,
+            #                                             self.operation_progress_status_counter.value))
             # self.logger.info("worker-{}=> {}:{}".format(self.id, self.task_count_previous, self.task_count.value))
             # Detect hung condition
             if self.task_count.value > 0 and self.task_count.value == self.task_count_previous:
-                if ( self.operation_progress_status_counter.value > 0 )  and \
-                    self.operation_progress_counter_previous_value == self.operation_progress_status_counter.value:
+                if (self.operation_progress_status_counter.value > 0) and \
+                        self.operation_progress_counter_previous_value == self.operation_progress_status_counter.value:
                     hung_state_index = self.operation_progress_counter_previous_value % len(WORKER_OPERATION_STATUS[operation])
                     hung_state_name = WORKER_OPERATION_STATUS[operation][hung_state_index]
-                    #hunged_task = self.latest_task_processed.get()
-                    #self.logger.info("Task_id:{}".format(hunged_task.id))
+                    # hunged_task = self.latest_task_processed.get()
+                    # self.logger.info("Task_id:{}".format(hunged_task.id))
                     latest_message = self.latest_task_processed.get()
-                    file_index =  int(self.operation_progress_status_counter.value / len(WORKER_OPERATION_STATUS[operation]))
-                    # self.logger.info("Index-{}, Total File-{}, FileIndex-{}".format(self.operation_progress_status_counter.value, len(latest_message["files"]), file_index))
+                    file_index = int(self.operation_progress_status_counter.value / len(WORKER_OPERATION_STATUS[operation]))
+                    # self.logger.info("Index-{}, Total File-{}, FileIndex-{}".format(self.operation_progress_status_counter.value,
+                    #                                                                 len(latest_message["files"]), file_index))
                     if file_index < len(latest_message["files"]):
                         self.logger.error("Worker-{} Possibly is in Hung state \"{}\", {}/{}".format(self.id,
-                                                                                    hung_state_name,
-                                                                                    latest_message["dir"],
-                                                                                    latest_message["files"][file_index]
-                                                                                    ))
-                        #self.task_queue.put(hunged_task) # Put the task again.
+                                                                                                     hung_state_name,
+                                                                                                     latest_message["dir"],
+                                                                                                     latest_message["files"][file_index]
+                                                                                                     ))
+                        # self.task_queue.put(hunged_task) # Put the task again.
 
                         return True
                 else:
@@ -227,7 +229,7 @@ class Worker(object):
             self.status.value = -1
             self.logger.error("S3 Client is not initialized. Exit worker-{}".format(self.id))
             return
-        
+
         self.status.value = 1
         self.worker_pid.value = current_process().pid
         self.logger.info("Worker-{}, PID-{} started ... ".format(self.id, self.worker_pid.value))
