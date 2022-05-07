@@ -32,7 +32,7 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os
+import multiprocessing as mp
 import sys
 import signal
 from utils.utility import exception
@@ -46,17 +46,19 @@ SIGNAL = {
 }
 
 
-class SignalHandler:
-
+class SignalHandler(object):
     def __init__(self):
         self.registered_functions = []
 
+    def add_fn(self, func):
+        self.registered_functions.append(func)
+
     def initiate(self):
         signal.signal(signal.SIGINT, self.handler)
-        signal.signal(signal.SIGABRT, self.handler)
+        # signal.signal(signal.SIGABRT, self.handler)
         # signal.signal(signal.SIGBUS, self.handler)
         # signal.signal(signal.SIGKILL, self.handler)
-        signal.signal(signal.SIGTERM, self.handler)
+        # signal.signal(signal.SIGTERM, self.handler)
 
     @exception
     def handler(self, signal, frame):
@@ -65,6 +67,10 @@ class SignalHandler:
             print("INFO: Received {} Signal ... ".format(SIGNAL[signal]))
         else:
             print("INFO: Received {} Signal ... ".format(signal))
+
+        # if mp.current_process().name != 'MainProcess':
+        #     return
+
         for func in self.registered_functions:
             func()
         print("INFO: All functions are done, exiting ...")

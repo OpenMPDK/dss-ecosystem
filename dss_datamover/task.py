@@ -30,20 +30,15 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 """
 
-import os
-import sys
+import os, sys
 from utils.utility import exception, exec_cmd, get_hash_key
 from multiprocessing import Value, Manager, current_process
-from minio_client import MinioClient
-from s3_client import S3
-import json
-from datetime import datetime
 import time
 
 task_id = Value('i', 1)
 
-mgr = Manager()
-ds = mgr.dict()
+# mgr = Manager()
+# ds = mgr.dict()
 
 """
 Need to be updated
@@ -122,7 +117,6 @@ def list(s3_client, **kwargs):
     """
     List the Object keys from lower level directory. If not then, create a task, so that can be processed by other
     worker.
-    :param params:
     :param task_queue: Holds the task
     :param index_data_queue:  Holds the list index message to be distributed among the client nodes.
     :param logger: A logger with shared queue used among the running processes
