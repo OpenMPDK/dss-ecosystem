@@ -30,10 +30,11 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 """
 
-import os, sys
-from utils.utility import exception, exec_cmd, get_hash_key
-from multiprocessing import Value, Manager, current_process
+import os
+import sys
 import time
+from utils.utility import exception, exec_cmd, get_hash_key
+from multiprocessing import Value, current_process
 
 task_id = Value('i', 1)
 

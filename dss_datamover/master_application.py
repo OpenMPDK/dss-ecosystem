@@ -575,8 +575,8 @@ class Master(object):
             for target_ip in compaction_status:
                 if "status" in compaction_status[target_ip] and compaction_status[target_ip]["status"]:
                     continue
-                if ("ssh_remote_client" in compaction_status[target_ip] and
-                        compaction_status[target_ip]["ssh_remote_client"]):
+                if ("ssh_remote_client" in compaction_status[target_ip]
+                        and compaction_status[target_ip]["ssh_remote_client"]):
                     if "stdout" in compaction_status[target_ip] and compaction_status[target_ip]["stdout"]:
                         status = compaction_status[target_ip]["stdout"].channel.exit_status_ready()
                         if status:

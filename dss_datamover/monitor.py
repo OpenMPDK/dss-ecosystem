@@ -459,7 +459,8 @@ class Monitor(object):
                     # Should close the receiving end socket.
                     self.logger.error("Monitor-Status-Poller: client-{}, Status - {}".format(client.id, e))
                     if client.status.value:
-                        self.logger.warn("Monitor-Status-Poller: client-{} terminated and reciving socket doesn't have any element, closing socket!".format(client.id, e))
+                        self.logger.warn("Monitor-Status-Poller: client-{} terminated and reciving socket doesn't have any element, closing socket!".format(
+                            client.id, e))
                         client.socket_status.close()
                         client.socket_status = None
                 except Exception as e:

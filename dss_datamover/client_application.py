@@ -531,8 +531,8 @@ class ClientApplication(object):
         """
         if nfs_cluster_ip and nfs_share:
             # Don't mount if the nfs share all ready mounted.
-            if (nfs_cluster_ip in self.nfs_cluster.local_mounts and
-                    nfs_share in self.nfs_cluster.local_mounts[nfs_cluster_ip]):
+            if (nfs_cluster_ip in self.nfs_cluster.local_mounts
+                    and nfs_share in self.nfs_cluster.local_mounts[nfs_cluster_ip]):
                 return True
 
             ret, console = self.nfs_cluster.mount(nfs_cluster_ip, nfs_share)

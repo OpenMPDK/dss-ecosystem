@@ -89,8 +89,8 @@ class NFSCluster:
         for nfs_share in self.config[cluster_ip]:
             nfs_share_prefix = cluster_ip + nfs_share
             if prefix.startswith(nfs_share_prefix):
-                if (cluster_ip in self.local_mounts and
-                        nfs_share in self.local_mounts[cluster_ip]):
+                if (cluster_ip in self.local_mounts
+                        and nfs_share in self.local_mounts[cluster_ip]):
                     self.logger.info("Prefix -{} is already mounted to {}".format(
                         prefix, "/" + nfs_share_prefix))
                     return cluster_ip, nfs_share, 0
