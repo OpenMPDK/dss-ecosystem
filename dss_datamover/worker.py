@@ -149,8 +149,8 @@ class Worker(object):
             self.process.name = "Worker-{}".format(self.id)
             self.process.start()
         except Exception as e:
-            self.logger.excep("{}".format(e))
-            return
+            self.logger.excep(f"Exception in starting worker-{self.id} - {e}")
+            raise
 
         # while self.status.value == 0:
         #    time.sleep(0.1)
@@ -169,6 +169,7 @@ class Worker(object):
             time.sleep(2)
             try:
                 self.process.terminate()
+                self.process.join()
             except Exception as e:
                 self.logger.excep("Unable to terminate Worker-{} - {}".format(self.id, e))
         self.logger.info("Worker-{} stopped!".format(self.id))

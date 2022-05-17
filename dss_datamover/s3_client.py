@@ -33,13 +33,12 @@
 """
 
 import os
-import sys
 import boto3
 from botocore.client import Config
 from datetime import datetime
 
 
-class S3:
+class S3(object):
     def __init__(self, config={}):
         self.s3_client = boto3.client('s3',
                                       endpoint_url=config["endpoint"],
@@ -137,8 +136,8 @@ class S3:
         # Create local directory structure
         local_file_path = "/" + object_key
         directory = os.path.dirname(local_file_path)
-        if not os.path.exist(directory):
-            os.makdir(directory)
+        if not os.path.exists(directory):
+            os.mkdir(directory)
         self.s3_client.download_file(object_key, local_file_path)
 
     def deleteObject(self, bucket=None, prefix=None):

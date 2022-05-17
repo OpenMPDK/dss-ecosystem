@@ -82,7 +82,7 @@ def commandLineArgumentParser():
     get_parser = subparser.add_parser("GET", help="Download the files from S3 storage bucket!")
     del_parser = subparser.add_parser("DEL", help="Remove the objects from the S3 storage bucket!")
 
-    ## All arguments for PUT
+    # All arguments for PUT
     put_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
                             help='Specify number of Jobs to be used for parallel processing. ')
     put_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
@@ -92,7 +92,7 @@ def commandLineArgumentParser():
                             help='Specify operation type such as read=r write=w , wr...')
     put_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
-    ## All arguments for LIST
+    # All arguments for LIST
     list_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
                              help='Specify number of Jobs to be used for parallel processing. ')
     list_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
@@ -102,7 +102,7 @@ def commandLineArgumentParser():
                              help='Specify operation type such as read=r write=w , wr...')
     list_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
-    ## All arguments for GET
+    # All arguments for GET
     get_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
                             help='Specify number of Jobs to be used for parallel processing. ')
     get_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
@@ -112,7 +112,7 @@ def commandLineArgumentParser():
                             help='Specify operation type such as read=r write=w , wr...')
     get_parser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
 
-    ## All arguments for DEL
+    # All arguments for DEL
     del_parser.add_argument("--thread", "-t", type=int, default=1, required=False,
                             help='Specify number of Jobs to be used for parallel processing. ')
     del_parser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
@@ -124,7 +124,7 @@ def commandLineArgumentParser():
 
     options = parser.parse_args()
 
-    return (sys.argv[1:2][0], vars(options))
+    return sys.argv[1:2][0], vars(options)
 
 
 def ClientApplicationArgumentParser():
@@ -150,12 +150,14 @@ def ClientApplicationArgumentParser():
                         help='Skip data upload operation for DataIntegrity')
     parser.add_argument("--distributed", "-dist", required=False, action='store_true',
                         help='Enable distributed LISTing')
+    parser.add_argument("--stop", "-stop", required=False, action='store_true',
+                        help='Stop Client application processes gracefully')
 
     options = vars(parser.parse_args())
     return options
 
 
-class CommandLineArgument:
+class CommandLineArgument(object):
     def __init__(self):
         parser = argparse.ArgumentParser(description='Distributed version of S3 CLI to perform PUT,LIST,GET,DEL operations!')
         subparsers = parser.add_subparsers(help="Supported Operations ... ")

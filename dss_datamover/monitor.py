@@ -36,15 +36,12 @@ import os
 import sys
 import time
 from multiprocessing import Process, Queue, Value, Lock, Manager
-from utils.utility import exception, exec_cmd, progress_bar, get_ip_address, is_queue_empty
+from utils.utility import exception, exec_cmd, is_queue_empty
 from datetime import datetime
 import json
-import uuid
-from logger import MultiprocessingLogger
-from socket_communication import ClientSocket, ServerSocket
+from socket_communication import ClientSocket
 import socket
 import prctl
-import ast
 
 """
 Monitor the progress of operation.
@@ -92,8 +89,8 @@ class Monitor(object):
         try:
             self.resume_prefix_dir_keys_file_handle = open(self.resume_prefix_dir_keys_file, 'a+')
         except Exception as e:
-            self.logger.excep("Exception in opening the file {} for updating the keys".format(
-                self.resume_prefix_dir_keys_file))
+            self.logger.excep("Exception in opening the file {} for updating the keys - {}".format(
+                self.resume_prefix_dir_keys_file, e))
             raise
 
         self.all_index_data_distributed = Value('i', 0)
@@ -151,7 +148,6 @@ class Monitor(object):
             self.process_operation_progress.start()
 
     def stop(self):
-
         self.logger.warn("Stopping monitors forcefully!")
         # self.status_lock.acquire()
         self.stop_status_poller.value = 1
@@ -162,6 +158,7 @@ class Monitor(object):
             time.sleep(1)
             try:
                 self.process_listing_aggregator.terminate()
+                self.process_listing_aggregator.join()
             except Exception as e:
                 self.logger.excep("Unable to terminate Listing Aggregator {}".format(e))
 
@@ -170,6 +167,7 @@ class Monitor(object):
                 time.sleep(1)
                 try:
                     self.process_index_distributor.terminate()
+                    self.process_index_distributor.join()
                 except Exception as e:
                     self.logger.excep("Unable to terminate MessageHandler - IndexSender {}".format(e))
 
@@ -177,6 +175,7 @@ class Monitor(object):
                 time.sleep(1)
                 try:
                     self.process_status_poller.terminate()
+                    self.process_status_poller.join()
                 except Exception as e:
                     self.logger.excep("Unable to terminate MessageHandler - StatusPoller ...\n {}".format(e))
 
@@ -198,7 +197,7 @@ class Monitor(object):
               and stop all other processes to shutdown DM.
         :return: None
         """
-        name = "DM_monitor_monitor_index_distributor"
+        name = "DM_monitor_index_distributor"
         prctl.set_name(name)
         prctl.set_proctitle(name)
 
@@ -280,8 +279,8 @@ class Monitor(object):
                     object_count += object_count_under_prefix
             # Debug message
             if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
-                self.logger.info("Monitor-Index-Distributor: Messages distributed to clients-{}, Objects Count: {}".format(message_count,
-                                                                                                                           object_count))
+                self.logger.info("Monitor-Index-Distributor: Messages distributed to clients-{}, Objects Count: {}".format(
+                    message_count, object_count))
                 debug_message_timer = datetime.now()
 
             if self.index_data_generation_complete.value == 1 and (self.index_msg_count.value == message_count):
@@ -342,7 +341,7 @@ class Monitor(object):
         """
         Send a common message to all ClientApp running in different nodes.
         Retry sending message if not delivered for MSG_SEND_RETRY_COUNT
-        :param data: message
+        :param message: message
         :return: None
         """
         if message and type(message) == dict:
@@ -365,7 +364,7 @@ class Monitor(object):
         """
         Send index data for a socket client. On failure, resend once.
         The error code is returned by the client and captured here in the log.
-        :param socket: client socket
+        :param client: client socket
         :param data: index data
         :return: success/failure 1/0
         """
@@ -396,8 +395,8 @@ class Monitor(object):
             try:
                 client.socket_status = ClientSocket(self.logger, self.ip_address_family)
                 client.socket_status.connect(client.ip_address, client.port_status)
-                self.logger.info("Monitor-Status-Poller: Connected to ClientApp-{}:{}".format(client.id,
-                                                                                              client.port_status))
+                self.logger.info("Monitor-Status-Poller: Connected to ClientApp-{}:{}".format(
+                    client.id, client.port_status))
                 successful_socket_connection += 1
             except Exception as e:
                 self.logger.excep("Monitor-Status-Poller: Socket connection error for ClientApp-{}, {}".format(client.id, e))
@@ -460,8 +459,8 @@ class Monitor(object):
                     # Should close the receiving end socket.
                     self.logger.error("Monitor-Status-Poller: client-{}, Status - {}".format(client.id, e))
                     if client.status.value:
-                        self.logger.warn("Monitor-Status-Poller: client-{} terminated and reciving socket \
-                                         doesn't have any element, closing socket!".format(client.id, e))
+                        self.logger.warn("Monitor-Status-Poller: client-{} terminated and reciving socket doesn't have any element, closing socket!".format(
+                            client.id, e))
                         client.socket_status.close()
                         client.socket_status = None
                 except Exception as e:
@@ -583,15 +582,16 @@ class Monitor(object):
         # Calculate operation BandWidth
         # If operation == PUT , then only open the updated prefix_index_data.json file.
         if self.operation.upper() == "PUT":
-            with open(self.index_data_json_file, "r") as prefix_index_data_handler:
-                try:
-                    self.prefix_index_data_persist = json.load(prefix_index_data_handler)
-                except json.JSONDecodeError as e:
-                    self.logger.error("Persistent index data - {}".format(e))
-                except MemoryError as e:
-                    self.logger.error("Unable to load prefix_index_data from {}, {}".format(self.index_data_json_file, e))
-                except Exception as e:
-                    self.logger.error("Prefix index-metadata loading error - {}".format(e))
+            if os.path.exists(self.index_data_json_file):
+                with open(self.index_data_json_file, "r") as prefix_index_data_handler:
+                    try:
+                        self.prefix_index_data_persist = json.load(prefix_index_data_handler)
+                    except json.JSONDecodeError as e:
+                        self.logger.error("Persistent index data - {}".format(e))
+                    except MemoryError as e:
+                        self.logger.error("Unable to load prefix_index_data from {}, {}".format(self.index_data_json_file, e))
+                    except Exception as e:
+                        self.logger.error("Prefix index-metadata loading error - {}".format(e))
 
         # Calculate total operation(PUT/GET/DEL) size
         if self.prefix:
@@ -635,10 +635,8 @@ class Monitor(object):
                                                                                               success_percentage))
         if operation_failure_count and self.index_data_count.value:
             failure_percentage = (operation_failure_count / self.index_data_count.value) * 100
-            self.logger.info("Total {} Operation:{}, Operation Failure:{} - {:.2f}%".format(self.operation,
-                                                                                            self.index_data_count.value,
-                                                                                            operation_failure_count,
-                                                                                            failure_percentage))
+            self.logger.info("Total {} Operation:{}, Operation Failure:{} - {:.2f}%".format(
+                self.operation, self.index_data_count.value, operation_failure_count, failure_percentage))
             success_operation_size_in_byte -= failure_file_size_in_byte
             self.logger.warn("DataMover RESUME operation is required!")
 

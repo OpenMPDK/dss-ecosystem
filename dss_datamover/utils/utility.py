@@ -42,7 +42,6 @@ import hashlib
 import paramiko
 import socket
 import queue
-from multiprocessing import Process, Queue, Value, Lock
 
 """
 Contains list of utility functions...
@@ -77,6 +76,8 @@ def exec_cmd(cmd="", output=False, blocking=False, user_id="ansible", password="
     :param cmd: <string> a executable command.
     :param output: Output
     :param blocking: Blocking or non-blocking call
+    :param user_id:
+    :param password:
     :return:
     ret = { ret==0  indicate success
             ret !=0 failure
@@ -159,6 +160,8 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
     """
     Remote execution of a command to the specified host
     :param host:
+    :param username:
+    :param password:
     :param cmd:
     :param blocking:
     :return:
@@ -181,7 +184,8 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
 def get_s3_prefix(logger, nfs_cluster, prefix=None):
     """
     Validate prefix for minio S3 and return the same.
-    :param cluster_ip
+    :param logger:
+    :param nfs_cluster:
     :param prefix: s3 prefix
     :return: s3 compatible prefix
     """
@@ -235,8 +239,9 @@ def progress_bar(prefix=""):
 def get_hash_key(**kwargs):
     """
     Generate a 32 byte md5 hash key for a string or object or file content.
-    :param type: Type of arguments are being passed ["string", "object", "file"]
-    :param data: Pass string content, object or file
+    :param kwargs: tuple of type and data
+    type: Type of arguments are being passed ["string", "object", "file"]
+    data: Pass string content, object or file
     :return: A 32 byte hash_key
     """
     type = kwargs.get("type", None)
@@ -299,8 +304,8 @@ def is_prefix_valid_for_nfs_share(logger, **kwargs):
     """
     Check if the prefix exist for a nfs share?
     :param logger:
-    :param nfs_share: nfs_share
-    :param prefix: A s3 prefix starts not with "/" and ends with "/".
+    nfs_share: nfs_share
+    prefix: A s3 prefix starts not with "/" and ends with "/".
     """
     nfs_share = kwargs["share"]
     prefix = kwargs["prefix"]
@@ -373,15 +378,15 @@ def first_delimiter_index(data_str, delimiter):
 
 
 def file_open(file_path, mode="r", logger=None):
-    FH = None
+    fh = None
     try:
-        FH = open(file_path, mode)
+        fh = open(file_path, mode)
     except OSError as e:
         if logger:
             logger.error(e)
         else:
             print("ERROR: {}".format(e))
-    return FH
+    return fh
 
 
 def file_close(file_handle, logger=None):

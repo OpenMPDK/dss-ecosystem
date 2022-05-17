@@ -32,12 +32,11 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-from utils.utility import exception, is_queue_empty
-from multiprocessing import Process, Queue, Value, Lock
 import os
-import sys
 import prctl
 import time
+from utils.utility import exception, is_queue_empty
+from multiprocessing import Process, Value
 
 """
 Logging Level:
@@ -63,7 +62,6 @@ LOGGER_STATE = [
 
 
 class MultiprocessingLogger(object):
-
     def __init__(self, queue, lock, status):
         self.queue = queue
         self.logger_lock = lock
@@ -145,6 +143,7 @@ class MultiprocessingLogger(object):
         name = "DM_logger"
         prctl.set_name(name)
         prctl.set_proctitle(name)
+        fh = None
 
         try:
             print("Log file:{}".format(self.logfile))

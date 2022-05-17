@@ -33,7 +33,6 @@
 """
 
 import os
-import sys
 from utils.utility import exception, exec_cmd, first_delimiter_index
 from multiprocessing import Manager
 
@@ -86,12 +85,15 @@ class NFSCluster:
         first_delimiter_pos = first_delimiter_index(prefix, "/")
         cluster_ip = prefix[0:first_delimiter_pos]
         ret = -1
+        nfs_share = ""
         for nfs_share in self.config[cluster_ip]:
             nfs_share_prefix = cluster_ip + nfs_share
             if prefix.startswith(nfs_share_prefix):
-                if cluster_ip in self.local_mounts and nfs_share in self.local_mounts[cluster_ip]:
-                    self.logger.info("Prefix -{} is already mounted to {}".format(prefix, "/" + nfs_share_prefix))
-                    return (cluster_ip, nfs_share, 0)
+                if (cluster_ip in self.local_mounts
+                        and nfs_share in self.local_mounts[cluster_ip]):
+                    self.logger.info("Prefix -{} is already mounted to {}".format(
+                        prefix, "/" + nfs_share_prefix))
+                    return cluster_ip, nfs_share, 0
                 else:
                     ret, console = self.mount(cluster_ip, nfs_share)
                 break
@@ -99,7 +101,7 @@ class NFSCluster:
             self.logger.info("Mounted NFS shares {}:{}".format(cluster_ip, nfs_share))
             self.nfs_cluster.append(cluster_ip)
 
-        return (cluster_ip, nfs_share, ret)
+        return cluster_ip, nfs_share, ret
 
     @exception
     def mount(self, cluster_ip, nfs_share):
@@ -140,9 +142,11 @@ class NFSCluster:
 
                 if ret == 0:
                     self.mounted_nfs_shares.append(nfs_share)
-                    self.logger.info("NFS mounting {}:{} => {} successful".format(cluster_ip, nfs_share, nfs_share_mount))
+                    self.logger.info("NFS mounting {}:{} => {} successful".format(
+                        cluster_ip, nfs_share, nfs_share_mount))
                 elif ret:
-                    self.logger.error("NFS mounting {}:{} failed \n {}".format(cluster_ip, nfs_share, console))
+                    self.logger.error("NFS mounting {}:{} failed \n {}".format(
+                        cluster_ip, nfs_share, console))
 
         if ret == 0 or nfs_share_already_mounted:
             if cluster_ip not in self.local_mounts:
@@ -172,9 +176,11 @@ class NFSCluster:
                         nfs_unmount_failed.append(nfs_share)
             if self.mounted_nfs_shares:
                 if nfs_unmount_success:
-                    self.logger.info("Un-mounted local NFS mount => NFS Cluster-{}:{}".format(cluster_ip, nfs_unmount_success))
+                    self.logger.info("Un-mounted local NFS mount => NFS Cluster-{}:{}".format(
+                        cluster_ip, nfs_unmount_success))
                 if nfs_unmount_failed:
-                    self.logger.info("Un-mount failed for local NFS mount => NFS Cluster-{}:{}".format(cluster_ip, nfs_unmount_failed))
+                    self.logger.info("Un-mount failed for local NFS mount => NFS Cluster-{}:{}".format(
+                        cluster_ip, nfs_unmount_failed))
         self.mounted = False
 
     @exception

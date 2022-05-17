@@ -32,14 +32,14 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os
-import sys
-from utils.utility import exception, exec_cmd, File
-from utils.config import Config, TargetCompactionArgumentParser
-from datetime import datetime
 import json
-import time
+import os
 import socket
+import time
+
+from utils.utility import exec_cmd
+from utils.config import TargetCompactionArgumentParser
+from datetime import datetime
 
 """
 The target_compaction script start the compaction on each target node and wait for its completion.
@@ -96,22 +96,26 @@ class Compaction:
                 compaction_start_status = json.loads(console)
                 if "result" in compaction_start_status:
                     if compaction_start_status["result"] == "STARTED":
-                        self.logger.write("INFO: Compaction started for NQN - {}, StartTime-{}\n".format(nqn, nqn_compaction_start_time))
+                        self.logger.write("INFO: Compaction started for NQN - {}, StartTime-{}\n".format(
+                            nqn, nqn_compaction_start_time))
                     else:
-                        self.logger.write("INFO: Compaction Status:{} for NQN - {}".format(compaction_start_status["result"], nqn))
+                        self.logger.write("INFO: Compaction Status:{} for NQN - {}".format(
+                            compaction_start_status["result"], nqn))
                     self.status[nqn] = False
                 else:
-                    self.logger.write("ERROR: Failed to start compaction for NQN - {}\n {}\n".format(nqn, console))
+                    self.logger.write("ERROR: Failed to start compaction for NQN - {}\n {}\n".format(
+                        nqn, console))
             else:
                 self.logger.write("ERROR: failed to start compaction for NQN - {}".format(nqn))
 
     def get_subsystem_nqn(self, subsystem_nqn_str):
-        subsystem_nqn_list = []
         if subsystem_nqn_str:
             subsystem_nqn_list = subsystem_nqn_str.split(",")
-            self.logger.write("INFO: Compaction should be initiated for the following NQNs\n {}\n".format(subsystem_nqn_list))
+            self.logger.write("INFO: Compaction should be initiated for the following NQNs\n {}\n".format(
+                subsystem_nqn_list))
         else:
-            self.logger.write("INFO: Using \"nvme list-subsys\" command for getting subsystem-nqn of {}\n".format(self.target_ip))
+            self.logger.write("INFO: Using \"nvme list-subsys\" command for getting subsystem-nqn of {}\n".format(
+                self.target_ip))
             subsystem_nqn_list = self.get_subsystem_nqn_from_command()
         return subsystem_nqn_list
 
@@ -150,6 +154,7 @@ if __name__ == "__main__":
     while True:
         compaction.get_status()
         if compaction.finished_nqn_compaction >= len(compaction.status):
-            compaction.logger.write("INFO: Compaction is finished! Time-{} Seconds\n".format((datetime.now() - compaction.compaction_start_time).seconds))
+            compaction.logger.write("INFO: Compaction is finished! Time-{} Seconds\n".format(
+                (datetime.now() - compaction.compaction_start_time).seconds))
             break
         time.sleep(1)

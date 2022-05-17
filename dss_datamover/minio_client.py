@@ -30,15 +30,11 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os
-import sys
 from minio import Minio
 from minio.error import ResponseError, BucketAlreadyOwnedByYou, BucketAlreadyExists
-from datetime import datetime
-import json
 
 
-class MinioClient:
+class MinioClient(object):
     def __init__(self, url, access_key="minio", secret_key="minio123", logger=None):
         self.minio_url = url
         self.status = False
@@ -65,7 +61,7 @@ class MinioClient:
                 print("INFO: Bucket {} already own by you".format(bucket))
             except BucketAlreadyExists as err:
                 print("WARNING: Bucket {} already exist".format(bucket))
-            except err:
+            except Exception as err:
                 print("Exception:{}".format(err))
 
     def list_bucket(self):
@@ -77,7 +73,7 @@ class MinioClient:
         try:
             if bucket:
                 objects = self.client.list_objects(bucket_name=bucket, prefix=prefix, recursive=recursive)
-        except err:
+        except Exception as err:
             self.logger.excep("{}".format(err))
 
         return objects
@@ -86,7 +82,7 @@ class MinioClient:
         # print("Bucket Name:{}=>{}".format(bucket,data))
         try:
             self.client.fput_object(bucket_name=bucket, object_name=data[1:], file_path=data, content_type="text/plain")
-        except err:
+        except Exception as err:
             self.logger.excep("{}".format(err))
             return False
         return True
@@ -105,7 +101,7 @@ class MinioClient:
                   self.client.remove_object(bucket_name=bucket,object_name=object.object_name)  # Require object name,
                 """
                 self.client.remove_object(bucket_name=bucket, object_name=prefix)
-        except err:
+        except Exception as err:
             self.logger.excep("{}".format(err))
             return False
         return True

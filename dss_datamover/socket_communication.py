@@ -31,8 +31,6 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os
-import sys
 import socket
 import json
 import time
@@ -153,7 +151,8 @@ class ClientSocket:
                 msg_len_in_bytes += received_msg_len_in_bytes
                 time_spent_in_seconds = (datetime.now() - time_started).seconds
                 if time_spent_in_seconds >= timeout:
-                    raise socket.timeout("ClientSocket: Timeout ({} seconds) from recv function".format(time_spent_in_seconds))
+                    raise socket.timeout("ClientSocket: Timeout ({} seconds) from recv function".format(
+                        time_spent_in_seconds))
             if msg_len_in_bytes != b'':
                 msg_len = int(msg_len_in_bytes)
         except socket.timeout as e:
@@ -173,11 +172,12 @@ class ClientSocket:
                     received_data = self.socket.recv(data_size)
                     received_data_size += len(received_data)
                     msg_body += received_data
-                except socket.error as e:
-                    self.logger.error("ClientSocket: {}".format(e))
                 except socket.timeout as e:
                     self.logger.error("ClientSocket: Timeout-{}".format(e))
                     break
+                except socket.error as e:
+                    self.logger.error("ClientSocket: {}".format(e))
+
             if msg_body == b'':
                 raise RuntimeError("ClientSocket: Empty message for message length -{}".format(msg_len))
 
@@ -190,7 +190,7 @@ class ClientSocket:
             json_data = {}
             try:
                 json_data = json.loads(msg)
-            except JSONDecodeError as e:
+            except json.JSONDecodeError as e:
                 self.logger.error("ClientSocket: Bad JSON data - {},{}, {}".format(msg_len, msg, e))
             except Exception as e:
                 raise Exception("Bad formed message - {}{}, error- {}".format(msg_len, msg, e))
@@ -242,7 +242,7 @@ class ServerSocket:
             self.socket.listen(5)
             self.logger.info("Client is listening for message on {}:{} ".format(host, port))
         except ConnectionError as e:
-            self.logger.error("Address ({}:{}) bind error - {}".format(e))
+            self.logger.error("Address ({}:{}) bind error - {}".format(host, port, e))
         except Exception as e:
             self.logger.error("Not able to bind to host={}:{}, {}".format(host, port, e))
 
@@ -335,10 +335,10 @@ class ServerSocket:
                     received_data = self.client_socket.recv(data_size)
                     received_data_size += len(received_data)
                     msg_body += received_data
-                except socket.error as e:
-                    self.logger.excep("ServerSocket receive bytes -  {}".format(e))
                 except socket.timeout as e:
                     self.logger.error("ServerSocket: Timeout - {}".format(e))
+                except socket.error as e:
+                    self.logger.excep("ServerSocket receive bytes -  {}".format(e))
             if msg_body == b'':
                 raise RuntimeError("Empty message for message length -{}".format(msg_len))
 
@@ -351,8 +351,8 @@ class ServerSocket:
             json_data = {}
             try:
                 json_data = json.loads(msg)
-            except JSONDecodeError as e:
-                raise JSONDecodeError("ClientSocket: Bad JSON data - {}".format(e))
+            except json.JSONDecodeError as e:
+                raise json.JSONDecodeError("ClientSocket: Bad JSON data - {}".format(e))
             except MemoryError as e:
                 raise MemoryError("MemoryError: JSON load failed - {}".format(e))
             except Exception as e:

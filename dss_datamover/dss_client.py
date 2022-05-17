@@ -32,10 +32,7 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os
-import sys
 import dss
-from datetime import datetime
 from minio.error import BucketAlreadyOwnedByYou
 
 
@@ -231,11 +228,11 @@ class DssClientLib(object):
                 except Exception as e:
                     self.logger.info("ListObjects {} - {}".format(prefix, e))
         except dss.FileIOError as e:
-            self.logger.execp("FileIOError - key:{}, {}".format(object_key, e))
+            self.logger.execp("FileIOError - key:{}, {}".format(obj_key, e))
         except dss.NoIterator as e:
             self.logger.excep("NoIterator - {}".format(e))
         except dss.NetworkError as e:
-            self.logger.execp("NetworkError - key:{}, {}".format(object_key, e))
+            self.logger.execp("NetworkError - key:{}, {}".format(obj_key, e))
         except dss.NoSuchResouceError as e:
             self.logger.excep("NoSuchResouceError - {}".format(e))
         except dss.GenericError as e:

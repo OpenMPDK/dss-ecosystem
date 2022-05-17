@@ -32,22 +32,23 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 import os
+import prctl
+import psutil
+import signal
+import socket
+import sys
+import time
+
 from utils.config import Config, ClientApplicationArgumentParser
-from utils.utility import exception, OPERATION_STATUS
+from utils.utility import exception
 from logger import MultiprocessingLogger
-from multiprocessing import Process, Queue, Value, Lock, Manager
+from multiprocessing import Process, Queue, Value, Lock, Manager, Event
 from worker import Worker
 from task import Task
 from nfs_cluster import NFSCluster
 from datetime import datetime
-import time
-import socket
-import sys
-from socket_communication import ServerSocket, ClientSocket
-import prctl
-
-mgr = Manager()
-index_buffer = mgr.dict()
+from socket_communication import ServerSocket
+from utils.signal_handler import SignalHandler
 
 BASE_DIR = os.path.dirname(__file__)
 MONITOR_INACTIVE_WAIT_TIME = 1800  # 30 Mins
@@ -81,6 +82,8 @@ class ClientApplication(object):
 
         # self.operation_status_send_completed_lock = Lock()
         # Task
+        mgr = Manager()
+        self.index_buffer = mgr.dict()
         self.task_queue = mgr.Queue()
         self.task_lock = Lock()
         self.task_id = 0
@@ -103,6 +106,7 @@ class ClientApplication(object):
         self.logger_lock = Lock()
         self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
         self.logger = None
+        self.start_logging()
 
         # AWS log
         if 'aws' in config:
@@ -121,6 +125,13 @@ class ClientApplication(object):
         # Mount NFS Share locally
         self.nfs_cluster = None
         self.nfs_share_list = Queue()
+
+        # Processes spawned by client
+        self.process_index = None
+        self.process_status = None
+
+        # Event to exit from the processes
+        self.event = Event()
 
     def __del__(self):
         # TODO Stop all running process for abrupt shutdown
@@ -144,7 +155,8 @@ class ClientApplication(object):
 
         # Start workers based on number of CPU available
         # Start messaging service
-        self.start_logging()
+        # self.start_logging()
+        self.check_and_stop_stale_processes_using_pgid()
         self.logger.info("Started Client Application for id:{} on node {}".format(self.id, self.host_name))
         self.nfs_cluster = NFSCluster(self.fs_config, "root", self.password, self.logger)
         if not self.start_workers():
@@ -152,7 +164,7 @@ class ClientApplication(object):
             sys.exit("Workers were not started.")
         self.start_message()
 
-    def stop(self):
+    def stop(self, force_flag=False):
         """
         This function can be used to forcefully shutdown all the running process.
         - Stop message handler
@@ -190,8 +202,11 @@ class ClientApplication(object):
                        s3_config=self.s3_config,
                        skip_upload=self.config.get("skip_upload", False),
                        aws_log_debug_val=self.aws_log_debug_val)
-            w.start()
-            self.workers.append(w)
+            try:
+                w.start()
+                self.workers.append(w)
+            except:
+                pass
             index += 1
 
         # Check atleast one worker is RUNNING
@@ -210,18 +225,21 @@ class ClientApplication(object):
             self.logger.fatal("Workers were not started exit ClientApplication-{}!".format(self.id))
         return workers_started
 
-    def stop_workers(self, id=None):
+    def stop_workers(self, worker_id=None):
         """
         Stop worker/s
-        :param id: worker id
+        :param worker_id: worker id
         :return:
         """
+        self.logger.info('Stopping workers')
         index = 0
-        while index < self.workers_count:
-            w = self.workers[index]
+        for w in self.workers:
+            if worker_id and w.id != worker_id:
+                continue
             if w.get_status():
                 w.stop()
             index += 1
+        self.logger.info('Stopped all workers')
 
     def start_message(self):
         """
@@ -243,6 +261,7 @@ class ClientApplication(object):
         Stop ZMQ server
         :return:
         """
+        self.logger.info('Stopping all MessageHandlers')
         # First stop the loop in the process.
         self.stop_messaging.value = 0
 
@@ -251,6 +270,7 @@ class ClientApplication(object):
             time.sleep(1)
             try:
                 self.process_index.terminate()
+                self.process_index.join()
                 self.logger.info("Terminated MessageHandler - Index ...")
             except Exception as e:
                 self.logger.execp("Terminated MessageHandler - Index - {} ".format(e))
@@ -259,6 +279,7 @@ class ClientApplication(object):
             time.sleep(1)
             try:
                 self.process_status.terminate()
+                self.process_status.join()
                 self.logger.info("Terminated MessageHandler - Status ...")
             except Exception as e:
                 self.logger.excep("Terminated MessageHandler - Status  - {} ".format(e))
@@ -301,8 +322,8 @@ class ClientApplication(object):
         objects_count = 0
         start_time_no_response = 0  # Start time of no response from master
         debug_message_timer = datetime.now()
-        while True:
 
+        while True:
             # Check messaging flag  and break the  , generally multiprocessing Queue and value is thread/process safe.
             if self.stop_messaging.value == 0:
                 break
@@ -348,10 +369,10 @@ class ClientApplication(object):
                     objects_count += objects_count_under_prefix
                     if is_index_data_added:
                         # Create a Shared dictionary to check progress of PUT/DEL/GET operation
-                        if message["dir"] in index_buffer:
-                            index_buffer[message["dir"]] += len(message["files"])
+                        if message["dir"] in self.index_buffer:
+                            self.index_buffer[message["dir"]] += len(message["files"])
                         else:
-                            index_buffer[message["dir"]] = len(message["files"])
+                            self.index_buffer[message["dir"]] = len(message["files"])
 
                     start_time_no_response = 0
                 else:
@@ -497,8 +518,6 @@ class ClientApplication(object):
             time.sleep(1)
             socket.close()
             self.logger.info("Monitor-StatusHandler is terminated gracefully !")
-        except socket.error as e:
-            self.logger.excep("MOnitor-StatusHandler - {}".format(e))
         except Exception as e:
             self.logger.excep("Monitor-StatusHandler - {}".format(e))
 
@@ -507,13 +526,13 @@ class ClientApplication(object):
         """
         Mount remote NFS share based on cluster dns/ip and NFS share
         :param nfs_cluster_ip: nfs cluster dns/ip
-        :param path: nfs share , e.g - /dir
+        :param nfs_share: nfs share , e.g - /dir
         :return:
         """
         if nfs_cluster_ip and nfs_share:
             # Don't mount if the nfs share all ready mounted.
-            if nfs_cluster_ip in self.nfs_cluster.local_mounts and \
-               nfs_share in self.nfs_cluster.local_mounts[nfs_cluster_ip]:
+            if (nfs_cluster_ip in self.nfs_cluster.local_mounts
+                    and nfs_share in self.nfs_cluster.local_mounts[nfs_cluster_ip]):
                 return True
 
             ret, console = self.nfs_cluster.mount(nfs_cluster_ip, nfs_share)
@@ -523,8 +542,8 @@ class ClientApplication(object):
             else:
                 if ret is None:
                     return True
-                self.logger.error(
-                    "{}: NFS Mounting failed for {}:{}\n  {}".format(__file__, nfs_cluster_ip, path, console))
+                self.logger.error("{}: NFS Mounting failed for {}:{}\n  {}".format(
+                    __file__, nfs_cluster_ip, nfs_share, console))
 
         return False
 
@@ -573,8 +592,51 @@ class ClientApplication(object):
             return False
         return True
 
+    def check_and_stop_stale_processes_using_pgid(self):
+        app = f'{__file__}'
+        self_pgid = os.getpgid(os.getpid())
+        self.logger.info(f'Check for the stale process for {app} other than pgid {self_pgid}')
+        for proc in psutil.process_iter():
+            if app in proc.cmdline():
+                try:
+                    pgid = os.getpgid(proc.pid)
+                    if self_pgid == pgid:
+                        continue
+                    self.logger.info(f'Killing the stale process {app} with pgid {pgid}')
+                    os.killpg(pgid, signal.SIGKILL)
+                    break
+                except:
+                    self.logger.error(f'Exception in stopping process {proc.name()}')
+
+    def check_and_stop_process(self):
+        app = 'DM_ClientApplication'
+        retval = 0
+        self_pgid = os.getpgid(os.getpid())
+        self.logger.info(f'Check for the stale process for {app} other than pgid {self_pgid}')
+        for proc in psutil.process_iter():
+            if app in proc.cmdline():
+                try:
+                    pgid = os.getpgid(proc.pid)
+                    if self_pgid == pgid:
+                        continue
+                    ppid = proc.ppid()
+                    if pgid != ppid:
+                        continue
+                    self.logger.info(f'Killing the stale process {app} with pgid {pgid} - PID {proc.pid} PPID {ppid}')
+                    proc.send_signal(signal.SIGINT)
+                    proc.wait()
+                except Exception as e:
+                    self.logger.error(f'Exception in stopping process {proc.name()} - {e}')
+                    retval = -1
+        return retval
+
 
 if __name__ == "__main__":
+    name = "DM_ClientApplication"
+    prctl.set_name(name)
+    prctl.set_proctitle(name)
+    signal_handler = SignalHandler()
+
     params = ClientApplicationArgumentParser()
 
     if "config" not in params:
@@ -584,12 +646,19 @@ if __name__ == "__main__":
     client_config = config.get("client", {})
 
     ca = ClientApplication(params["client_id"], config)
+    if 'stop' in params and params['stop']:
+        # Send signal SIGINT to DM_ClientApplication process so that
+        # it stops all the child processes and exit
+        ret = ca.check_and_stop_process()
+        ca.stop()
+        sys.exit(ret)
     ca.start()
+    signal_handler.add_fn(ca.stop)
+    signal_handler.initiate()
     ca.logger.info("CONFIG:{}".format(config))
     ca.logger.info("Starting client application ...")
 
-    while True:
-
+    while not ca.event.is_set():
         if ca.index_data_receive_completed.value and ca.operation_status_send_completed.value:
             # Un-mount local NFS shares
             while ca.nfs_share_list.qsize() > 0:
@@ -612,20 +681,18 @@ if __name__ == "__main__":
             #    break
             pass
 
-        time.sleep(1)
+        ca.event.wait(1)
 
     ca.logger.info("Stopping client application")
-    ca.stop_logging()
-    # ca.stop()
+    # ca.stop_logging()
+    ca.stop()
     print("INFO: Stopped client application")
 
     # Stop execution
-    ## Received the instruction from master that all data has been sent
-    ## Process all outstanding data from message queue
-    ## Stop all worker processes
-    ## Stop Status process which sends message to Master once all the status is send.
-    ### Send a message to master that closing client application.
-    ## Stop logger process
-    ### Check all outstanding logging message is written to a file./var/log/client_application.log
-
-    ### 10.110.
+    # Received the instruction from master that all data has been sent
+    # Process all outstanding data from message queue
+    # Stop all worker processes
+    # Stop Status process which sends message to Master once all the status is send.
+    # Send a message to master that closing client application.
+    # Stop logger process
+    # Check all outstanding logging message is written to a file./var/log/client_application.log
