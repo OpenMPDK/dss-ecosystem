@@ -75,6 +75,7 @@ class Monitor(object):
         self.operation_start_time = kwargs["operation_start_time"]
         self.ip_address_family = self.config["ip_address_family"]
         self.standalone = kwargs["standalone"]
+        self.dryrun = kwargs["dryrun"]
 
         if not self.standalone:
             self.status_queue = Queue()
@@ -545,7 +546,7 @@ class Monitor(object):
                             prefix, self.prefix_index_data[prefix]["files"]))
                         self.resume_prefix_dir_keys_file_handle.writelines([prefix, '\n'])
                         self.resume_prefix_dir_keys_file_handle.flush()
-                elif self.operation.upper() in ["DEL"]:
+                elif self.operation.upper() in ["DEL"] and not self.dryrun:
                     if self.prefix_index_data_persist[prefix]["files"] == processed_prefix[prefix]["success"]:
                         prefix_dir_deleted.append(prefix)
 
@@ -608,7 +609,7 @@ class Monitor(object):
                     original_file_size_in_byte += value["size"]
 
         #  Update or Remove metadata-persistent-index file.
-        if self.operation.upper() == "DEL" and self.prefix_index_data_persist:
+        if self.operation.upper() == "DEL" and not self.dryrun and self.prefix_index_data_persist:
             for prefix in prefix_dir_deleted:
                 if prefix in self.prefix_index_data_persist:
                     del self.prefix_index_data_persist[prefix]
