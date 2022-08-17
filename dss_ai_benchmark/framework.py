@@ -1,14 +1,4 @@
-
-
 from worker import Worker
-
-
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
-
-# PyTorch library
-from torch.utils.data import DataLoader
-
 
 # from dataset import DataSet, TorchImageClassificationDataset
 from dataset import pytorch_dataset
@@ -18,6 +8,18 @@ import numpy as np
 # from models import NeuralNetwork, Net
 from models import pytorch
 from training import CustomTrain
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
+
+# PyTorch library
+from torch.utils.data import DataLoader
+import torch
+import re
+import collections
+from torch._six import string_classes
+
+np_str_obj_array_pattern = re.compile(r'[SaUO]')
 
 
 class DNNFramework(object):
@@ -82,7 +84,7 @@ class DNNFramework(object):
         for index in range(2):
             self.metrics.append([])
         # Update metrics
-        self.metrics[0] = ["dl_workers", "listing_workers", "listing_time", "max_batch_size", "batch_size"]
+        self.metrics[0] = ["dl_workers", "listing_workers", "listing_time (Sec)", "max_batch_size", "batch_size"]
         self.metrics[1] = [str(self.dataset.data_loader_workers),
                            str(self.dataset.max_workers),
                            str(self.dataset.listing_time),
@@ -177,6 +179,10 @@ class PyTorch(DNNFramework):
         self.distributed_data_parallel = self.framework["PyTorch"]["distributed_data_parallel"]
         self.logger.info("Using PyTorch v{}".format(torch.__version__))
 
+        self.default_collate_err_msg_format = (
+            "default_collate: batch must contain tensors, numpy arrays, numbers, "
+            "dicts or lists; found {}")
+
     def initialize(self):
         """
         Initialize the framework with creating dataset, dnn model and compiling a model.
@@ -197,6 +203,7 @@ class PyTorch(DNNFramework):
     def create_data_loader(self):
         self.train_dataloader = DataLoader(self.dataset,
                                            batch_size=self.batch_size,
+                                           collate_fn=self.collate_batch,
                                            shuffle=self.data_loader_params["shuffle"],
                                            prefetch_factor=self.data_loader_params["prefetch_factor"],
                                            persistent_workers=self.data_loader_params["persistent_workers"],
@@ -207,6 +214,49 @@ class PyTorch(DNNFramework):
 
         self.logger.info("DataLoader initialized with workers:{}, max_batch_size:{}, batch_size:{}".format(
             self.data_loader_params["num_workers"], self.max_batch_size, self.batch_size))
+
+    def collate_batch(self, batch):
+        elem = batch[0]
+        elem_type = type(elem)
+        if isinstance(elem, torch.Tensor):
+            out = None
+            if torch.utils.data.get_worker_info() is not None:
+                # If we're in a background process, concatenate directly into a
+                # shared memory tensor to avoid an extra copy
+                numel = sum(x.numel() for x in batch)
+                storage = elem.storage()._new_shared(numel)
+                out = elem.new(storage)
+            return torch.stack(batch, 0, out=out)
+        elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
+                and elem_type.__name__ != 'string_':
+            if elem_type.__name__ == 'ndarray' or elem_type.__name__ == 'memmap':
+                # array of string classes and object
+                if np_str_obj_array_pattern.search(elem.dtype.str) is not None:
+                    raise TypeError(self.default_collate_err_msg_format.format(elem.dtype))
+
+                return self.collate_batch([torch.as_tensor(b) for b in batch])
+            elif elem.shape == ():  # scalars
+                return torch.as_tensor(batch)
+        elif isinstance(elem, float):
+            return torch.tensor(batch, dtype=torch.float64)
+        elif isinstance(elem, int):
+            return torch.tensor(batch)
+        elif isinstance(elem, string_classes):
+            return batch
+        elif isinstance(elem, collections.abc.Mapping):
+            return {key: self.collate_batch([d[key] for d in batch]) for key in elem}
+        elif isinstance(elem, tuple) and hasattr(elem, '_fields'):  # namedtuple
+            return elem_type(*(self.collate_batch(samples) for samples in zip(*batch)))
+        elif isinstance(elem, collections.abc.Sequence):
+            # check to make sure that the elements in batch have consistent size
+            it = iter(batch)
+            elem_size = len(next(it))
+            if not all(len(elem) == elem_size for elem in it):
+                raise RuntimeError('each element in list of batch should be of equal size')
+            transposed = zip(*batch)
+            return [self.collate_batch(samples) for samples in transposed]
+
+        raise TypeError(self.default_collate_err_msg_format.format(elem_type))
 
     def create_model(self):
         """
