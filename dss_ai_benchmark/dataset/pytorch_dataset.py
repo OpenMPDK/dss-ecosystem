@@ -38,7 +38,8 @@ class RandomAccessDataset(Dataset):
         # Read config
         self.config_dataset = config["dataset"]
         self.categories = self.config_dataset["label"]
-        self.image_dimension = self.config_dataset["image_dimension"]  # height, width of image
+        self.image_dimension = self.config_dataset["image_dimension"]   # height, width of image
+        self.avg_image_size = self.config_dataset["avg_image_size"]     # avg disk space occupied by an image
         self.max_workers = self.config["execution"]["workers"]
         self.data_loader_workers = self.config["framework"]["PyTorch"]["DataLoader"]["num_workers"]
         self.max_object_size = int(self.config["framework"]["max_object_size"])
@@ -87,13 +88,12 @@ class RandomAccessDataset(Dataset):
         # self.logger.info("WorkerID: {}, {}".format(worker_info.id,worker_info))
         image_name_label = self.images[index]
         image_label = image_name_label[1]
-        image_ndarray = self.data_source(image=image_name_label,
-                                         worker_id=worker_info.id)  # Already converted using cv2.imread
+        image_ndarray, img_read_time = self.data_source(image=image_name_label, worker_id=worker_info.id)  # Already converted using cv2.imread
 
         if self.transform is not None:
             image_ndarray = self.tansform(image_ndarray)
 
-        return image_ndarray, image_label
+        return image_ndarray, image_label, img_read_time
 
     def get_image_names(self):
         """
@@ -172,9 +172,17 @@ class RandomAccessDataset(Dataset):
         """
         image = kwargs["image"]
         image_path = image[0]  # (image1,0) => (<image_name>,<Category Index>)
+
+        start_time = time.monotonic()
         img_ndarray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)  # Read using CV2
+        time_delta = time.monotonic() - start_time
+
         img_ndarray = cv2.resize(img_ndarray, self.image_dimension)
-        return img_ndarray
+
+        with self.dataset_size_in_bytes.get_lock():
+            self.dataset_size_in_bytes.value += int(self.avg_image_size)
+
+        return img_ndarray, time_delta
 
     def read_s3_object(self, **kwargs):
         """

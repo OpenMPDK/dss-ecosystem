@@ -43,7 +43,11 @@
                "access": {"random": true, "sequential":  false},
                "type":  "image",
                "label": ["daisy", "dandelion", "roses", "sunflowers", "tulips"],
-               "image_dimension": [32,32]
+               "image_dimension": [32,32],
+
+               "__comment__": "Below line specifies the average image file size in 'KB'; has been included --",
+               "__comment__": "-- to avoid extra file reads to extract the dataset size.",
+               "avg_image_size": 62
               },
   "storage": {
       "format": "s3",

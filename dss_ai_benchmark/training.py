@@ -1,9 +1,12 @@
 
 from abc import abstractmethod, abstractproperty
+import numpy as np
 
 # Torch Libraries
+import torch
 import torch.optim as optimization
 import torchvision.transforms as transforms
+
 import time
 
 
@@ -22,6 +25,7 @@ class DNNTrain(object):
         self.max_batch_size = self.framework["max_batch_size"]
         self.image_dimension = self.config["dataset"]["image_dimension"]
         self.train_dataloader = kwargs["dataloader"]
+        self.num_workers = self.config["framework"]["PyTorch"]["DataLoader"]["num_workers"]
 
         # Metrics
         self.metrics = kwargs["metrics"]
@@ -65,15 +69,20 @@ class RandomAccessDatasetTrain(DNNTrain):
         optimizer = optimization.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
         start_time = time.monotonic()
         # Add metrics header
-        self.metrics.append(["time", "dataset_size", "bw"])
+        self.metrics.append(["num_epochs", "total_time (Sec)", "dataset_size (MBytes)", "bw (MB/Sec)", "dataset_read_time (Sec)"])
+        tot_read_time, dataload_time, epoch_bw = [], [], []
         for epoch in range(self.epochs):
             running_loss = 0.0
             # Following line returns image, label tensor.
             self.train_dataloader.dataset.dataset_size_in_bytes.value = 0
             epoch_start_time = time.monotonic()
+            epoch_read_time = 0
             for batch_index, data in enumerate(self.train_dataloader, 0):
-                images, labels = data
+                images, labels, read_times = data
                 images = images.float()  # Convert to float.
+
+                epoch_read_time += torch.mean(read_times).item()
+
                 # Zero the parameter gradient
                 optimizer.zero_grad()
 
@@ -88,16 +97,23 @@ class RandomAccessDatasetTrain(DNNTrain):
                 if batch_index % self.max_batch_size == 0:
                     self.logger.info(f'Epoch:{epoch + 1}, BatchIndex:{batch_index} loss: {running_loss / self.max_batch_size:.3f}')
                     running_loss = 0.0
-            dataload_time = round((time.monotonic() - epoch_start_time), 2)
+
+            tot_read_time.append(round(epoch_read_time, 4))
+            dload_time = round((time.monotonic() - epoch_start_time), 2)
+            dataload_time.append(dload_time)
             dataset_size_mb = round((self.train_dataloader.dataset.dataset_size_in_bytes.value / 1024), 2)
-            epoch_bw = round((dataset_size_mb / dataload_time), 2)
-            self.metrics.append([str(dataload_time), str(dataset_size_mb), str(epoch_bw)])
+            epoch_bw.append(round((dataset_size_mb / dload_time), 2))
+        self.metrics.append([str(self.epochs).replace(',', ';'), str(dataload_time).replace(',', ';'),
+                             str(dataset_size_mb).replace(',', ';'),
+                             str(epoch_bw).replace(',', ';'), str(tot_read_time).replace(',', ';')])
         total_time = time.monotonic() - start_time
         bw = (self.train_dataloader.dataset.dataset_size_in_bytes.value / 1024) / total_time
         train_summary = "** Train Summary **\n"
         train_summary += "\t Epochs:{}, BatchSize:{}, MaxBatchSize:{}\n".format(self.epochs, self.batch_size, self.max_batch_size)
-        train_summary += "\t Time:{:.2f} Sec, Detaset Size:{} MBytes, BW:{:.2f} MiB/Sec".format(total_time,
-                                                                                                self.train_dataloader.dataset.dataset_size_in_bytes.value, bw)
+        train_summary += "\t Loading + Training Time:{:.2f} Sec, Detaset Size:{} KBytes, BW:{:.2f} MiB/Sec, " \
+                         "Total Read Time:{} Secs\n".format(total_time,
+                                                            self.train_dataloader.dataset.dataset_size_in_bytes.value,
+                                                            bw, tot_read_time)
         self.logger.info(train_summary)
 
 
