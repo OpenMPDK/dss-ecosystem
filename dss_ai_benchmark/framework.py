@@ -1,5 +1,14 @@
 from worker import Worker
 
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
+
+# PyTorch library
+import torch
+from torchvision.models import resnet50
+from torch.utils.data import DataLoader
+
 # from dataset import DataSet, TorchImageClassificationDataset
 from dataset import pytorch_dataset
 from datetime import datetime
@@ -32,7 +41,7 @@ class DNNFramework(object):
 
         self.framework = config.get("framework", {})
         self.name = self.framework.get("name", None)
-        self.categories = config["dataset"]["label"]
+        self.categories = self.config["dataset"][config["dataset"]["choice"]]["label"]
 
         # DNN Parameters
         self.epochs = self.framework["epochs"]
@@ -40,8 +49,8 @@ class DNNFramework(object):
         self.max_batch_size = self.framework["max_batch_size"]
 
         self.model = None
-        self.model_name = self.config["model"]["name"]
-        self.image_dimension = config["dataset"]["image_dimension"]
+        self.model_name = self.config["model"]["choice"]
+        self.image_dimension = self.config["dataset"][config["dataset"]["choice"]]["image_dimension"]
 
         # Computation
         self.device = config["device"].lower()  # GPU /CPU
@@ -174,10 +183,21 @@ class PyTorch(DNNFramework):
 
     def __init__(self, config, logger):
         import torch
+        from torchvision import transforms
+
         DNNFramework.__init__(self, config, logger)
         self.data_loader_params = self.framework["PyTorch"]["DataLoader"]
         self.distributed_data_parallel = self.framework["PyTorch"]["distributed_data_parallel"]
         self.logger.info("Using PyTorch v{}".format(torch.__version__))
+        self.config_mean = config["dataset"][config["dataset"]["choice"]]["mean"]
+        self.config_std = config["dataset"][config["dataset"]["choice"]]["std"]
+        self.train_dataloader = None
+
+        self.transforms = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=self.config_mean, std=self.config_std)
+        ])
 
         self.default_collate_err_msg_format = (
             "default_collate: batch must contain tensors, numpy arrays, numbers, "
@@ -197,8 +217,10 @@ class PyTorch(DNNFramework):
         Create custom dataset.
         :return:
         """
-        custom_dataset = pytorch_dataset.CustomDataset(config=self.config, logger=self.logger)
+        custom_dataset = pytorch_dataset.CustomDataset(transforms=self.transforms, config=self.config,
+                                                       logger=self.logger)
         self.dataset = custom_dataset.get_dataset()
+        self.logger.info(f"Custom Dataset initialized, length: {len(self.dataset)}....")
 
     def create_data_loader(self):
         self.train_dataloader = DataLoader(self.dataset,
@@ -264,10 +286,21 @@ class PyTorch(DNNFramework):
         :return:
         """
         self.logger.info("Creating AI model! - device:{}".format(self.device))
+
+        # load the ResNet50 network
+        resnet = resnet50(pretrained=True)
+
+        # freeze all ResNet50 layers, so they will *not* be updated during the training process
+        for param in resnet.parameters():
+            param.requires_grad = False
+
         torch_model = pytorch.Model(name=self.model_name,
+                                    baseModel=resnet,
+                                    num_classes=len(self.categories),
                                     image_dimension=self.image_dimension,
                                     device=self.device,
                                     logger=self.logger)
+
         self.model = torch_model.get()
 
         # self.model = pytorch.Model(self.image_dimension).to(self.device)
