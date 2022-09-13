@@ -5,7 +5,10 @@ import tensorflow as tf
 import cv2
 import random
 import numpy as np
+from tqdm import tqdm
+from imutils import paths
 from datetime import datetime
+
 from s3_client import S3
 # from dss_client import DssClientLib
 import glob
@@ -36,7 +39,7 @@ class RandomAccessDataset(Dataset):
         self.logger = logger
 
         # Read config
-        self.config_dataset = config["dataset"]
+        self.config_dataset = config["dataset"][config["dataset"]["choice"]]
         self.categories = self.config_dataset["label"]
         self.image_dimension = self.config_dataset["image_dimension"]   # height, width of image
         self.avg_image_size = self.config_dataset["avg_image_size"]     # avg disk space occupied by an image
@@ -88,7 +91,8 @@ class RandomAccessDataset(Dataset):
         # self.logger.info("WorkerID: {}, {}".format(worker_info.id,worker_info))
         image_name_label = self.images[index]
         image_label = image_name_label[1]
-        image_ndarray, img_read_time = self.data_source(image=image_name_label, worker_id=worker_info.id)  # Already converted using cv2.imread
+        image_ndarray, img_read_time = self.data_source(image=image_name_label,
+                                                        worker_id=worker_info.id)  # Already converted using cv2.imread
 
         if self.transform is not None:
             image_ndarray = self.tansform(image_ndarray)
@@ -251,7 +255,7 @@ class RandomAccessDataset(Dataset):
                 self.logger.info("Cleared page cache ...")
             else:
                 self.logger.error("Unable to clear pagecache - ret:{},console:{}".format(ret, console))
-            self.data_dirs = storage_config[self.storage_format]["data_dir"]
+            self.data_dirs = storage_config[self.storage_format][storage_config[self.storage_format]["choice"]]["data_dir"]
             self.data_source = self.read_file_system_data
 
         self.logger.info("Data source:{}, format:{}{}".format(self.storage_name, self.storage_format, data_source_summary))
@@ -279,8 +283,8 @@ class RandomAccessDataset(Dataset):
 
 class PythonReadDataset(RandomAccessDataset):
 
-    def __init__(self, config={}, logger=None):
-        super(PythonReadDataset, self).__init__(transform=None,
+    def __init__(self, transforms=None, config={}, logger=None):
+        super(PythonReadDataset, self).__init__(transform=transforms,
                                                 config=config,
                                                 logger=logger)
 
@@ -328,8 +332,8 @@ class PythonReadDataset(RandomAccessDataset):
 
 class PythonReadDatasetToDevNull(RandomAccessDataset):
 
-    def __init__(self, config={}, logger=None):
-        super(PythonReadDatasetToDevNull, self).__init__(transform=None,
+    def __init__(self, transforms=None, config={}, logger=None):
+        super(PythonReadDatasetToDevNull, self).__init__(transform=transforms,
                                                          config=config,
                                                          logger=logger)
 
@@ -355,8 +359,8 @@ class TorchImageClassificationDataset(RandomAccessDataset):
     Each functions in the override section can be overide
     """
 
-    def __init__(self, config={}, logger=None):
-        super(TorchImageClassificationDataset, self).__init__(transform=None,
+    def __init__(self, transforms=None, config={}, logger=None):
+        super(TorchImageClassificationDataset, self).__init__(transform=transforms,
                                                               config=config,
                                                               logger=logger)
 
@@ -416,14 +420,107 @@ class SequentialAccessDataset(Dataset):
         pass
 
 
+class TorchObjectDetectionDataset(RandomAccessDataset):
+    """
+    User defined dataset class. The base class has all default functionalities
+    Each functions in the override section can be overidden
+    """
+
+    def __init__(self, transforms=None, config={}, logger=None):
+        super(TorchObjectDetectionDataset, self).__init__(transform=transforms,
+                                                          config=config,
+                                                          logger=logger)
+        self.tensors = self.get_tensors()
+
+    def __getitem__(self, index):
+
+        image = self.tensors[0][index]
+        label = self.tensors[1][index]
+        bbox = self.tensors[2][index]
+        img_read_time = self.tensors[3][index]
+
+        # transpose the image such that its channel dimension becomes the leading one,
+        # as accepted by the model to be used.
+        image = image.permute(2, 0, 1)
+
+        # check to see if we have any image transformations to apply and if so, apply them
+        if self.transform:
+            image = self.transform(image)
+
+        with self.dataset_size_in_bytes.get_lock():
+            self.dataset_size_in_bytes.value += int(self.avg_image_size)
+
+        # return a tuple of the images, labels, and bounding box coordinates
+        return image, label, bbox, img_read_time
+
+    def __len__(self):
+        return self.tensors[0].size(0)
+
+    def get_tensors(self):
+        self.logger.info("\nReading all the different objects from each of those listed images....")
+
+        # grab the image, label, and its bounding box coordinates
+
+        images, labels, bboxes, read_times = [], [], [], []
+        for dirs in (
+                self.config["storage"][self.config["storage"]["format"]][self.config["storage"][self.config["storage"]["format"]]["choice"]]["data_dir"]):
+            for path in tqdm([f for f in paths.list_files(dirs, validExts='.txt')]):
+                img_file = [file for file in paths.list_files(dirs, validExts='.jpg') if
+                            path.split('.')[0].split('/')[-1] in file][0]
+
+                with open(path) as file:
+                    rows = file.read()
+                    rows = rows.strip().split("\n")
+
+                for row in rows:
+                    row = row.split(' ')
+                    (label, XMin, YMin, XMax, YMax) = row
+
+                    label = self.categories.index(str(label))
+
+                    start = time.monotonic()
+                    image = cv2.imread(img_file)
+                    read_time = (time.monotonic() - start)
+                    (h, w) = image.shape[:2]
+
+                    # scale the bounding box coordinates relative to the spatial
+                    # dimensions of the input image
+                    startX = float(XMin) / w
+                    startY = float(YMin) / h
+                    endX = float(XMax) / w
+                    endY = float(YMax) / h
+
+                    # load the image and preprocess it
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    image = cv2.resize(image, tuple(self.config_dataset["image_dimension"]))
+
+                    images.append(image)
+                    labels.append(label)
+                    bboxes.append((startX, startY, endX, endY))
+                    read_times.append(read_time)
+
+        images = np.array(images, dtype="float32")
+        labels = np.array(labels)
+        bboxes = np.array(bboxes, dtype="float32")
+        read_times = np.array(read_times, dtype="float32")
+        self.logger.info("Individual lists converted to NumPy arrays....")
+
+        # convert NumPy arrays to PyTorch tensors
+        images, labels, bboxes, read_times = torch.tensor(images), torch.tensor(labels), torch.tensor(bboxes), torch.tensor(read_times)
+        self.logger.info("NumPy arrays converted to individual tensors...")
+
+        return images, labels, bboxes, read_times
+
+
 class CustomDataset(object):
-    def __init__(self, config, logger):
+    def __init__(self, transforms=None, config={}, logger=None):
         self.config = config
         self.logger = logger
-        self.random_access_dataset = config["dataset"]["access"]["random"]
-        self.name = config["dataset"]["name"]
+        self.name = self.config["dataset"]["choice"]
+        self.random_access_dataset = self.config["dataset"][self.name]["access"]["random"]
         self.class_name = self.get_class_name()
         self.dataset = None
+        self.transforms = transforms
         # self.logger.info(self.class_name)
 
     def get_class_name(self):
@@ -440,7 +537,7 @@ class CustomDataset(object):
     def get_dataset(self):
         self.logger.info("INFO: Using custom dataset - {}->{}".format(self.name, self.class_name))
         if self.random_access_dataset:
-            return self.class_name(self.config, self.logger)
+            return self.class_name(self.transforms, self.config, self.logger)
         else:
             # This section should be for sequential read
             pass

@@ -1,7 +1,9 @@
 import torch
 from torch import nn
+
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+from torchvision.models import resnet50
 import torch.nn.functional as F
 
 from abc import abstractmethod
@@ -14,6 +16,8 @@ class Model(object):
     """
     def __init__(self, **kwargs):
         self.name = kwargs["name"]
+        self.baseModel = kwargs["baseModel"]
+        self.num_classes = kwargs["num_classes"]
         self.device = kwargs["device"]
         self.logger = kwargs["logger"]
         self.image_dimension = kwargs["image_dimension"]
@@ -29,9 +33,10 @@ class Model(object):
         return None
 
     def get(self):
-        self.logger.info("INFO: Creating neural network model instance - {}=>{}".format(self.name, self.model_class_name))
+        self.logger.info(
+            "INFO: Creating neural network model instance - {}=>{}".format(self.name, self.model_class_name))
         if self.model_class_name:
-            return self.model_class_name(self.image_dimension).to(self.device)
+            return self.model_class_name(self.baseModel, self.num_classes).to(self.device)
 
 
 class NeuralNetwork(nn.Module):
@@ -118,3 +123,51 @@ class ConvNet(NeuralNetwork):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
+
+
+class ObjectDetector(nn.Module):
+
+    def __init__(self, baseModel, numClasses):
+        super(ObjectDetector, self).__init__()
+
+        # initialize the base model and the number of classes
+        self.baseModel = baseModel
+        self.numClasses = numClasses
+
+        # build the regressor head for outputting the bounding box coordinates
+        self.regressor = nn.Sequential(
+            nn.Linear(baseModel.fc.in_features, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 4),
+            nn.Sigmoid()
+        )
+
+        # build the classifier head to predict the class labels
+        self.classifier = nn.Sequential(
+            nn.Linear(baseModel.fc.in_features, 512),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(512, self.numClasses)
+        )
+
+        # set the classifier of our base model to produce outputs
+        # from the last convolution block
+        self.baseModel.fc = nn.Identity()
+
+    def forward(self, x):
+        # pass the inputs through the base model and then obtain
+        # predictions from two different branches of the network
+
+        features = self.baseModel(x)
+        bboxes = self.regressor(features)
+        classLogits = self.classifier(features)
+
+        # return the outputs as a tuple
+        return bboxes, classLogits

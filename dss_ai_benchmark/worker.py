@@ -145,7 +145,8 @@ class Worker(object):
                 #    for file in files:
                 #        file_path = root_path + "/" + file
                 #        self.images.append((file_path, category_index))
-                path_list = glob.glob(category_path + '/*', recursive=False)
+                path_list = [file for file in glob.glob(category_path + '/*', recursive=False)
+                             if not os.path.isdir(file)]
                 for image_path in path_list:
                     images.append((image_path, category_index))
             else:

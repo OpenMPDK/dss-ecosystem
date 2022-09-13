@@ -32,23 +32,59 @@
   },
   "device": "CPU",
   "model":{
-    "name": "ConvNet",
-    "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
+    "choice": "ConvNet",
+
+    "ConvNet": {
+        "loss_function": "<Specify Loss Function ex.[CorssEntrophy]"
+    },
+    "ObjectDetector": {
+        "loss_function": ["MSE", "CrossEntropy"]
+    }
   },
   "training":{
-    "name": "RandomAccessDatasetTrain"
+      "choice": "RandomAccessDatasetTrain",
+
+      "RandomAccessDatasetTrain": {
+          "__comment__": "Whether we are going for a Random access or Sequential access",
+          "access_method": "Random"
+      },
+      "ObjectDetectionDatasetTrain": {
+          "__comment__": "Specify the Learning Rate, the initial Loss weights",
+          "init_lr": 1e-4,
+          "label_loss": 1.0,
+          "bbox_loss": 1.0
+      }
   },
   "dataset" : {
-               "name": "TorchImageClassificationDataset",
-               "access": {"random": true, "sequential":  false},
-               "type":  "image",
-               "label": ["daisy", "dandelion", "roses", "sunflowers", "tulips"],
-               "image_dimension": [32,32],
+               "choice": "TorchImageClassificationDataset",
 
-               "__comment__": "Below line specifies the average image file size in 'KB'; has been included --",
-               "__comment__": "-- to avoid extra file reads to extract the dataset size.",
-               "avg_image_size": 62
-              },
+               "TorchImageClassificationDataset": {
+                    "access": {"random": true, "sequential": false},
+                    "type": "image",
+                    "label": ["daisy", "dandelion", "roses", "sunflowers", "tulips"],
+                    "image_dimension": [32, 32],
+
+                    "__comment__": "Below line specifies the average image file size in 'KB'; has been included --",
+                    "__comment__": "-- to avoid extra file reads to extract the dataset size.",
+                    "avg_image_size": 62
+               },
+               "TorchObjectDetectionDataset": {
+                    "access": {"random": true, "sequential": false},
+                    "type": "image",
+                    "label": ["Car", "Motorcycle", "Airplane", "Bus", "Truck"],
+
+                    "__comment__": "Specify ImageNet compatible image dimensions",
+                    "image_dimension": [224, 224],
+
+                    "__comment__": "Below line specifies the average image file size in 'KB'; has been included --",
+                    "__comment__": "-- to avoid extra file reads to extract the dataset size.",
+                    "avg_image_size": 315,
+
+                    "__comment__": "specify ImageNet mean and standard deviation",
+                    "mean": [0.485, 0.456, 0.406],
+                    "std": [0.229, 0.224, 0.225]
+               }
+  },
   "storage": {
       "format": "s3",
       "name": "dss",
@@ -78,7 +114,19 @@
         }
       },
       "fs": {
-         "data_dir": ["/nfs_share1"]
+         "choice": "ConvNet",
+         "ConvNet": {
+           "data_dir": ["/nfs_share1"]
+         },
+         "ObjectDetector": {
+           "data_dir": ["/Dss_Datasets/google_open_images/OID/Dataset"],
+           "base_output_dir": "object_detector_outputs",
+           "saved_model_name": "detector.pth",
+           "le_name": "label_encoder.pickle",
+           "plots_path": "object_detector_outputs/plots",
+           "predictions_path": "object_detector_outputs/predicted_images",
+           "test_paths": "object_detector_outputs/test_paths.txt"
+         }
       }
   },
   "metrics": {
