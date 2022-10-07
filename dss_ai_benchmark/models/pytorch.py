@@ -14,13 +14,20 @@ class Model(object):
     Create the model based on the specification from configuration file.
     DO NOT Touch
     """
+
     def __init__(self, **kwargs):
         self.name = kwargs["name"]
-        self.baseModel = kwargs["baseModel"]
         self.num_classes = kwargs["num_classes"]
         self.device = kwargs["device"]
         self.logger = kwargs["logger"]
         self.image_dimension = kwargs["image_dimension"]
+
+        # Load the pretrained network for object detection
+        self.baseModel = resnet50(pretrained=True)
+        # freeze all ResNet50 layers, so they will *not* be updated during the training process
+        for param in self.baseModel.parameters():
+            param.requires_grad = False
+
         self.model_class_name = self.get_class_name()
 
     def get_class_name(self):
@@ -36,7 +43,10 @@ class Model(object):
         self.logger.info(
             "INFO: Creating neural network model instance - {}=>{}".format(self.name, self.model_class_name))
         if self.model_class_name:
-            return self.model_class_name(self.baseModel, self.num_classes).to(self.device)
+            if str(self.name) == 'ObjectDetector':
+                return self.model_class_name(self.baseModel, self.num_classes).to(self.device)
+            else:
+                return self.model_class_name(self.image_dimension, self.logger).to(self.device)
 
 
 class NeuralNetwork(nn.Module):
@@ -66,10 +76,12 @@ class NeuralNetwork(nn.Module):
 
 class SequentialNet(NeuralNetwork):
 
-    def __init__(self, image_diments=()):
-        super(SequentialNet, self).__init__()
+    def __init__(self, image_diments=(), logger=None):
+        super(SequentialNet, self).__init__(logger=logger)
         self.input_image_height = int(image_diments[0])
-        self.input_image_weidth = int(image_diments[1])
+        self.input_image_width = int(image_diments[1])
+        self.logger = logger
+
         self.network()
 
     def network(self):
@@ -96,8 +108,9 @@ class ConvNet(NeuralNetwork):
     def __init__(self, image_diments=(), logger=None):
         super(ConvNet, self).__init__(logger=logger)
         self.input_image_height = int(image_diments[0])
-        self.input_image_weidth = int(image_diments[1])
+        self.input_image_width = int(image_diments[1])
         self.logger = logger
+
         self.network()
 
     def network(self):
@@ -112,7 +125,6 @@ class ConvNet(NeuralNetwork):
 
     def forward(self, x):
 
-        x = x.unsqueeze(1)
         # Max pooling over a (2,2) window ( Sub sampling ) of the output from first feature maps.
         x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
         # If the size is a square, you can specify with a single number
@@ -127,12 +139,10 @@ class ConvNet(NeuralNetwork):
 
 class ObjectDetector(nn.Module):
 
-    def __init__(self, baseModel, numClasses):
+    def __init__(self, baseModel=None, num_classes=0):
         super(ObjectDetector, self).__init__()
-
-        # initialize the base model and the number of classes
+        self.numClasses = num_classes
         self.baseModel = baseModel
-        self.numClasses = numClasses
 
         # build the regressor head for outputting the bounding box coordinates
         self.regressor = nn.Sequential(

@@ -35,7 +35,6 @@ The following are custom benchmark tools developed to measure performance of DSS
 A benchmark tool developed based on machine leaning (ML) framework such as PyTorch and TensorFlow to evaluate
 the read access performance of the DSS Object storage through ML model training.
 
-
 [DSS AI_benhcmark README](./dss_ai_benchmark/README.md)
 
 ### DSS s3-benchmark

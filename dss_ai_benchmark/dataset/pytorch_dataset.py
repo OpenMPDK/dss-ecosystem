@@ -182,6 +182,7 @@ class RandomAccessDataset(Dataset):
         time_delta = time.monotonic() - start_time
 
         img_ndarray = cv2.resize(img_ndarray, self.image_dimension)
+        img_ndarray = torch.tensor(img_ndarray).unsqueeze(0).numpy()
 
         with self.dataset_size_in_bytes.get_lock():
             self.dataset_size_in_bytes.value += int(self.avg_image_size)
