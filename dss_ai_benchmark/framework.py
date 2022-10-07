@@ -189,15 +189,18 @@ class PyTorch(DNNFramework):
         self.data_loader_params = self.framework["PyTorch"]["DataLoader"]
         self.distributed_data_parallel = self.framework["PyTorch"]["distributed_data_parallel"]
         self.logger.info("Using PyTorch v{}".format(torch.__version__))
-        self.config_mean = config["dataset"][config["dataset"]["choice"]]["mean"]
-        self.config_std = config["dataset"][config["dataset"]["choice"]]["std"]
         self.train_dataloader = None
 
-        self.transforms = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=self.config_mean, std=self.config_std)
-        ])
+        if "mean" in self.config["dataset"][config["dataset"]["choice"]]:
+            self.config_mean = self.config["dataset"][config["dataset"]["choice"]]["mean"]
+            self.config_std = self.config["dataset"][config["dataset"]["choice"]]["std"]
+            self.transforms = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=self.config_mean, std=self.config_std)
+            ])
+        else:
+            self.transforms = None
 
         self.default_collate_err_msg_format = (
             "default_collate: batch must contain tensors, numpy arrays, numbers, "
@@ -287,15 +290,7 @@ class PyTorch(DNNFramework):
         """
         self.logger.info("Creating AI model! - device:{}".format(self.device))
 
-        # load the ResNet50 network
-        resnet = resnet50(pretrained=True)
-
-        # freeze all ResNet50 layers, so they will *not* be updated during the training process
-        for param in resnet.parameters():
-            param.requires_grad = False
-
         torch_model = pytorch.Model(name=self.model_name,
-                                    baseModel=resnet,
                                     num_classes=len(self.categories),
                                     image_dimension=self.image_dimension,
                                     device=self.device,

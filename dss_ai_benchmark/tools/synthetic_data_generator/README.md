@@ -1,15 +1,16 @@
 # SyntheticDataGenerator
+
 A custom tool to generate synthetic data from a small dataset. The tool copy the data from source to destination.
 The source of data can be from a posix based file system or from S3 Object storage. Similarly, the destination
  either would be file system or S3 Object storage. A replication factor and the destination directories
- determines the overall size of the copied data in the destination. The tool preserve the 
- source directory structure in the destination. 
- 
+ determines the overall size of the copied data in the destination. The tool preserve the
+ source directory structure in the destination.
+
  Let say, source data size is = 1GiB, replication factor= 2, destination directories = 2
  Then each file of the source would be copied twice under a directory. As, the above example
- has 2 directories, then there would 2x2 = 4 copies of a source file. 
- 
- ```
+ has 2 directories, then there would 2x2 = 4 copies of a source file.
+
+ ```text
 Replication Factor: 2
 Source: dir1
 dir1/file[1,10]
@@ -20,6 +21,7 @@ data1/dir1/file[1,10]_[0,1]
 dir1/dir11/file[1,10]_[0,1]
 dir1/dir12/file[1,10]_[0,1]
 ```
+
 ## Setup and Installation
 
 Install the required libraries by running the following command in the node you are working on.
@@ -31,10 +33,12 @@ python3 -m pip install -r requirements.txt
 To work with dss_client lib, one require to install that library separately on the node.
 
 ## Configuration
+
 The user requires to set the source and destination path of data in the configuration file.
 The workers, determine how many parallel operations are to be performed for listing and copy.
-User should set source and destination data type. 
+User should set source and destination data type.
 Supported client_lib : "dss_client", "boto3"
+
 ```json
 {
   "workers": 5,
@@ -93,6 +97,7 @@ Supported client_lib : "dss_client", "boto3"
   "logging": { "path": "/var/log/dss", "level": "INFO"}
 }
 ```
+
 ## Logging
 
 Set the logging path in the following section.
@@ -102,7 +107,9 @@ Set the logging path in the following section.
 ```
 
 ## Execution
+
 Once all the configuration is done, run the tool as below.
+
 ```bash
 # Use configuration file from default location.
 python3 generate_data.py
@@ -115,7 +122,8 @@ sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 generate_data.py 
 ```
 
 ## Check all running process
-```
+
+```bash
 [user@node]$ ps -e | grep SDG
  1410 pts/0    00:00:00 SDG_logger
  1421 pts/0    00:00:17 SDG_worker_0
