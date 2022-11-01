@@ -1,7 +1,5 @@
 # dss-ecosystem
 
-hi
-
 DSS Ecosystem software consists of several software packages to interact with and benchmark DSS Object storage.
 
 ## DSS Client Library
