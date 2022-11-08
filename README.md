@@ -43,5 +43,3 @@ the read access performance of the DSS Object storage through ML model training.
 A customized benchmark tool based on the original [Wasabi s3-benchmark](https://github.com/wasabi-tech/s3-benchmark) tool.
 
 [DSS s3-benchmark README](./dss_s3benchmark/README.md)
-
-test
