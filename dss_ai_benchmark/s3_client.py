@@ -43,6 +43,8 @@ class S3:
         self.storage_name = kwargs["storage_name"]
         self.credentials = kwargs["credentials"]
         self.logger = kwargs["logger"]
+
+        self.s3_client = None
         self.get_s3_client()
 
     def get_s3_client(self):

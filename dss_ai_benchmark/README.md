@@ -10,10 +10,6 @@ As per the latest version of the tool, we have 2 projects live -- an Image Class
 - This tool initially was created with an Image Classification framework where user is supposed to provide a dataset for a few categories, train the model on that dataset and optional inference.
 - But now it has been expanded to include an Object Detection framework along with the existing Image Classification framework. This has been created keeping in mind the usage of a production-level framework to test out our performance metrics on! User needs to come up with 3-5 categories of objects, with their corresponding image dataset (containing more than at least 7000 images), along with their bounding-box coordinates (coordinates (x_min, y_min, x_max, y_max) on the image to tell the model where to locate the specific object), and feed them in a specific format to the tool -- which will then train and return a trained model which can be further used for inference.
 
-Pending works
-
-- Inference (Test data set and sample inference for end to end flow for the image classification project).
-
 ## 2. Setup and Installation
 
 Install the required libraries by running the following command in the node you are working on.
@@ -102,25 +98,53 @@ The custom usage requires user to update dataset, model and training in the **Co
   ```
 
 - Update the "Storage" section for the specific directories and/or files to be used corresponding to the project being run ("ConvNet" for Image Classification or "ObjectDetector" for Object Detection)
+  - In case of inputs from S3, update the section related to `s3` below -- like the "client_lib" to be used, the "bucket" name, the corresponding "prefixes" where the dataset is kept, etc (shown below) and also toggle the "format" & "name" attribute value between "fs", "nfs" and "s3", "dss" -- depending on the use case.  
 
   ```json
   "storage": {
-      "format": "s3",
-      "name": "dss",
+      "format": "s3",             <=== Update format
+      "name": "dss",              <=== Update name
       "s3": {
-        "bucket": "dss0",
-        "prefix": ["flower_photos/"],
-        ... .
+        "bucket": "dss0",               <==== Specify Bucket
+        "prefix": ["flower_photos/"],    <==== Specify prefix
+        "client_lib": {
+          "name": "boto3",               <=== Specify Client Lib
+          "dss_client": {"max_connections":25, "http_request_timeout_ms":0, "connect_timeout_ms":1000,
+                         "request_timeout_ms": 10000, "enable_tcp_keep_alive":true,
+                         "tcp_keep_alive_interval_ms":  1000, "object_keys_per_page_count":  1000,
+                         "endpoints_per_cluster": 256}
         },
-      "fs": {
-         "choice": "ConvNet",         <-- Update the choice here
+        "aws": {
+          "credentials": {
+            "region_name": "us-east-2",
+            "access_key": "access_key",
+            "secret_key": "secret_key"
+          }
+        },
+        "dss": {
+          "credentials": {                             <=== Specify endpoint & credentials
+            "endpoint": "http://10.1.51.107:9000",
+            "access_key": "minio",
+            "secret_key": "minio123"
+          }
+        }
+      },
+      "fs": {                                  <=== Update corresponding details here if working with Filesystem inputs
+         "choice": "ConvNet",
          "ConvNet": {
-           "data_dir": ["/nfs_share1"]    <-- Update path to the dataset if choice is Image Classification
+           "data_dir": ["/nfs_share1"],
+           "base_output_dir": "image_classifier_outputs",
+           "saved_model_name": "classifier.pt",
+           "predictions_path": "image_classifier_outputs/predicted_images"
          },
          "ObjectDetector": {
-           "data_dir": ["/Dss_Datasets/google_open_images/OID/Dataset"],   <-- Update path to the dataset if choice is Object Detection
+           "data_dir": ["/Dss_Datasets/google_open_images/OID/Dataset"],
            "base_output_dir": "object_detector_outputs",
-         ... .
+           "saved_model_name": "detector.pth",
+           "le_name": "label_encoder.pickle",
+           "plots_path": "object_detector_outputs/plots",
+           "predictions_path": "object_detector_outputs/predicted_images",
+           "test_paths": "object_detector_outputs/test_paths.txt"
          }
       }
   }
@@ -434,6 +458,55 @@ Update custom training class name as below.
 },
 ```
 
+### 5.8. Update Inference
+
+Just like the `ObjectDetection` project, the inference part of the `ImageClassifier` has also been updated in a separate standalone script -- `image_classifier_predict.py`.
+First to go for inference the Execution ***Config*** needs to be updated to `true`:
+
+```json
+ "execution":{
+    "workers": 10,  
+    "steps":{
+      "model": true,
+      "training": true,             
+      "inference": false,              <<=== Update "true" here
+      "metrics": false
+    }
+  },
+```
+
+-----------------------------------Run Instructions----------------------------------
+
+The above script can be run with test images present on Filesystem or S3.
+
+To run with test images from Filesystem:
+
+```commandline
+path]$ python3 image_classifier_predict.py --fs --input absolute/path/to/the/test/image.jpg
+```
+
+Or, for bulk image tests:
+
+```commandline
+path]$ python3 image_classifier_predict.py --fs --input 'absolute/path/to/the/text/file/containing/a/list/of/images.txt 
+```
+
+To run with test images from S3:
+
+```commandline
+path]$ python3 image_classifier_predict.py --s3 --input client_lib_name(dss_client / boto3):prefix/to/the/test/image.jpg\n '
+```
+
+Or, for bulk image tests:
+
+```commandline
+path]$ python3 image_classifier_predict.py --fs --input client_lib_name(dss_client / boto3):prefix/to/the/text/file/containing/a/list/of/images.txt\n'
+```
+
+**In case of bulk image tests with S3 inputs, please make sure that the "text" file' contains the list of the test images along with its full prefix.**
+
+The output images would be saved under `image_classifier_outputs/predicted_images` directory within same project directory (`dss_ai_benchmark/`).
+
 ## 6. Workings of the Object Detection project
 
 ### 6.1. Add Data source (Dataset)
@@ -456,7 +529,7 @@ Each of the above directories should have their corresponding images (1500 each 
 
 In addition, each of the above directories should also contain a subdirectory called ***Label***, which should have a list of `.txt` files with filenames same as each image filenames, present a directory above i.e. if there are 1500 images (.jpg) in `Dataset/Car` directory, there should be 1500 text files (.txt) in the `Dataset/Car/Label` directory, with the filenames being the same between the image & text files (like if image filename is `e652f30d67a222d6.jpg`, the corresponding text filename should be `e652f30d67a222d6.txt`). These text files contain the ***label*** and the ***bounding-box coordinates*** for each of the image (as per the filename). A sample text file content is shown below:
 
-```bash
+```commandline
 OID]$ ls -lrt Dataset/Car/e652f30d67a222d6.jpg
 -rwxrwxrwx 1 s.banerjee s.banerjee 269790 Jul 11  2018 Dataset/Car/e652f30d67a222d6.jpg
 OID]$
@@ -743,12 +816,35 @@ The **Config** file should be updated as below:
 Once the training is complete, we can try the optional step of checking on how our Object Detection model is performing on unseen data.
 
 A ***predict*** script `object_detector_predict.py` is added in the same project directory (`dss_ai_benchmark/`), which is a standalone script to provide inference on the trained model.
-This can be executed by:
 
-```bash
-dss_ai_benchmark]$ /usr/bin/python3 object_detector_predict.py --input <path_to_single_test_image.jpg>
-Or
-dss_ai_benchmark]$ /usr/bin/python3 object_detector_predict.py --input <path_to_txt_file_containing_absolute_paths_of_multiple_test_images_placed_one_below_the_other.txt>
+-----------------------------------Run Instructions----------------------------------
+
+The above script can be run with test images present on Filesystem or S3.
+
+To run with test images from Filesystem:
+
+```commandline
+path]$ python3 object_detector_predict.py --fs --input absolute/path/to/the/test/image.jpg
 ```
+
+Or, for bulk image tests:
+
+```commandline
+path]$ python3 object_detector_predict.py --fs --input 'absolute/path/to/the/text/file/containing/a/list/of/images.txt 
+```
+
+To run with test images from S3:
+
+```commandline
+path]$ python3 object_detector_predict.py --s3 --input client_lib_name(dss_client / boto3):prefix/to/the/test/image.jpg\n '
+```
+
+Or, for bulk image tests:
+
+```commandline
+path]$ python3 object_detector_predict.py --fs --input client_lib_name(dss_client / boto3):prefix/to/the/text/file/containing/a/list/of/images.txt\n'
+```
+
+**In case of bulk image tests with S3 inputs, please make sure that the "text" file' contains the list of the test images along with its full prefix.**
 
 The output images would be saved under `object_detector_outputs/predicted_images` directory within same project directory (`dss_ai_benchmark/`).

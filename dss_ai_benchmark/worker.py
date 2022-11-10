@@ -135,7 +135,7 @@ class Worker(object):
         images = []
         # Iterate over all specified the NFS paths/ all the prefixes.
         for category_path in self.data_dirs:
-            self.logger.debug("Worker-{}, Listing datadir/prefix - {}".format(self.id, category_path))
+            self.logger.info("Worker-{}, Listing datadir/prefix - {}".format(self.id, category_path))
             category = category_path.split("/")[-1]
             category_index = self.categories.index(category)
 
@@ -155,5 +155,7 @@ class Worker(object):
                 prefix = "{}/".format(category_path)
                 for object_keys in s3_client.listObjects(bucket=bucket, prefix=prefix):
                     for object_key in object_keys:
+                        if 'Label' in str(object_key):
+                            continue
                         images.append((object_key, category_index))
         return images
