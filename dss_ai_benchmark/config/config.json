@@ -116,7 +116,10 @@
       "fs": {
          "choice": "ConvNet",
          "ConvNet": {
-           "data_dir": ["/nfs_share1"]
+           "data_dir": ["/nfs_share1"],
+           "base_output_dir": "image_classifier_outputs",
+           "saved_model_name": "classifier.pt",
+           "predictions_path": "image_classifier_outputs/predicted_images"
          },
          "ObjectDetector": {
            "data_dir": ["/Dss_Datasets/google_open_images/OID/Dataset"],

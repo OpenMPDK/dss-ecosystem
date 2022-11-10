@@ -1,8 +1,8 @@
 from worker import Worker
 
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
 
 # PyTorch library
 import torch
@@ -18,8 +18,8 @@ import numpy as np
 from models import pytorch
 from training import CustomTrain
 
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
 
 # PyTorch library
 from torch.utils.data import DataLoader
@@ -320,4 +320,41 @@ class PyTorch(DNNFramework):
         Predict the category of an unknown image.
         :return:
         """
-        pass
+        if self.config["model"]["choice"] == "ObjectDetector":
+            self.logger.info(f'\n\nPLEASE NOTE: The corresponding Inference to this Object Detection framework'
+                             f' is NOT a part of this Benchmark script; a separate script has been created for the same'
+                             f': **object_detector_predict.py** (Present in this same project folder).'
+                             f'\n\n----------Run Instructions----------\n'
+                             f'The above script can be run with test images present on Filesystem or S3.\n\n'
+                             f'To run with test images from Filesystem:\n'
+                             f'$ python3 object_detector_predict.py --fs --input absolute/path/to/the/test/image.jpg\n'
+                             f'Or, for bulk image tests:\n'
+                             f'$ python3 object_detector_predict.py --fs --input '
+                             f'absolute/path/to/the/text/file/containing/a/list/of/images.txt '
+                             f'\n\nTo run with test images from S3:\n'
+                             f'$ python3 object_detector_predict.py --s3 --input client_lib_name(dss_client / '
+                             f'boto3):prefix/to/the/test/image.jpg\n '
+                             f'Or, for bulk image tests:\n'
+                             f'$ python3 object_detector_predict.py --fs --input client_lib_name(dss_client / '
+                             f'boto3):prefix/to/the/text/file/containing/a/list/of/images.txt\n'
+                             f'**In case of bulk image tests with S3 inputs, please make sure that the "text" file'
+                             f'contains the list of the test images along with its full prefix.\n\n')
+        else:
+            self.logger.info(f'\n\nPLEASE NOTE: The corresponding Inference to this Image Classification framework'
+                             f' is NOT a part of this Benchmark script; a separate script has been created for the same'
+                             f': **image_classifier_predict.py** (Present in this same project folder).'
+                             f'\n\n----------Run Instructions----------\n'
+                             f'The above script can be run with test images present on Filesystem or S3.\n\n'
+                             f'To run with test images from Filesystem:\n'
+                             f'$ python3 image_classifier_predict.py --fs --input absolute/path/to/the/test/image.jpg\n'
+                             f'Or, for bulk image tests:\n'
+                             f'$ python3 image_classifier_predict.py --fs --input '
+                             f'absolute/path/to/the/text/file/containing/a/list/of/images.txt '
+                             f'\n\nTo run with test images from S3:\n'
+                             f'$ python3 image_classifier_predict.py --s3 --input client_lib_name(dss_client / '
+                             f'boto3):prefix/to/the/test/image.jpg\n '
+                             f'Or, for bulk image tests:\n'
+                             f'$ python3 image_classifier_predict.py --fs --input client_lib_name(dss_client / '
+                             f'boto3):prefix/to/the/text/file/containing/a/list/of/images.txt\n'
+                             f'**In case of bulk image tests with S3 inputs, please make sure that the "text" file'
+                             f'contains the list of the test images along with its full prefix.\n\n')

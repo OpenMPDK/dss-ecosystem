@@ -10,7 +10,7 @@ from imutils import paths
 from datetime import datetime
 
 from s3_client import S3
-# from dss_client import DssClientLib
+from dss_client import DssClientLib
 import glob
 # from utils.utility import exception
 
@@ -124,6 +124,7 @@ class RandomAccessDataset(Dataset):
         category_paths = [[] for i in range(self.max_workers)]
 
         index = 0
+        self.logger.info(f'Data Dirs: {self.data_dirs}')
         for data_dir in self.data_dirs:
             for category in self.categories:
                 if index >= self.max_workers:
@@ -200,21 +201,26 @@ class RandomAccessDataset(Dataset):
         image = kwargs["image"]
         worker_id = kwargs["worker_id"]
         object_key = image[0]
-        image_buffer = None
+        buffer_length = None
+        read_time = 0.0
         image_2darray = []
         try:
             if self.s3_config["client_lib"]["name"] == "dss_client":
                 # image_buffer = np.asarray(bytearray( self.max_object_size )) # Used for getObjectNumpyBuffer
                 image_buffer = bytearray(self.max_object_size)  # Use that for getObjectBuffer
+                start = time.monotonic()
                 buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"], key=object_key,
                                                                      memory=image_buffer)
                 # image_numpy_array = image_buffer
                 image_numpy_array = memoryview(image_buffer)[0:buffer_length]
                 image_numpy_array = np.asarray(image_numpy_array)
+                read_time = time.monotonic() - start
             else:
+                start = time.monotonic()
                 image_buffer, buffer_length = self.s3_clients[worker_id].getObject(bucket=self.s3_config["bucket"],
                                                                                    key=object_key)
                 image_numpy_array = np.asarray(bytearray(image_buffer))
+                read_time = time.monotonic() - start
 
         except Exception as e:
             self.logger.excep(f"Exception:{e}")
@@ -223,9 +229,15 @@ class RandomAccessDataset(Dataset):
                 self.dataset_size_in_bytes.value += int(buffer_length / 1024)
 
             # Converts to image format
+            start = time.monotonic()
             image_2darray = cv2.imdecode(image_numpy_array, cv2.IMREAD_GRAYSCALE)
+            read_time += (time.monotonic() - start)
+
             image_2darray = cv2.resize(image_2darray, self.image_dimension)
-        return image_2darray
+
+            image_2darray = torch.tensor(image_2darray).unsqueeze(0).numpy()
+
+        return image_2darray, read_time
 
     def set_data_source(self):
         """
@@ -431,6 +443,14 @@ class TorchObjectDetectionDataset(RandomAccessDataset):
         super(TorchObjectDetectionDataset, self).__init__(transform=transforms,
                                                           config=config,
                                                           logger=logger)
+
+        if self.config["storage"]["format"].lower() == 's3':
+            self.dss_client = DssClientLib(credentials=self.credentials,
+                                           config=self.s3_config["client_lib"].get("dss_client", {}),
+                                           uuid=self.instance_id,
+                                           logger=self.logger)
+            self.boto_client = S3(storage_name=self.storage_name, credentials=self.credentials, logger=self.logger)
+
         self.tensors = self.get_tensors()
 
     def __getitem__(self, index):
@@ -463,13 +483,96 @@ class TorchObjectDetectionDataset(RandomAccessDataset):
         # grab the image, label, and its bounding box coordinates
 
         images, labels, bboxes, read_times = [], [], [], []
-        for dirs in (
-                self.config["storage"][self.config["storage"]["format"]][self.config["storage"][self.config["storage"]["format"]]["choice"]]["data_dir"]):
-            for path in tqdm([f for f in paths.list_files(dirs, validExts='.txt')]):
-                img_file = [file for file in paths.list_files(dirs, validExts='.jpg') if
-                            path.split('.')[0].split('/')[-1] in file][0]
 
-                with open(path) as file:
+        if self.config["storage"]["format"] == 'fs':
+            for dirs in (
+                    self.config["storage"][self.config["storage"]["format"]][
+                        self.config["storage"][self.config["storage"]["format"]]["choice"]]["data_dir"]):
+                for path in tqdm([f for f in paths.list_files(dirs, validExts='.txt')]):
+                    img_file = [file for file in paths.list_files(dirs, validExts='.jpg') if
+                                path.split('.')[0].split('/')[-1] in file][0]
+
+                    start = time.monotonic()
+                    image = cv2.imread(img_file)
+                    read_time = (time.monotonic() - start)
+                    (h, w) = image.shape[:2]
+
+                    # load the image and preprocess it
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    image = cv2.resize(image, tuple(self.config_dataset["image_dimension"]))
+
+                    with open(path) as file:
+                        rows = file.read()
+                        rows = rows.strip().split("\n")
+
+                    for row in rows:
+                        row = row.split(' ')
+                        (label, XMin, YMin, XMax, YMax) = row
+
+                        label = self.categories.index(str(label))
+
+                        # scale the bounding box coordinates relative to the spatial
+                        # dimensions of the input image
+                        startX = float(XMin) / w
+                        startY = float(YMin) / h
+                        endX = float(XMax) / w
+                        endY = float(YMax) / h
+
+                        images.append(image)
+                        labels.append(label)
+                        bboxes.append((startX, startY, endX, endY))
+                        read_times.append(read_time)
+        else:
+            read_time = 0.0
+            image = []
+            for img_label in tqdm(self.images):
+                img_path = img_label[0]
+
+                name = str(str(img_path).strip().split('/')[-1]).strip().split('.')[0]
+                coor_file = "/".join(str(img_path).strip().split('/')[:-1]) + '/Label/' + name + '.txt'
+
+                try:
+                    if self.s3_config["client_lib"]["name"] == "boto3":
+                        self.boto_client.getObjectToFile(bucket=self.s3_config["bucket"], key=coor_file,
+                                                         dest_file_path='/tmp')
+                    else:
+                        directory = os.path.dirname('/tmp/' + coor_file)
+                        if not os.path.exists(directory):
+                            os.makedirs(directory)
+                        self.dss_client.get_object(object_key=coor_file, dest_file_path='/tmp/' + coor_file)
+                except Exception as e:
+                    self.logger.info(f"Exception faced while fetching S3 object from {coor_file}: {e}")
+
+                try:
+                    if self.s3_config["client_lib"]["name"] == "dss_client":
+                        image_buffer = bytearray(self.max_object_size)  # Use that for getObjectBuffer
+                        start = time.monotonic()
+                        buffer_length = self.dss_client.getObject(bucket=self.s3_config["bucket"],
+                                                                  key=img_path,
+                                                                  memory=image_buffer)
+                        image_numpy_array = memoryview(image_buffer)[0:buffer_length]
+                        image = np.asarray(image_numpy_array)
+                        read_time = time.monotonic() - start
+                    else:
+                        start = time.monotonic()
+                        image_buffer, buffer_length = self.boto_client.getObject(
+                            bucket=self.s3_config["bucket"],
+                            key=img_path)
+                        image = np.asarray(bytearray(image_buffer))
+                        read_time = time.monotonic() - start
+
+                except Exception as e:
+                    self.logger.info(f"Exception faced while reading S3 buffer data: {e}")
+
+                start = time.monotonic()
+                image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+                read_time += (time.monotonic() - start)
+                (h, w) = image.shape[:2]
+
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                image = cv2.resize(image, tuple(self.config_dataset["image_dimension"]))
+
+                with open('/tmp/' + coor_file) as file:
                     rows = file.read()
                     rows = rows.strip().split("\n")
 
@@ -479,21 +582,12 @@ class TorchObjectDetectionDataset(RandomAccessDataset):
 
                     label = self.categories.index(str(label))
 
-                    start = time.monotonic()
-                    image = cv2.imread(img_file)
-                    read_time = (time.monotonic() - start)
-                    (h, w) = image.shape[:2]
-
                     # scale the bounding box coordinates relative to the spatial
                     # dimensions of the input image
                     startX = float(XMin) / w
                     startY = float(YMin) / h
                     endX = float(XMax) / w
                     endY = float(YMax) / h
-
-                    # load the image and preprocess it
-                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                    image = cv2.resize(image, tuple(self.config_dataset["image_dimension"]))
 
                     images.append(image)
                     labels.append(label)

@@ -1,4 +1,5 @@
 import os
+import shutil
 from abc import abstractmethod, abstractproperty
 import numpy as np
 
@@ -130,6 +131,29 @@ class RandomAccessDatasetTrain(DNNTrain):
                                                             bw, tot_read_time)
         self.logger.info(train_summary)
 
+        self.logger.info("\nTraining completed...")
+
+        base_op_dir = (
+            self.config["storage"]["fs"][self.config["storage"]["fs"]["choice"]]["base_output_dir"])
+        prediction_path = (
+            self.config["storage"]["fs"][self.config["storage"]["fs"]["choice"]]["predictions_path"])
+        saved_model_name = (
+            self.config["storage"]["fs"][self.config["storage"]["fs"]["choice"]]["saved_model_name"])
+
+        if not os.path.exists(base_op_dir):
+            os.makedirs(prediction_path)
+        else:
+            if not os.path.exists(prediction_path):
+                os.makedirs(prediction_path)
+
+        # serialize the model to disk
+        saved_model_path = os.path.sep.join([base_op_dir, saved_model_name])
+        self.logger.info("Saving the image classifier model...")
+        model_scripted = torch.jit.script(self.model)
+        model_scripted.save(saved_model_path)
+
+        self.logger.info("Training artifacts saved and script run completed!...")
+
 
 class ObjectDetectionDatasetTrain(DNNTrain):
 
@@ -242,14 +266,14 @@ class ObjectDetectionDatasetTrain(DNNTrain):
         self.logger.info("\nTraining completed...")
 
         base_op_dir = (
-            self.config["storage"][self.config["storage"]["format"]][self.config["storage"][self.config["storage"]["format"]]["choice"]]["base_output_dir"])
+            self.config["storage"]["fs"][self.config["storage"]["fs"]["choice"]]["base_output_dir"])
         prediction_path = (
-            self.config["storage"][self.config["storage"]["format"]][self.config["storage"][self.config["storage"]["format"]]["choice"]]["predictions_path"])
+            self.config["storage"]["fs"][self.config["storage"]["fs"]["choice"]]["predictions_path"])
         plot_path = (
-            self.config["storage"][self.config["storage"]["format"]][self.config["storage"][self.config["storage"]["format"]]["choice"]]["plots_path"])
+            self.config["storage"]["fs"][self.config["storage"]["fs"]["choice"]]["plots_path"])
         saved_dir_list = [prediction_path, plot_path]
         saved_model_name = (
-            self.config["storage"][self.config["storage"]["format"]][self.config["storage"][self.config["storage"]["format"]]["choice"]]["saved_model_name"])
+            self.config["storage"]["fs"][self.config["storage"]["fs"]["choice"]]["saved_model_name"])
 
         if not os.path.exists(base_op_dir):
             for dirc in saved_dir_list:
@@ -279,6 +303,11 @@ class ObjectDetectionDatasetTrain(DNNTrain):
         plotPath = os.path.sep.join([plot_path, 'training_plot.png'])
         plt.savefig(plotPath)
         self.logger.info("Training plot saved and script run completed!...")
+
+        if str(self.config["storage"]["format"]).lower() == 's3':
+            temp_path = '/tmp/' + str(self.config["storage"]["s3"]["prefix"][0]).strip().split('/')[0]
+            if os.path.exists(temp_path):
+                shutil.rmtree(temp_path, ignore_errors=True)
 
 
 class PythonReadTrain(DNNTrain):
