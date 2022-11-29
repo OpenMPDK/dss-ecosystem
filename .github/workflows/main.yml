@@ -18,7 +18,7 @@ jobs:
       - name: Build dss-ecosystem on CodeBuild
         uses: aws-actions/aws-codebuild-run-build@v1
         with:
-          project-name: dss-ecosystem-master
+          project-name: dss-ecosystem
   pycodestyle:
     runs-on: ubuntu-latest
     steps:
