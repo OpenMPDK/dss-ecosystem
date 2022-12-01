@@ -177,14 +177,13 @@ pointing to the config file
 
 ```DSS_CONFIG_FILE=/path/to/clientlib/dss_client/conf.json python3 test/example.py```
 
-
-##API Reference
+## API Reference
 
 - createClient (url, username, password, options)
 
 Creates a client object with URL and the credentials
 
-**URL** is the S3 minio instance of the format http://\<ip\>:\<port\>
+**URL** is the S3 minio instance of the format `http://\<ip\>:\<port\>`
 
 **username** and **password** are the minio instance credentials
 
@@ -210,7 +209,7 @@ Get the object into a bytearray buffer. Allocation and release of buffer is the 
 
 Returns: Actual data length in the buffer, -1 on failure
 
--  getObjectNumpyBuffer(key, numpy_buffer)
+- getObjectNumpyBuffer(key, numpy_buffer)
 
 Get the object into a numpy buffer. Allocation and release of buffer is the caller's responsibility
 
@@ -220,7 +219,8 @@ Returns: Actual data length in the buffer, -1 on failure
 
 Returns list of objects matching with the prefix
 Need to call this in a recursive manner until the end of iterator
-```
+
+```python
     objects = list()
     try:
         obj_iter = self.client.getObjects(prefix)
@@ -235,6 +235,7 @@ Need to call this in a recursive manner until the end of iterator
 
     return objects
 ```
+
 - putObject(key, file_name)
 
 Upload the object with the name *key* to the file name

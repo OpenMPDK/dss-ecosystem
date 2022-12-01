@@ -1,8 +1,8 @@
 from worker import Worker
 
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
 
 # PyTorch library
 import torch
@@ -18,8 +18,8 @@ import numpy as np
 from models import pytorch
 from training import CustomTrain
 
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, MaxPooling2D
 
 # PyTorch library
 from torch.utils.data import DataLoader
@@ -189,15 +189,18 @@ class PyTorch(DNNFramework):
         self.data_loader_params = self.framework["PyTorch"]["DataLoader"]
         self.distributed_data_parallel = self.framework["PyTorch"]["distributed_data_parallel"]
         self.logger.info("Using PyTorch v{}".format(torch.__version__))
-        self.config_mean = config["dataset"][config["dataset"]["choice"]]["mean"]
-        self.config_std = config["dataset"][config["dataset"]["choice"]]["std"]
         self.train_dataloader = None
 
-        self.transforms = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=self.config_mean, std=self.config_std)
-        ])
+        if "mean" in self.config["dataset"][config["dataset"]["choice"]]:
+            self.config_mean = self.config["dataset"][config["dataset"]["choice"]]["mean"]
+            self.config_std = self.config["dataset"][config["dataset"]["choice"]]["std"]
+            self.transforms = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=self.config_mean, std=self.config_std)
+            ])
+        else:
+            self.transforms = None
 
         self.default_collate_err_msg_format = (
             "default_collate: batch must contain tensors, numpy arrays, numbers, "
@@ -287,15 +290,7 @@ class PyTorch(DNNFramework):
         """
         self.logger.info("Creating AI model! - device:{}".format(self.device))
 
-        # load the ResNet50 network
-        resnet = resnet50(pretrained=True)
-
-        # freeze all ResNet50 layers, so they will *not* be updated during the training process
-        for param in resnet.parameters():
-            param.requires_grad = False
-
         torch_model = pytorch.Model(name=self.model_name,
-                                    baseModel=resnet,
                                     num_classes=len(self.categories),
                                     image_dimension=self.image_dimension,
                                     device=self.device,
@@ -325,4 +320,41 @@ class PyTorch(DNNFramework):
         Predict the category of an unknown image.
         :return:
         """
-        pass
+        if self.config["model"]["choice"] == "ObjectDetector":
+            self.logger.info(f'\n\nPLEASE NOTE: The corresponding Inference to this Object Detection framework'
+                             f' is NOT a part of this Benchmark script; a separate script has been created for the same'
+                             f': **object_detector_predict.py** (Present in this same project folder).'
+                             f'\n\n----------Run Instructions----------\n'
+                             f'The above script can be run with test images present on Filesystem or S3.\n\n'
+                             f'To run with test images from Filesystem:\n'
+                             f'$ python3 object_detector_predict.py --fs --input absolute/path/to/the/test/image.jpg\n'
+                             f'Or, for bulk image tests:\n'
+                             f'$ python3 object_detector_predict.py --fs --input '
+                             f'absolute/path/to/the/text/file/containing/a/list/of/images.txt '
+                             f'\n\nTo run with test images from S3:\n'
+                             f'$ python3 object_detector_predict.py --s3 --input client_lib_name(dss_client / '
+                             f'boto3):prefix/to/the/test/image.jpg\n '
+                             f'Or, for bulk image tests:\n'
+                             f'$ python3 object_detector_predict.py --fs --input client_lib_name(dss_client / '
+                             f'boto3):prefix/to/the/text/file/containing/a/list/of/images.txt\n'
+                             f'**In case of bulk image tests with S3 inputs, please make sure that the "text" file'
+                             f'contains the list of the test images along with its full prefix.\n\n')
+        else:
+            self.logger.info(f'\n\nPLEASE NOTE: The corresponding Inference to this Image Classification framework'
+                             f' is NOT a part of this Benchmark script; a separate script has been created for the same'
+                             f': **image_classifier_predict.py** (Present in this same project folder).'
+                             f'\n\n----------Run Instructions----------\n'
+                             f'The above script can be run with test images present on Filesystem or S3.\n\n'
+                             f'To run with test images from Filesystem:\n'
+                             f'$ python3 image_classifier_predict.py --fs --input absolute/path/to/the/test/image.jpg\n'
+                             f'Or, for bulk image tests:\n'
+                             f'$ python3 image_classifier_predict.py --fs --input '
+                             f'absolute/path/to/the/text/file/containing/a/list/of/images.txt '
+                             f'\n\nTo run with test images from S3:\n'
+                             f'$ python3 image_classifier_predict.py --s3 --input client_lib_name(dss_client / '
+                             f'boto3):prefix/to/the/test/image.jpg\n '
+                             f'Or, for bulk image tests:\n'
+                             f'$ python3 image_classifier_predict.py --fs --input client_lib_name(dss_client / '
+                             f'boto3):prefix/to/the/text/file/containing/a/list/of/images.txt\n'
+                             f'**In case of bulk image tests with S3 inputs, please make sure that the "text" file'
+                             f'contains the list of the test images along with its full prefix.\n\n')
