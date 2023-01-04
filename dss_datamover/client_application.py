@@ -303,6 +303,8 @@ class ClientApplication(object):
         ## TODO
         - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
         - Forcefully: process gets terminated on receiving termination signal. Need to add signal handler.
+        - resolve bug of incomplete termination on completion of full data migration. Transient issue of client application
+          continuing to run on at least one client.
         :return:
         """
         name = "DM_client_message_server_index"
