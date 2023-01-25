@@ -38,19 +38,19 @@ def get_object(client_handle, filename, size, print_enable=False):
     content_length = client_handle.getObjectBuffer(filename, buffer)
     mv = memoryview(buffer)
     data_out = mv[:content_length]
-    data_out_md5 = hashlib.md5(data_out).hexdigest()
+    data_out_chksum = hashlib.sha512(data_out).hexdigest()
     if print_enable:
-        print(f"GetObject: {filename} length: {content_length} md5sum: {data_out_md5}")
-    return data_out_md5
+        print(f"GetObject: {filename} length: {content_length} md5sum: {data_out_chksum}")
+    return data_out_chksum
 
 
 def put_object(client_handle, filename, size, print_enable=False):
     buffer = os.urandom(size)
     client_handle.putObjectBuffer(filename, buffer, size)
-    data_in_md5 = hashlib.md5(buffer).hexdigest()
+    data_in_chksum = hashlib.sha512(buffer).hexdigest()
     if print_enable:
-        print(f"PutObject: {filename} length: {size} md5sum: {data_in_md5}")
-    return data_in_md5
+        print(f"PutObject: {filename} length: {size} md5sum: {data_in_chksum}")
+    return data_in_chksum
 
 
 def data_integrity_check(endpoint, user, password, prefix, file_name_prefix, size, file_count, debug=False):
@@ -77,8 +77,8 @@ def data_integrity_check(endpoint, user, password, prefix, file_name_prefix, siz
             filename = full_filename_prefix + str(i)
             if debug:
                 print(f"Downloading file {filename}")
-            data_out_md5 = get_object(c, filename, size, debug)
-            if data_out_md5 != data_hash_map[filename]:
+            data_out_chksum = get_object(c, filename, size, debug)
+            if data_out_chksum != data_hash_map[filename]:
                 print(f"File {filename} contents mismatched")
         print("-" * 64)
 
@@ -96,5 +96,5 @@ def data_integrity_check(endpoint, user, password, prefix, file_name_prefix, siz
 if __name__ == '__main__':
     p = command_line_parser()
     args = p.parse_args()
-    data_integrity_check(args.endpoint, args.user, args.password, args.path_prefix, args.file_name_prefix, args.size, args.count, args.debug)
-
+    data_integrity_check(args.endpoint, args.user, args.password, args.path_prefix, args.file_name_prefix, args.size,
+                         args.count, args.debug)
