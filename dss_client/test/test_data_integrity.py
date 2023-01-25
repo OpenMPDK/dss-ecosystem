@@ -40,7 +40,7 @@ def get_object(client_handle, filename, size, print_enable=False):
     data_out = mv[:content_length]
     data_out_chksum = hashlib.sha512(data_out).hexdigest()
     if print_enable:
-        print(f"GetObject: {filename} length: {content_length} md5sum: {data_out_chksum}")
+        print(f"GetObject: {filename} length: {content_length} chksum: {data_out_chksum}")
     return data_out_chksum
 
 
@@ -49,7 +49,7 @@ def put_object(client_handle, filename, size, print_enable=False):
     client_handle.putObjectBuffer(filename, buffer, size)
     data_in_chksum = hashlib.sha512(buffer).hexdigest()
     if print_enable:
-        print(f"PutObject: {filename} length: {size} md5sum: {data_in_chksum}")
+        print(f"PutObject: {filename} length: {size} chksum: {data_in_chksum}")
     return data_in_chksum
 
 
@@ -59,7 +59,7 @@ def data_integrity_check(endpoint, user, password, prefix, file_name_prefix, siz
         print(f"Uploading objects with the name {prefix + file_name_prefix}")
         print("-" * 64)
         os.makedirs(prefix, 0o755, True)
-        full_filename_prefix = '/'.join([prefix, file_name_prefix])
+        full_filename_prefix = os.path.join(prefix, file_name_prefix)
         for i in range(file_count):
             filename = full_filename_prefix + str(i)
             if debug:
@@ -96,5 +96,5 @@ def data_integrity_check(endpoint, user, password, prefix, file_name_prefix, siz
 if __name__ == '__main__':
     p = command_line_parser()
     args = p.parse_args()
-    data_integrity_check(args.endpoint, args.user, args.password, args.path_prefix, args.file_name_prefix, args.size,
+    data_integrity_check(args.endpoint, args.user, args.password, args.path_prefix, args.file_name_prefix, args.size * 1024 * 1024,
                          args.count, args.debug)
