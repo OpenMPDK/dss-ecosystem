@@ -82,6 +82,7 @@ class ClientSocket:
                 self.socket.connect((host, int(port)))
             except ConnectionRefusedError as e:
                 self.logger.warn(f"ConnectionRefusedError - retrying to connect {time_to_sleep}")
+                self.logger.warn(f"{e} on host: {host} port: {port}")                
                 is_connection_refused = True
             except ConnectionError as e:
                 self.logger.excep(f"{host}:{port}-ConnectionError - {e}")
@@ -238,6 +239,14 @@ class ServerSocket:
             self.logger.error("ERROR: Port not specified")
         port = int(port)
         try:
+            """
+            Previous execution may have left the socket in a TIME_WAIT state and can't be 
+            immediately reused
+                
+            On POSIX platforms the SO_REUSEADDR socket option is set in order to immediately 
+            reuse previous sockets which were bound on the same address and remained in TIME_WAIT state.
+            """
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.bind((host, port))
             self.socket.listen(5)
             self.logger.info("Client is listening for message on {}:{} ".format(host, port))
