@@ -63,7 +63,6 @@ class ClientSocket:
         # set socket to send data as a burst rather than keeping data in the buffer
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-
     def connect(self, host, port):
         """
         Connect to a socket with the specified host and port.
@@ -324,7 +323,7 @@ class ServerSocket:
             raise e
         except BlockingIOError as e:
             time.sleep(0.001)
-            raise e 
+            raise e
         except socket.error as e:
             self.logger.error("ServerSocket: Determine msg length - {}".format(e))
         except ValueError as e:
