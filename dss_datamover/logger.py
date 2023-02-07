@@ -108,14 +108,12 @@ class MultiprocessingLogger(object):
 
     def stop(self):
         self.info("LOGGER Stopping logging!")
-        while self.process.is_alive():
+        try:
+            self.queue.put(None)
             self.stop_logging.value = 1
-            time.sleep(1)
-            if is_queue_empty(self.queue):
-                try:
-                    self.process.terminate()
-                except Exception as e:
-                    print("EXCEPTION: LOGGER - {}".format(e))
+            self.process.join()
+        except Exception as e:
+            print("EXCEPTION: LOGGER - {}".format(e))
 
         print("INFO: LOGGER Stopped !!!")
 
@@ -144,6 +142,7 @@ class MultiprocessingLogger(object):
         prctl.set_name(name)
         prctl.set_proctitle(name)
         fh = None
+        stop_flag = False
 
         try:
             print("Log file:{}".format(self.logfile))
@@ -163,10 +162,15 @@ class MultiprocessingLogger(object):
                         (message_level, message_value) = message
                         print("{}: {}".format(LOGGING_LEVEL[message_level], message_value))
                         fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
+                    elif message is None:
+                        stop_flag = True
+                        break
                     else:
                         fh.write(str(time.ctime()) + ": " + message + "\n")
 
-                if stop_logging.value and queue.qsize() == 0:
+                if stop_logging.value:
+                    if stop_flag and queue.qsize():
+                        print("Queue is not empty, but received a stop signal. Exiting ...")
                     break
                 time.sleep(1)
                 fh.close()
