@@ -60,7 +60,7 @@ class ClientSocket:
         else:
             self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
             raise ConnectionError("Socket initialization failed! ")
-        # configures socket to send data as soon as it is available, regardless of packet size 
+        # configures socket to send data as soon as it is available, regardless of packet size
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def connect(self, host, port):
@@ -315,7 +315,7 @@ class ServerSocket:
 
         try:
             # first receive message length from payload
-            msg_len_in_bytes =b''
+            msg_len_in_bytes = b''
             msg_len_in_bytes = self.client_socket.recv(MESSAGE_LENGTH)
             msg_len = int(msg_len_in_bytes.decode('utf8'))
             if len(msg_len_in_bytes) != MESSAGE_LENGTH:
@@ -339,7 +339,7 @@ class ServerSocket:
                     msg = msg_body.decode("utf8", "ignore")
                 else:
                     raise RuntimeError("ServerSocket: Received incomplete message.")
-            
+
             # return reponse as JSON
             if format.upper() == "JSON":
                 json_data = {}
