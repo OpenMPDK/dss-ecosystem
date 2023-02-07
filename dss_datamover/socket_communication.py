@@ -60,7 +60,7 @@ class ClientSocket:
         else:
             self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
             raise ConnectionError("Socket initialization failed! ")
-        # set socket to send data as a burst rather than keeping data in the buffer
+        # configures socket to send data as soon as it is available, regardless of packet size 
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def connect(self, host, port):
@@ -141,15 +141,16 @@ class ClientSocket:
         """
         self.socket.settimeout(timeout)
         msg = "{}"
+        msg_len = 0
         time_started = datetime.now()
 
         try:
-            msg_len_in_bytes = b''
-            received_msg_len_size = 0
-
             # first receive message length from payload
+            msg_len_in_bytes = b''
             msg_len_in_bytes = self.socket.recv(MESSAGE_LENGTH)
             msg_len = int(msg_len_in_bytes)
+            if len(msg_len_in_bytes) != MESSAGE_LENGTH:
+                raise RuntimeError(f"ClientSocket: Received incorrect message length header {msg_len} bytes")
 
             # now retrieve rest of payload from buffer based on msg_len
             # TODO: handle rare edge case where only partial bytes were read before socket termination
@@ -165,11 +166,12 @@ class ClientSocket:
             if msg_body == b'':
                 raise RuntimeError("ClientSocket: Empty message for message length -{}".format(msg_len))
             elif msg_body:
-                if len(msg_body) == msg_len:
+                if received_data_size == msg_len:
                     msg = msg_body.decode("utf8", "ignore")
                 else:
-                    self.logger.error("ClientSocket: Received incomplete message.")
+                    raise RuntimeError("ClientSocket: Received incomplete message.")
 
+            # return response as JSON
             if format.upper() == "JSON":
                 json_data = {}
                 try:
@@ -184,14 +186,18 @@ class ClientSocket:
                 return msg
         except socket.timeout as e:
             self.logger.error("ClientSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
-            # return empty status and let the next iteration or worker process the status left on the buffer
-            return json.loads(msg)
+            # return status depending on received message size, if incomplete a Runtime Error should have been raised
+            if len(msg_len_in_bytes) == MESSAGE_LENGTH and received_data_size == msg_len:
+                return json.loads(msg)
+            else:
+                return json.loads("{}")
         except socket.error as e:
             self.logger.error(f"ClientSocket SocketError: {e}")
             raise socket.error(f"ClientSocket SocketError: {e}")
         except ValueError as e:
             raise ValueError(f"ClientSocket: ValueError - {e}")
         except RuntimeError as e:
+            self.logger.error(f"ClientSocket: RuntimeError {e}")
             raise RuntimeError(f"ClientSocket: RuntimeError {e}")
         except Exception as e:
             raise Exception(f"ClientSocket: Exception {e}")
@@ -302,71 +308,69 @@ class ServerSocket:
         :timeout: default 60 seconds
         :return: Return received data in json format.
         """
+        self.client_socket.settimeout(timeout)
         msg_len = None
         msg = "{}"
+        time_started = datetime.now()
+
         try:
-            msg_len_in_bytes = b''
-            received_msg_len_size = 0
-            time_started = datetime.now()
-            # Iterate till we receive 10 bytes or timeout.
-            while received_msg_len_size < MESSAGE_LENGTH:
-                received_msg_len_in_bytes = self.client_socket.recv(MESSAGE_LENGTH - received_msg_len_size)
-                received_msg_len_size += len(received_msg_len_in_bytes)
-                msg_len_in_bytes += received_msg_len_in_bytes
-                time_spent_in_seconds = (datetime.now() - time_started).seconds
-                if time_spent_in_seconds >= timeout:
-                    raise socket.timeout("ServerSocket: Timeout ({} seconds) from recv function".format(time_spent_in_seconds))
+            # first receive message length from payload
+            msg_len_in_bytes =b''
+            msg_len_in_bytes = self.client_socket.recv(MESSAGE_LENGTH)
+            msg_len = int(msg_len_in_bytes.decode('utf8'))
+            if len(msg_len_in_bytes) != MESSAGE_LENGTH:
+                raise RuntimeError(f"ServerSocket: Received incorrect message length header {msg_len} bytes")
 
-            if msg_len_in_bytes != b'':
-                msg_len = int(msg_len_in_bytes.decode('utf8'))
-        except socket.timeout as e:
-            raise e
-        except BlockingIOError as e:
-            time.sleep(0.001)
-            raise e
-        except socket.error as e:
-            self.logger.error("ServerSocket: Determine msg length - {}".format(e))
-        except ValueError as e:
-            raise socket.error("ServerSocket: ValueError - {}".format(e))
-        except Exception as e:
-            self.logger.error("ServerSocket: {}".format(e))
-
-        if msg_len:
+            # now retrieve rest of payload from buffer based on msg_len
+            # TODO: handle rare edge case where only partial bytes were read before socket termination
             msg_body = b''
             received_data_size = 0
-            # Iterate till we receive desired number of bytes.
             while received_data_size < msg_len:
                 data_size = msg_len - received_data_size
-                try:
-                    received_data = self.client_socket.recv(data_size)
-                    received_data_size += len(received_data)
-                    msg_body += received_data
-                except socket.timeout as e:
-                    self.logger.error("ServerSocket: Timeout - {}".format(e))
-                except socket.error as e:
-                    self.logger.excep("ServerSocket receive bytes -  {}".format(e))
-            if msg_body == b'':
-                raise RuntimeError("Empty message for message length -{}".format(msg_len))
+                received_data = self.client_socket.recv(data_size)
+                received_data_size += len(received_data)
+                msg_body += received_data
 
-            if msg_body:
-                if len(msg_body) == msg_len:
+            # process received payload
+            if msg_body == b'':
+                raise RuntimeError("ServerSocket: Empty message for message length -{}".format(msg_len))
+            elif msg_body:
+                if received_data_size == msg_len:
                     msg = msg_body.decode("utf8", "ignore")
                 else:
-                    self.logger.error("ServerSocket: Received incomplete message.")
-        if format.upper() == "JSON":
-            json_data = {}
-            try:
-                json_data = json.loads(msg)
-            # except json.JSONDecodeError as e:
-            #     raise json.JSONDecodeError("ClientSocket: Bad JSON data - {}".format(e))
-            except MemoryError as e:
-                raise MemoryError("MemoryError: JSON load failed - {}".format(e))
-            except Exception as e:
-                raise Exception("ClientSocket: Bad JSON data - {}, error- {}".format(msg, e))
+                    raise RuntimeError("ServerSocket: Received incomplete message.")
+            
+            # return reponse as JSON
+            if format.upper() == "JSON":
+                json_data = {}
+                try:
+                    json_data = json.loads(msg)
+                except json.JSONDecodeError as e:
+                    self.logger.error("ServerSocket: Bad JSON data - {},{}, {}".format(msg_len, msg, e))
+                except Exception as e:
+                    raise Exception("Bad formed message - {}{}, error- {}".format(msg_len, msg, e))
 
-            return json_data
-        else:
-            return msg
+                return json_data
+            else:
+                return msg
+
+        except socket.timeout as e:
+            self.logger.error("ServerSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
+            # return status depending on received message size, if incomplete a Runtime Error should have been raised
+            if len(msg_len_in_bytes) == MESSAGE_LENGTH and received_data_size == msg_len:
+                return json.loads(msg)
+            else:
+                return json.loads("{}")
+        except socket.error as e:
+            self.logger.error(f"ServerSocket SocketError: {e}")
+            raise socket.error(f"ServerSocket SocketError: {e}")
+        except ValueError as e:
+            raise ValueError(f"ServerSocket: ValueError - {e}")
+        except RuntimeError as e:
+            self.logger.error(f"ServerSocket: RuntimeError {e}")
+            raise RuntimeError(f"ServerSocket: RuntimeError {e}")
+        except Exception as e:
+            raise Exception(f"ServerSocket: Exception {e}")
 
     def close(self):
         """
