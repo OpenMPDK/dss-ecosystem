@@ -205,7 +205,7 @@ class Monitor(object):
         successful_socket_connection = 0
         for client in self.clients:
             try:
-                client.socket_index = ClientSocket(self.logger, self.ip_address_family)
+                client.socket_index = ClientSocket(self.config, self.logger, self.ip_address_family)
                 client.socket_index.connect(client.ip_address, client.port_index)
                 successful_socket_connection += 1
                 self.logger.info("Monitor-Index-Distributor: Connected to Monitor-Index-MessageHandler of ClientApp-{}:{}".format(client.id, client.port_index))
@@ -394,7 +394,7 @@ class Monitor(object):
         successful_socket_connection = 0
         for client in self.clients:
             try:
-                client.socket_status = ClientSocket(self.logger, self.ip_address_family)
+                client.socket_status = ClientSocket(self.config, self.logger, self.ip_address_family)
                 client.socket_status.connect(client.ip_address, client.port_status)
                 self.logger.info("Monitor-Status-Poller: Connected to ClientApp-{}:{}".format(
                     client.id, client.port_status))
