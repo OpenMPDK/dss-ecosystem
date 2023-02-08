@@ -42,9 +42,9 @@ IP_ADDRESS_FAMILY = {
     "IPv6": socket.AF_INET6
 }
 
-DEFAULT_CONNECTION_DELAY_INTERVAL = 2
+DEFAULT_CONNECTION_DELAY_INTERVAL = 2  # wait time before retrying connection of socket
 DEFAULT_CONNECTION_TIME_THRESHOLD = 300  # 5 Minutes, maximum wait time for socket connection.
-DEFAULT_MESSAGE_LENGTH = 10  # Message length 10 bytes
+DEFAULT_RESPONSE_HEADER_LENGTH = 10  # Message length 10 bytes
 DEFAULT_RECV_TIMEOUT = 60  # Wait to receive data from socket for 60 seconds.
 
 
@@ -55,17 +55,17 @@ class ClientSocket:
         self.config = config
         self.socket = None
 
-        self.CONNECTION_DELAY_INTERVAL = (
-            self.config.get("socket_options", DEFAULT_CONNECTION_DELAY_INTERVAL).get("connection_delay_interval", DEFAULT_CONNECTION_DELAY_INTERVAL)
+        self.connection_delay_interval = (
+            self.config.get("socket_options", {}).get("connection_delay_interval", DEFAULT_CONNECTION_DELAY_INTERVAL)
         )
-        self.CONNECTION_TIME_THRESHOLD = (
-            self.config.get("socket_options", DEFAULT_CONNECTION_TIME_THRESHOLD).get("connection_time_threshold", DEFAULT_CONNECTION_TIME_THRESHOLD)
+        self.connection_time_threshold = (
+            self.config.get("socket_options", {}).get("connection_time_threshold", DEFAULT_CONNECTION_TIME_THRESHOLD)
         )
-        self.MESSAGE_LENGTH = (
-            self.config.get("socket_options", DEFAULT_MESSAGE_LENGTH).get("message_length", DEFAULT_MESSAGE_LENGTH)
+        self.response_header_length = (
+            self.config.get("socket_options", {}).get("message_length", DEFAULT_RESPONSE_HEADER_LENGTH)
         )
-        self.RECV_TIMEOUT = (
-            self.config.get("socket_options", DEFAULT_RECV_TIMEOUT).get("recv_timeout", DEFAULT_RECV_TIMEOUT)
+        self.recv_timeout = (
+            self.config.get("socket_options", {}).get("recv_timeout", DEFAULT_RECV_TIMEOUT)
         )
 
         if ip_address_family.upper() == "IPV4":
@@ -92,8 +92,7 @@ class ClientSocket:
 
         is_connection_refused = True
         connection_time_start = datetime.now()
-        time_to_sleep = self.config.get("socket_options", ).get("connection_delay_interval")
-        time_to_sleep = self.CONNECTION_DELAY_INTERVAL
+        time_to_sleep = self.connection_delay_interval
         while is_connection_refused:
             is_connection_refused = False
             try:
@@ -109,8 +108,8 @@ class ClientSocket:
                 self.logger.error(f"{host}:{port}->{e}")
             # Add a delay in increasing order of 2 sec.
             time.sleep(time_to_sleep)
-            time_to_sleep += self.CONNECTION_DELAY_INTERVAL
-            if (datetime.now() - connection_time_start).seconds > self.CONNECTION_TIME_THRESHOLD:
+            time_to_sleep += self.connection_delay_interval
+            if (datetime.now() - connection_time_start).seconds > self.connection_time_threshold:
                 raise socket.timeout("Socket connection timeout=300sec !")
 
     def send_json(self, message={}):
@@ -121,7 +120,7 @@ class ClientSocket:
         """
         if message and self.socket:
             msg_body = json.dumps(message)
-            msg_len = (str(len(msg_body))).zfill(self.MESSAGE_LENGTH)
+            msg_len = (str(len(msg_body))).zfill(self.response_header_length)
             if not msg_body.startswith('{') or not msg_body.endswith('}'):
                 self.logger.error("ClientSocket: BAD MSG - {}".format(msg_body))
             msg = msg_len + msg_body
@@ -155,7 +154,7 @@ class ClientSocket:
         :timeout: default 60 seconds
         :return: Return received data in json format.
         """
-        self.socket.settimeout(self.RECV_TIMEOUT)
+        self.socket.settimeout(self.recv_timeout)
         msg = "{}"
         msg_len = 0
         time_started = datetime.now()
@@ -163,9 +162,9 @@ class ClientSocket:
         try:
             # first receive message length from payload
             msg_len_in_bytes = b''
-            msg_len_in_bytes = self.socket.recv(self.MESSAGE_LENGTH)
+            msg_len_in_bytes = self.socket.recv(self.response_header_length)
             msg_len = int(msg_len_in_bytes)
-            if len(msg_len_in_bytes) != self.MESSAGE_LENGTH:
+            if len(msg_len_in_bytes) != self.response_header_length:
                 raise RuntimeError(f"ClientSocket: Received incorrect message length header {msg_len} bytes")
 
             # now retrieve rest of payload from buffer based on msg_len
@@ -203,7 +202,7 @@ class ClientSocket:
         except socket.timeout as e:
             self.logger.error("ClientSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
             # return status depending on received message size, if incomplete a Runtime Error should have been raised
-            if len(msg_len_in_bytes) == self.MESSAGE_LENGTH and received_data_size == msg_len:
+            if len(msg_len_in_bytes) == self.response_header_length and received_data_size == msg_len:
                 return json.loads(msg)
             else:
                 return json.loads("{}")
@@ -238,17 +237,17 @@ class ServerSocket:
         self.config = config
         self.client_socket = None
 
-        self.CONNECTION_DELAY_INTERVAL = (
-            self.config.get("socket_options", DEFAULT_CONNECTION_DELAY_INTERVAL).get("connection_delay_interval", DEFAULT_CONNECTION_DELAY_INTERVAL)
+        self.connection_delay_interval = (
+            self.config.get("socket_options", {}).get("connection_delay_interval", DEFAULT_CONNECTION_DELAY_INTERVAL)
         )
-        self.CONNECTION_TIME_THRESHOLD = (
-            self.config.get("socket_options", DEFAULT_CONNECTION_TIME_THRESHOLD).get("connection_time_threshold", DEFAULT_CONNECTION_TIME_THRESHOLD)
+        self.connection_time_threshold = (
+            self.config.get("socket_options", {}).get("connection_time_threshold", DEFAULT_CONNECTION_TIME_THRESHOLD)
         )
-        self.MESSAGE_LENGTH = (
-            self.config.get("socket_options", DEFAULT_MESSAGE_LENGTH).get("message_length", DEFAULT_MESSAGE_LENGTH)
+        self.response_header_length = (
+            self.config.get("socket_options", {}).get("message_length", DEFAULT_RESPONSE_HEADER_LENGTH)
         )
-        self.RECV_TIMEOUT = (
-            self.config.get("socket_options", DEFAULT_RECV_TIMEOUT).get("recv_timeout", DEFAULT_RECV_TIMEOUT)
+        self.recv_timeout = (
+            self.config.get("socket_options", {}).get("recv_timeout", DEFAULT_RECV_TIMEOUT)
         )
 
         if ip_address_family.upper() == "IPV4":
@@ -309,7 +308,7 @@ class ServerSocket:
             if not msg_body.startswith('{') or not msg_body.endswith('}'):
                 self.logger.error("ServerSocket: BAD MSG - {}".format(msg_body))
 
-            msg_len = (str(len(msg_body))).zfill(self.MESSAGE_LENGTH)
+            msg_len = (str(len(msg_body))).zfill(self.response_header_length)
             msg = msg_len + msg_body
             try:
                 # sendall on success return None.
@@ -340,7 +339,7 @@ class ServerSocket:
         :timeout: default 60 seconds
         :return: Return received data in json format.
         """
-        self.client_socket.settimeout(self.RECV_TIMEOUT)
+        self.client_socket.settimeout(self.recv_timeout)
         msg_len = None
         msg = "{}"
         time_started = datetime.now()
@@ -348,9 +347,9 @@ class ServerSocket:
         try:
             # first receive message length from payload
             msg_len_in_bytes = b''
-            msg_len_in_bytes = self.client_socket.recv(self.MESSAGE_LENGTH)
+            msg_len_in_bytes = self.client_socket.recv(self.response_header_length)
             msg_len = int(msg_len_in_bytes.decode('utf8'))
-            if len(msg_len_in_bytes) != self.MESSAGE_LENGTH:
+            if len(msg_len_in_bytes) != self.response_header_length:
                 raise RuntimeError(f"ServerSocket: Received incorrect message length header {msg_len} bytes")
 
             # now retrieve rest of payload from buffer based on msg_len
@@ -389,7 +388,7 @@ class ServerSocket:
         except socket.timeout as e:
             self.logger.error("ServerSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
             # return status depending on received message size, if incomplete a Runtime Error should have been raised
-            if len(msg_len_in_bytes) == self.MESSAGE_LENGTH and received_data_size == msg_len:
+            if len(msg_len_in_bytes) == self.response_header_length and received_data_size == msg_len:
                 return json.loads(msg)
             else:
                 return json.loads("{}")
