@@ -49,13 +49,11 @@ DEFAULT_RESPONSE_HEADER_LENGTH = 10  # Message length 10 bytes
 DEFAULT_RECV_TIMEOUT = 60  # Wait to receive data from socket for 60 seconds.
 
 
-class ClientSocket:
-
+class ClientSocket(object):
     def __init__(self, config, logger=None, ip_address_family="IPv4"):
         self.logger = logger
         self.config = config
         self.socket = None
-
 
     def connect(self, host, port):
         """
@@ -80,7 +78,6 @@ class ClientSocket:
         except:
             self.logger.error("Wrong ip_address_family - {}, Supported {}".format(host, IP_ADDRESS_FAMILY))
             raise ConnectionError("Socket initialization failed!")
-
 
        # configures socket to send data as soon as it is available, regardless of packet size
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
