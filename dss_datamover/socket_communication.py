@@ -79,7 +79,7 @@ class ClientSocket(object):
             self.logger.error("Wrong ip_address_family - {}, Supported {}".format(host, IP_ADDRESS_FAMILY))
             raise ConnectionError("Socket initialization failed!")
 
-       # configures socket to send data as soon as it is available, regardless of packet size
+        # configures socket to send data as soon as it is available, regardless of packet size
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         is_connection_refused = True
         connection_time_start = datetime.now()
