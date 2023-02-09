@@ -31,8 +31,9 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import socket
+import ipaddress
 import json
+import socket
 import time
 from datetime import datetime
 
@@ -55,15 +56,6 @@ class ClientSocket:
         self.config = config
         self.socket = None
 
-        if ip_address_family.upper() == "IPV4":
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        elif ip_address_family.upper() == "IPV6":
-            self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        else:
-            self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
-            raise ConnectionError("Socket initialization failed! ")
-        # configures socket to send data as soon as it is available, regardless of packet size
-        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def connect(self, host, port):
         """
@@ -76,7 +68,22 @@ class ClientSocket:
             raise ConnectionError("Host not specified")
         if not port:
             raise ConnectionError("Port not specified")
+        try:
+            ip_info = ipaddress.ip_address(host)
+            if type(ip_info) == ipaddress.IPv4Address:
+                self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            elif type(ip_info) == ipaddress.IPv6Address:
+                self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            else:
+                self.logger.error(f"Invalid IP address {host}")
+                raise ConnectionError("Socket initialization failed!")
+        except:
+            self.logger.error("Wrong ip_address_family - {}, Supported {}".format(host, IP_ADDRESS_FAMILY))
+            raise ConnectionError("Socket initialization failed!")
 
+
+       # configures socket to send data as soon as it is available, regardless of packet size
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         is_connection_refused = True
         connection_time_start = datetime.now()
         connection_retry_delay = (
@@ -228,19 +235,15 @@ class ClientSocket:
             self.logger.excep("Close socket {}".format(e))
 
 
-class ServerSocket:
-
+class ServerSocket(object):
     def __init__(self, config, logger=None, ip_address_family="IPv4"):
         self.socket = None
         self.logger = logger
         self.config = config
         self.client_socket = None
-
-        if ip_address_family.upper() == "IPV4":
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        elif ip_address_family.upper() == "IPV6":
+        try:
             self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        else:
+        except:
             self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
             raise ConnectionError("Socket initialization failed!")
 
@@ -263,7 +266,7 @@ class ServerSocket:
             reuse previous sockets which were bound on the same address and remained in TIME_WAIT state.
             """
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind((host, port))
+            self.socket.bind(('', port))
             self.socket.listen(5)
             self.logger.info("Client is listening for message on {}:{} ".format(host, port))
         except ConnectionError as e:

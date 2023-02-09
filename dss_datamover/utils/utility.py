@@ -281,15 +281,9 @@ def get_ip_address(logger, hostname_or_ip_address=None, ip_address_family="IPV4"
     ip_address = None
     if hostname_or_ip_address:
         try:
-            if ip_address_family.upper() == "IPV4":
-                ip_address = socket.gethostbyname(hostname_or_ip_address)
-            elif ip_address_family.upper() == "IPV6":
-                ip_address = socket.getaddrinfo(hostname_or_ip_address,
-                                                None,
-                                                family=socket.AF_INET6,
-                                                proto=socket.IPPROTO_TCP)[-1][-1][0]
-            else:
-                logger.error("WRONG IP Address Family ...")
+            ip_address = socket.getaddrinfo(hostname_or_ip_address,
+                                            None,
+                                            proto=socket.IPPROTO_TCP)[-1][-1][0]
         except Exception as e:
             logger.error("Failed getting IP address for hostname/ip_address \
                          :{},Family:{} \n- {}".format(hostname_or_ip_address, ip_address_family, e))
