@@ -42,17 +42,19 @@ IP_ADDRESS_FAMILY = {
     "IPv6": socket.AF_INET6
 }
 
-CONNECTION_DELAY_INTERVAL = 2
-CONNECTION_TIME_THRESHOLD = 300  # 5 Minutes, maximum wait time for socket connection.
-MESSAGE_LENGTH = 10  # Message length 10 bytes
-RECV_TIMEOUT = 60  # Wait to receive data from socket for 60 seconds.
+DEFAULT_CONNECTION_RETRY_DELAY = 2  # wait time before retrying connection of socket
+DEFAULT_MAX_CONNECTION_TIME_THRESHOLD = 300  # 5 Minutes, maximum wait time for socket connection.
+DEFAULT_RESPONSE_HEADER_LENGTH = 10  # Message length 10 bytes
+DEFAULT_RECV_TIMEOUT = 60  # Wait to receive data from socket for 60 seconds.
 
 
 class ClientSocket:
 
-    def __init__(self, logger=None, ip_address_family="IPv4"):
+    def __init__(self, config, logger=None, ip_address_family="IPv4"):
         self.logger = logger
+        self.config = config
         self.socket = None
+
         if ip_address_family.upper() == "IPV4":
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         elif ip_address_family.upper() == "IPV6":
@@ -77,7 +79,14 @@ class ClientSocket:
 
         is_connection_refused = True
         connection_time_start = datetime.now()
-        time_to_sleep = CONNECTION_DELAY_INTERVAL
+        connection_retry_delay = (
+            self.config.get("socket_options", {}).get("connection_retry_delay", DEFAULT_CONNECTION_RETRY_DELAY)
+        )
+        time_to_sleep = connection_retry_delay
+        max_connection_time_threshold = (
+            self.config.get("socket_options", {}).get("max_connection_time_threshold", DEFAULT_MAX_CONNECTION_TIME_THRESHOLD)
+        )
+
         while is_connection_refused:
             is_connection_refused = False
             try:
@@ -93,8 +102,8 @@ class ClientSocket:
                 self.logger.error(f"{host}:{port}->{e}")
             # Add a delay in increasing order of 2 sec.
             time.sleep(time_to_sleep)
-            time_to_sleep += CONNECTION_DELAY_INTERVAL
-            if (datetime.now() - connection_time_start).seconds > CONNECTION_TIME_THRESHOLD:
+            time_to_sleep += connection_retry_delay
+            if (datetime.now() - connection_time_start).seconds > max_connection_time_threshold:
                 raise socket.timeout("Socket connection timeout=300sec !")
 
     def send_json(self, message={}):
@@ -105,7 +114,9 @@ class ClientSocket:
         """
         if message and self.socket:
             msg_body = json.dumps(message)
-            msg_len = (str(len(msg_body))).zfill(MESSAGE_LENGTH)
+            msg_len = (str(len(msg_body))).zfill(
+                self.config.get("socket_options", {}).get("response_header_length", DEFAULT_RESPONSE_HEADER_LENGTH)
+            )
             if not msg_body.startswith('{') or not msg_body.endswith('}'):
                 self.logger.error("ClientSocket: BAD MSG - {}".format(msg_body))
             msg = msg_len + msg_body
@@ -128,7 +139,7 @@ class ClientSocket:
                 self.logger.excep("Message Send Failed - {}".format(e))
         return False
 
-    def recv_json(self, format="JSON", timeout=RECV_TIMEOUT):
+    def recv_json(self, format="JSON"):
         """
         Receive the data from socket based on data length. and return data in JSON format.
         This is blocking call and wait for data from socket end utill received desired
@@ -139,17 +150,20 @@ class ClientSocket:
         :timeout: default 60 seconds
         :return: Return received data in json format.
         """
-        self.socket.settimeout(timeout)
+        self.socket.settimeout(self.config.get("socket_options", {}).get("recv_timeout", DEFAULT_RECV_TIMEOUT))
         msg = "{}"
         msg_len = 0
         time_started = datetime.now()
+        response_header_length = (
+            self.config.get("socket_options", {}).get("response_header_length", DEFAULT_RESPONSE_HEADER_LENGTH)
+        )
 
         try:
             # first receive message length from payload
             msg_len_in_bytes = b''
-            msg_len_in_bytes = self.socket.recv(MESSAGE_LENGTH)
+            msg_len_in_bytes = self.socket.recv(response_header_length)
             msg_len = int(msg_len_in_bytes)
-            if len(msg_len_in_bytes) != MESSAGE_LENGTH:
+            if len(msg_len_in_bytes) != response_header_length:
                 raise RuntimeError(f"ClientSocket: Received incorrect message length header {msg_len} bytes")
 
             # now retrieve rest of payload from buffer based on msg_len
@@ -187,7 +201,7 @@ class ClientSocket:
         except socket.timeout as e:
             self.logger.error("ClientSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
             # return status depending on received message size, if incomplete a Runtime Error should have been raised
-            if len(msg_len_in_bytes) == MESSAGE_LENGTH and received_data_size == msg_len:
+            if len(msg_len_in_bytes) == response_header_length and received_data_size == msg_len:
                 return json.loads(msg)
             else:
                 return json.loads("{}")
@@ -216,10 +230,12 @@ class ClientSocket:
 
 class ServerSocket:
 
-    def __init__(self, logger=None, ip_address_family="IPv4"):
+    def __init__(self, config, logger=None, ip_address_family="IPv4"):
         self.socket = None
         self.logger = logger
+        self.config = config
         self.client_socket = None
+
         if ip_address_family.upper() == "IPV4":
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         elif ip_address_family.upper() == "IPV6":
@@ -277,7 +293,9 @@ class ServerSocket:
             if not msg_body.startswith('{') or not msg_body.endswith('}'):
                 self.logger.error("ServerSocket: BAD MSG - {}".format(msg_body))
 
-            msg_len = (str(len(msg_body))).zfill(MESSAGE_LENGTH)
+            msg_len = (str(len(msg_body))).zfill(
+                self.config.get("socket_options", {}).get("response_header_length", DEFAULT_RESPONSE_HEADER_LENGTH)
+            )
             msg = msg_len + msg_body
             try:
                 # sendall on success return None.
@@ -297,7 +315,7 @@ class ServerSocket:
                 self.logger.error("Message Send Failed - {}".format(e))
         return False
 
-    def recv_json(self, format="JSON", timeout=RECV_TIMEOUT):
+    def recv_json(self, format="JSON"):
         """
         Receive the data from socket based on data length. and return data in JSON format.
         This is blocking call and wait for data from socket end utill received desired
@@ -308,17 +326,20 @@ class ServerSocket:
         :timeout: default 60 seconds
         :return: Return received data in json format.
         """
-        self.client_socket.settimeout(timeout)
+        self.client_socket.settimeout(self.config.get("socket_options", {}).get("recv_timeout", DEFAULT_RECV_TIMEOUT))
         msg_len = None
         msg = "{}"
         time_started = datetime.now()
+        response_header_length = (
+            self.config.get("socket_options", {}).get("response_header_length", DEFAULT_RESPONSE_HEADER_LENGTH)
+        )
 
         try:
             # first receive message length from payload
             msg_len_in_bytes = b''
-            msg_len_in_bytes = self.client_socket.recv(MESSAGE_LENGTH)
+            msg_len_in_bytes = self.client_socket.recv(response_header_length)
             msg_len = int(msg_len_in_bytes.decode('utf8'))
-            if len(msg_len_in_bytes) != MESSAGE_LENGTH:
+            if len(msg_len_in_bytes) != response_header_length:
                 raise RuntimeError(f"ServerSocket: Received incorrect message length header {msg_len} bytes")
 
             # now retrieve rest of payload from buffer based on msg_len
@@ -357,7 +378,7 @@ class ServerSocket:
         except socket.timeout as e:
             self.logger.error("ServerSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
             # return status depending on received message size, if incomplete a Runtime Error should have been raised
-            if len(msg_len_in_bytes) == MESSAGE_LENGTH and received_data_size == msg_len:
+            if len(msg_len_in_bytes) == response_header_length and received_data_size == msg_len:
                 return json.loads(msg)
             else:
                 return json.loads("{}")
