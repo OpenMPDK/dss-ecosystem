@@ -18,9 +18,9 @@
   },
   "ip_address_family" : "IPV6",
   "socket_options": {
-    "connection_delay_interval": 2,
-    "connection_time_threshold": 300,
-    "message_length": 10,
+    "connection_retry_delay": 2,
+    "max_connection_time_threshold": 300,
+    "response_header_length": 10,
     "recv_timeout": 60
   },
   "fs_config":{
