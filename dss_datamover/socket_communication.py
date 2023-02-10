@@ -213,7 +213,6 @@ class ClientSocket:
             return json.loads(msg)
         return json.loads("{}")
 
-
     def close(self):
         """
         Close client socket
