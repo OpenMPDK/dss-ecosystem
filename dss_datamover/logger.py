@@ -170,8 +170,9 @@ class MultiprocessingLogger(object):
 
                 if stop_logging.value:
                     if stop_flag and queue.qsize():
-                        print("Queue is not empty, but received a stop signal. Exiting ...")
-                    break
+                        print("Queue is not empty, but received a stop signal ...")
+                    else:
+                        break
                 time.sleep(1)
                 fh.close()
 

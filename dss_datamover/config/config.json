@@ -16,7 +16,6 @@
     "port_index": 6000,
     "port_status": 6001
   },
-  "ip_address_family" : "IPV6",
   "socket_options": {
     "connection_retry_delay": 2,
     "max_connection_time_threshold": 300,

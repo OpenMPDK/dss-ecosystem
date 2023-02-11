@@ -137,9 +137,6 @@ class Master(object):
         # NFS shares
         self.nfs_shares = []
 
-        # IP Address Family
-        self.ip_address_family = config.get("ip_address_family", "IPV4")
-
         # Unit TestCase
         self.testcase_passed = Value('b', False)
 
@@ -652,7 +649,7 @@ class Client(object):
         """
         self.id = id
         self.host_or_ip_address = host_or_ip_address
-        self.ip_address = get_ip_address(logger, host_or_ip_address, config["ip_address_family"])
+        self.ip_address = get_ip_address(logger, host_or_ip_address)
         self.operation = operation
         self.config = config
         # Logger
@@ -1143,7 +1140,6 @@ if __name__ == "__main__":
     master.start()
     master.logger.info("DataMover Config Options : {}".format(config))
     master.logger.info("Started DataMover with Logger in {} mode!".format(master.logging_level))
-    master.logger.info("IP Address Family - {}".format(master.ip_address_family))
 
     # signal_handler.registered_functions.append(master.nfs_cluster_obj.umount_all)
 

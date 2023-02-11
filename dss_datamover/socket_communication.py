@@ -31,8 +31,9 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import socket
+import ipaddress
 import json
+import socket
 import time
 from datetime import datetime
 
@@ -48,22 +49,11 @@ DEFAULT_RESPONSE_HEADER_LENGTH = 10  # Message length 10 bytes
 DEFAULT_RECV_TIMEOUT = 60  # Wait to receive data from socket for 60 seconds.
 
 
-class ClientSocket:
-
-    def __init__(self, config, logger=None, ip_address_family="IPv4"):
+class ClientSocket(object):
+    def __init__(self, config, logger=None):
         self.logger = logger
         self.config = config
         self.socket = None
-
-        if ip_address_family.upper() == "IPV4":
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        elif ip_address_family.upper() == "IPV6":
-            self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        else:
-            self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
-            raise ConnectionError("Socket initialization failed! ")
-        # configures socket to send data as soon as it is available, regardless of packet size
-        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def connect(self, host, port):
         """
@@ -77,6 +67,21 @@ class ClientSocket:
         if not port:
             raise ConnectionError("Port not specified")
 
+        try:
+            ip_info = ipaddress.ip_address(host)
+            if isinstance(ip_info, ipaddress.IPv4Address):
+                self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            elif isinstance(ip_info, ipaddress.IPv6Address):
+                self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            else:
+                self.logger.error(f"Invalid IP address {host}")
+                raise ConnectionError("Socket initialization failed!")
+        except:
+            self.logger.error("Wrong ip_address - {}, Supported {}".format(host, IP_ADDRESS_FAMILY))
+            raise ConnectionError("Socket initialization failed!")
+
+        # configures socket to send data as soon as it is available, regardless of packet size
+        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         is_connection_refused = True
         connection_time_start = datetime.now()
         connection_retry_delay = (
@@ -92,7 +97,7 @@ class ClientSocket:
             try:
                 self.socket.connect((host, int(port)))
             except ConnectionRefusedError as e:
-                self.logger.warn(f"ConnectionRefusedError - retrying to connect {time_to_sleep}")
+                self.logger.warn(f"ConnectionRefusedError - retrying to connect {time_to_sleep} - {e}")
                 is_connection_refused = True
             except ConnectionError as e:
                 self.logger.excep(f"{host}:{port}-ConnectionError - {e}")
@@ -106,7 +111,7 @@ class ClientSocket:
             if (datetime.now() - connection_time_start).seconds > max_connection_time_threshold:
                 raise socket.timeout("Socket connection timeout=300sec !")
 
-    def send_json(self, message={}):
+    def send_json(self, message=None):
         """
         Send a JSON formatted data.
         :param message: JSON/DICT
@@ -162,6 +167,9 @@ class ClientSocket:
             # first receive message length from payload
             msg_len_in_bytes = b''
             msg_len_in_bytes = self.socket.recv(response_header_length)
+            if not msg_len_in_bytes:
+                raise Exception('Empty data received from the socket')
+
             msg_len = int(msg_len_in_bytes)
             if len(msg_len_in_bytes) != response_header_length:
                 raise RuntimeError(f"ClientSocket: Received incorrect message length header {msg_len} bytes")
@@ -222,27 +230,18 @@ class ClientSocket:
         :return:
         """
         try:
-            # self.socket.shutdown()
+            # self.socket.shutdown(socket.SHUT_RDWR)
             self.socket.close()
         except Exception as e:
             self.logger.excep("Close socket {}".format(e))
 
 
-class ServerSocket:
-
-    def __init__(self, config, logger=None, ip_address_family="IPv4"):
+class ServerSocket(object):
+    def __init__(self, config, logger=None):
         self.socket = None
         self.logger = logger
         self.config = config
         self.client_socket = None
-
-        if ip_address_family.upper() == "IPV4":
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        elif ip_address_family.upper() == "IPV6":
-            self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        else:
-            self.logger.error("Wrong ip_address_family - {}, Supported {}".format(ip_address_family, IP_ADDRESS_FAMILY))
-            raise ConnectionError("Socket initialization failed!")
 
     def bind(self, host, port):
         """
@@ -256,6 +255,20 @@ class ServerSocket:
         if not port:
             self.logger.error("ERROR: Port not specified")
         port = int(port)
+
+        try:
+            ip_info = ipaddress.ip_address(host)
+            if type(ip_info) == ipaddress.IPv4Address:
+                self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            elif type(ip_info) == ipaddress.IPv6Address:
+                self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            else:
+                self.logger.error(f"Invalid IP address {host}")
+                raise ConnectionError("Socket initialization failed!")
+        except:
+            self.logger.error("Wrong ip_address - {}, Supported {}".format(host, IP_ADDRESS_FAMILY))
+            raise ConnectionError(f"Socket initialization failed - Address {host}")
+
         try:
             """
             Previous execution may have left the socket in a TIME_WAIT state and can't be
@@ -266,10 +279,9 @@ class ServerSocket:
             self.socket.bind((host, port))
             self.socket.listen(5)
             self.logger.info("Client is listening for message on {}:{} ".format(host, port))
-        except ConnectionError as e:
-            self.logger.error("Address ({}:{}) bind error - {}".format(host, port, e))
         except Exception as e:
             self.logger.error("Not able to bind to host={}:{}, {}".format(host, port, e))
+            raise ConnectionError(f"Socket initialization failed - Address {host}:{port} bind error - {e}!")
 
     def accept(self):
         """
@@ -338,6 +350,9 @@ class ServerSocket:
             # first receive message length from payload
             msg_len_in_bytes = b''
             msg_len_in_bytes = self.client_socket.recv(response_header_length)
+            if not msg_len_in_bytes:
+                raise Exception("Emtpy data received from the socket")
+
             msg_len = int(msg_len_in_bytes.decode('utf8'))
             if len(msg_len_in_bytes) != response_header_length:
                 raise RuntimeError(f"ServerSocket: Received incorrect message length header {msg_len} bytes")
@@ -399,6 +414,7 @@ class ServerSocket:
         :return: None
         """
         try:
+            # self.client_socket.shutdown(socket.SHUT_RDWR)
             self.client_socket.close()
             time.sleep(1)
             self.socket.close()
