@@ -179,6 +179,15 @@ class Master(object):
         self.logger.info("Performing {} operation".format(self.operation))
         self.load_prefix_index_data()  # Load prefix metadata.
         self.load_prefix_keys_for_resume_operation()  # Check if resume operation required.
+
+        # Validate S3 prefix before starting the workers, to allow graceful exit of application for invalid prefix
+        # error (Fix for MIN-1312)
+        if self.prefix:
+            if not validate_s3_prefix(self.logger, self.prefix):
+                self.logger.fatal("Bad prefix specified, exit application.")
+                self.stop_logging()
+                sys.exit("Invalid prefix. Shutting down DataMover application")
+
         if not self.start_workers():
             self.logger.info("Exit DataMover!")
             self.stop_logging()
