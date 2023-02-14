@@ -55,17 +55,15 @@ class ClientSocket(object):
         self.config = config
         self.socket = None
 
-    def connect(self, host, port):
+    def connect(self, host=None, port=None):
         """
         Connect to a socket with the specified host and port.
         :param host:
         :param port:
         :return:
         """
-        if not host:
-            raise ConnectionError("Host not specified")
-        if not port:
-            raise ConnectionError("Port not specified")
+        if not all([host, port]):
+            raise ConnectionError("Host or port not specified")
 
         try:
             ip_info = ipaddress.ip_address(host)
@@ -73,12 +71,9 @@ class ClientSocket(object):
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             elif isinstance(ip_info, ipaddress.IPv6Address):
                 self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            else:
-                self.logger.error(f"Invalid IP address {host}")
-                raise ConnectionError("Socket initialization failed!")
         except:
             self.logger.error("Wrong ip_address - {}, Supported {}".format(host, IP_ADDRESS_FAMILY))
-            raise ConnectionError("Socket initialization failed!")
+            raise ConnectionError(f"Invalid IP Address given - {host}")
 
         # configures socket to send data as soon as it is available, regardless of packet size
         self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -243,31 +238,28 @@ class ServerSocket(object):
         self.config = config
         self.client_socket = None
 
-    def bind(self, host, port):
+    def bind(self, host=None, port=None):
         """
         Bind server socket
         :param host:
         :param port:
         :return:
         """
-        if not host:
+        if not all([host, port]):
             self.logger.error("ERROR: Host not specified")
-        if not port:
-            self.logger.error("ERROR: Port not specified")
+            raise ConnectionError("Host or port not specified")
+
         port = int(port)
 
         try:
             ip_info = ipaddress.ip_address(host)
-            if type(ip_info) == ipaddress.IPv4Address:
+            if isinstance(ip_info, ipaddress.IPv4Address):
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            elif type(ip_info) == ipaddress.IPv6Address:
+            elif isinstance(ip_info, ipaddress.IPv6Address):
                 self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            else:
-                self.logger.error(f"Invalid IP address {host}")
-                raise ConnectionError("Socket initialization failed!")
         except:
             self.logger.error("Wrong ip_address - {}, Supported {}".format(host, IP_ADDRESS_FAMILY))
-            raise ConnectionError(f"Socket initialization failed - Address {host}")
+            raise ConnectionError(f"Invalid IP Address - {host}")
 
         try:
             """
