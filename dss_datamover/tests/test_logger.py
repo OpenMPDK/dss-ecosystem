@@ -1,15 +1,16 @@
-#!/bin/bash
+#!/usr/bin/python3
 
+"""
 # The Clear BSD License
 #
-# Copyright (c) 2022 Samsung Electronics Co., Ltd.
+# Copyright (c) 2023 Samsung Electronics Co., Ltd.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted (subject to the limitations in the disclaimer
 # below) provided that the following conditions are met:
 #
-# * Redistributions of source code must retain the above copyright notice, 
+# * Redistributions of source code must retain the above copyright notice,
 #   this list of conditions and the following disclaimer.
 # * Redistributions in binary form must reproduce the above copyright notice,
 #   this list of conditions and the following disclaimer in the documentation
@@ -29,7 +30,10 @@
 # WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
 
-export PYTHONPATH="/usr/dss/nkv-datamover"
-echo "Start DataMover UnitTest"
-sudo sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3  -m unittest unit_test.DataMover'
+import pytest
+
+
+class TestLogger():
+    """Test logging module, including MultiprocessingLogger object"""
