@@ -120,6 +120,7 @@ def get_mock_serversocket(mocker):
     mock_serversocket = mocker.patch('socket_communication.ClientSocket', spec=True)
     return mock_serversocket
 
+
 @pytest.fixture
 def get_master_dryrun(get_system_config_dict):
     def instantiate_master_object(operation):
@@ -146,6 +147,7 @@ def get_master(get_system_config_dict):
         return master
     return instantiate_master_object
 
+
 @pytest.fixture
 def shutdown_master_without_nfscluster():
     def _method(master):
@@ -155,6 +157,7 @@ def shutdown_master_without_nfscluster():
         master.stop_monitor()
         print("stopping monitoring")
     return _method
+
 
 @pytest.fixture
 def shutdown_master():
