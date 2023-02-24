@@ -62,6 +62,7 @@ class Master(object):
     def __init__(self, operation, config):
         manager = Manager()
         self.config = config
+        self.config_nfs = config["fs_config"]["nfs"]
         self.client_ip_list = config.get("clients_hosts_or_ip_addresses", [])
         self.workers_count = config["master"]["workers"]
         self.max_index_size = config["master"]["max_index_size"]
@@ -179,6 +180,27 @@ class Master(object):
         self.logger.info("Performing {} operation".format(self.operation))
         self.load_prefix_index_data()  # Load prefix metadata.
         self.load_prefix_keys_for_resume_operation()  # Check if resume operation required.
+
+        # Validate S3 prefix before starting the workers, to allow graceful exit of application for bad prefix
+        # (Fix for MIN-1312)
+        inv_prefix = 0
+        if self.prefix:
+            if not validate_s3_prefix(self.logger, self.prefix):
+                self.logger.fatal("Bad prefix specified, exit application.")
+                self.stop_logging()
+                sys.exit("Invalid prefix. Shutting down DataMover application")
+            cluster_ip = self.prefix.split('/')[0]
+            for nfs_share in self.config_nfs[cluster_ip]:
+                nfs_share_prefix = cluster_ip + nfs_share
+                if not self.prefix.startswith(nfs_share_prefix):
+                    inv_prefix += 1
+            if inv_prefix == len(self.config_nfs[cluster_ip]):
+                self.logger.fatal("Specified Prefix: {} does not match any entry in the Config file nfs_share list: "
+                                  "{}.".format(self.prefix, self.config_nfs[cluster_ip]))
+                self.stop_logging()
+                sys.exit("Specified prefix does not match Config entries. Please specify correct prefix or update "
+                         "the Config file entries to continue!")
+
         if not self.start_workers():
             self.logger.info("Exit DataMover!")
             self.stop_logging()
@@ -425,10 +447,15 @@ class Master(object):
                     self.logger.info('start_indexing: Processing prefixes for indexing stopped')
                     break
                 self.logger.info("Processing prefix:{}".format(prefix))
-                (ip_address, nfs_share, ret) = self.nfs_cluster_obj.mount_based_on_prefix(prefix)
+                (ip_address, nfs_share, ret, out) = self.nfs_cluster_obj.mount_based_on_prefix(prefix)
+                if ret != 0:
+                    self.nfs_cluster_obj.umount_all()
+                    self.logger.error("NFS Mounting failed, Error: \n**{}**".format(out))
+                    self.logger.fatal("Mounting failed, EXIT indexing!")
+                    self.indexing_started_flag.value = -1
+                    return
                 if ret == 0 and is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address,
                                                               prefix=prefix):
-
                     nfs_share_prefix_path = os.path.abspath("/" + prefix)
                     task = Task(operation="indexing",
                                 data=nfs_share_prefix_path,

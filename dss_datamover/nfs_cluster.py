@@ -86,6 +86,7 @@ class NFSCluster:
         cluster_ip = prefix[0:first_delimiter_pos]
         ret = -1
         nfs_share = ""
+        console = ""
         for nfs_share in self.config[cluster_ip]:
             nfs_share_prefix = cluster_ip + nfs_share
             if prefix.startswith(nfs_share_prefix):
@@ -93,7 +94,7 @@ class NFSCluster:
                         and nfs_share in self.local_mounts[cluster_ip]):
                     self.logger.info("Prefix -{} is already mounted to {}".format(
                         prefix, "/" + nfs_share_prefix))
-                    return cluster_ip, nfs_share, 0
+                    return cluster_ip, nfs_share, 0, console
                 else:
                     ret, console = self.mount(cluster_ip, nfs_share)
                 break
@@ -101,7 +102,7 @@ class NFSCluster:
             self.logger.info("Mounted NFS shares {}:{}".format(cluster_ip, nfs_share))
             self.nfs_cluster.append(cluster_ip)
 
-        return cluster_ip, nfs_share, ret
+        return cluster_ip, nfs_share, ret, console
 
     @exception
     def mount(self, cluster_ip, nfs_share):
