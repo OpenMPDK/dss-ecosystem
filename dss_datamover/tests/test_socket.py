@@ -38,4 +38,3 @@ import pytest
 @pytest.mark.usefixtures("get_mock_clientsocket")
 class TestSocketCommunication():
     """ Unit tests for both ClientSocket and ServerSocket objects"""
-

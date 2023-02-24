@@ -480,7 +480,7 @@ class Master(object):
         listing_based_on_indexing = False
         if self.operation.upper() == "LIST":
             self.listing_only.value = True
-            dump_object_keys_path = master.config.get("dest_path", None)
+            dump_object_keys_path = self.config.get("dest_path", None)
 
         # Distributed LISTing
         # TODO distributed prefix_dir from dm_resume_* file.

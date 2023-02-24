@@ -36,7 +36,7 @@ import os
 import sys
 import pytest
 
-from utils import utility, config
+from utils import utility
 from logger import MultiprocessingLogger
 
 
@@ -45,9 +45,7 @@ class TestUtils():
 
     def test_validate_s3_prefix(self, mocker):
         logger = mocker.patch('logger.MultiprocessingLogger', spec=True).start()
-        print(isinstance(logger, MultiprocessingLogger))
         """ verify validate_s3_prefix function detects faulty prefixes """
-        # logger = get_multiprocessing_logger
         valid_prefix = 'nfsserver01:/mnt/shard/10gb/'
         invalid_prefix = 'nfsserver02:/mnt/shard/15gb'
         assert utility.validate_s3_prefix(logger, valid_prefix)
@@ -70,4 +68,3 @@ class TestUtils():
         test_string = "usr/lib64/python3/site-packages"
         delimiter = "/"
         assert test_string.index(delimiter) == utility.first_delimiter_index(test_string, delimiter), "failure: inidices mismatched.."
-    

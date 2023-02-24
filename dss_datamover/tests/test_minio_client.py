@@ -34,6 +34,7 @@
 
 import pytest
 
+
 class TestMINIOClient():
     """Unit tests for MINIO Client module"""
     # TODO: determine if we want tests here or in MINIO client library
