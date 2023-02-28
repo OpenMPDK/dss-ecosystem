@@ -11,7 +11,14 @@ from master_application import (
 from utils.config import Config
 
 
-@pytest.mark.usefixtures("get_master", "shutdown_master", "shutdown_master_without_nfscluster", "get_system_config_dict", "get_pytest_configs", "clear_datamover_cache")
+@pytest.mark.usefixtures(
+    "get_master",
+    "shutdown_master",
+    "shutdown_master_without_nfscluster",
+    "get_system_config_dict",
+    "get_pytest_configs",
+    "clear_datamover_cache"
+)
 class TestDataMover:
     """
     This class may be used for system level / functional tests. However, it is not confirmed if this is the direction we want to go in,
