@@ -143,10 +143,11 @@ class MultiprocessingLogger(object):
         prctl.set_proctitle(name)
         fh = None
         stop_flag = False
+        stop_counter = 0
+        stop_counter_threshold = 5
 
         try:
             print("Log file:{}".format(self.logfile))
-            fh = None
             # Move existing log file to log1
             if os.path.exists(self.logfile):
                 newfile = self.logfile + ".bak"
@@ -169,11 +170,12 @@ class MultiprocessingLogger(object):
                         fh.write(str(time.ctime()) + ": " + message + "\n")
 
                 if stop_logging.value:
-                    if stop_flag and queue.qsize():
-                        print("Queue is not empty, but received a stop signal. Exiting ...")
-                    break
+                    if stop_flag and queue.qsize() and stop_counter < stop_counter_threshold:
+                        print("Queue is not empty, but received a stop signal ...")
+                        stop_counter += 1
+                    else:
+                        break
                 time.sleep(1)
-                fh.close()
 
         except Exception as e:
             print("Exception: {}".format(e))

@@ -73,7 +73,6 @@ class Monitor(object):
         self.logger = kwargs["logger"]
         self.operation = kwargs["operation"]
         self.operation_start_time = kwargs["operation_start_time"]
-        self.ip_address_family = self.config["ip_address_family"]
         self.standalone = kwargs["standalone"]
         self.dryrun = kwargs["dryrun"]
 
@@ -205,7 +204,7 @@ class Monitor(object):
         successful_socket_connection = 0
         for client in self.clients:
             try:
-                client.socket_index = ClientSocket(self.config, self.logger, self.ip_address_family)
+                client.socket_index = ClientSocket(self.config, self.logger)
                 client.socket_index.connect(client.ip_address, client.port_index)
                 successful_socket_connection += 1
                 self.logger.info("Monitor-Index-Distributor: Connected to Monitor-Index-MessageHandler of ClientApp-{}:{}".format(client.id, client.port_index))
@@ -394,7 +393,7 @@ class Monitor(object):
         successful_socket_connection = 0
         for client in self.clients:
             try:
-                client.socket_status = ClientSocket(self.config, self.logger, self.ip_address_family)
+                client.socket_status = ClientSocket(self.config, self.logger)
                 client.socket_status.connect(client.ip_address, client.port_status)
                 self.logger.info("Monitor-Status-Poller: Connected to ClientApp-{}:{}".format(
                     client.id, client.port_status))
@@ -466,6 +465,11 @@ class Monitor(object):
                         client.socket_status = None
                 except Exception as e:
                     self.logger.excep("Monitor-Status-Poller- client-{}, Status - {} ".format(client.id, e))
+                    if client.status.value:
+                        self.logger.warn("Monitor-Status-Poller: client-{} terminated and reciving socket doesn't have any element, closing socket!".format(
+                            client.id, e))
+                        client.socket_status.close()
+                        client.socket_status = None
 
             # Check if all client_applications terminated?
             if all_client_applications_terminated:
