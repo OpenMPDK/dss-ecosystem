@@ -199,12 +199,6 @@ class ClientSocket:
                 return msg
         except socket.timeout as e:
             self.logger.error("ClientSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
-        except socket.error as e:
-            self.logger.error(f"ClientSocket SocketError: {e}")
-        except ValueError as e:
-            self.logger.error(f"ClientSocket: ValueError - {e}")
-        except RuntimeError as e:
-            self.logger.error(f"ClientSocket: RuntimeError {e}")
         except Exception as e:
             self.logger.error(f"ClientSocket: Exception {e}")
 
@@ -373,12 +367,6 @@ class ServerSocket:
 
         except socket.timeout as e:
             self.logger.error("ServerSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
-        except socket.error as e:
-            self.logger.error(f"ServerSocket SocketError: {e}")
-        except ValueError as e:
-            self.logger.error(f"ServerSocket: ValueError - {e}")
-        except RuntimeError as e:
-            self.logger.error(f"ServerSocket: RuntimeError {e}")
         except Exception as e:
             self.logger.error(f"ServerSocket: Exception {e}")
 
