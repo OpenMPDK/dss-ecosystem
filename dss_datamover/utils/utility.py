@@ -206,17 +206,34 @@ def get_s3_prefix(logger, nfs_cluster, prefix=None):
             yield nfs_server_ip + "/"
 
 
-def validate_s3_prefix(logger, prefix):
+def validate_s3_prefix(logger, prefix, config_nfs=None):
     """
     Validate a given prefix. A S3 prefix should start without "/" and end with "/".
     <prefix string>/
     :param logger: multiprocessing logger object
     :param prefix: a string
+    :param(optional) config_nfs: nfs_share Config dict
     :return: Success/Failure
     """
+    inv_prefix = 0
     if prefix.startswith("/") or not prefix.endswith("/"):
-        logger.error("WRONG specification of prefix. Should be in the format of <nfs_server_ip>/<prefix>/ ")
+        logger.fatal("WRONG specification of prefix. Should be in the format of <nfs_server_ip>/<prefix>/ ")
         return False
+    if config_nfs is not None:
+        cluster_ip = prefix.split('/')[0]
+        if config_nfs and cluster_ip in config_nfs:
+            for nfs_share in config_nfs[cluster_ip]:
+                nfs_share_prefix = cluster_ip + nfs_share
+                if not prefix.startswith(nfs_share_prefix):
+                    inv_prefix += 1
+            if inv_prefix == len(config_nfs[cluster_ip]):
+                logger.fatal("Specified Prefix: {} does not match any entry in the Config file nfs_share list: "
+                             "{}.".format(prefix, config_nfs[cluster_ip]))
+                return False
+        else:
+            logger.fatal("Specified Prefix IP: {} does not match any entry in the Config file nfs_share IP list: {}."
+                         .format(cluster_ip, config_nfs))
+            return False
     return True
 
 
