@@ -53,6 +53,13 @@ def put_object(client_handle, filename, size, print_enable=False):
     return data_in_chksum
 
 
+def del_object(client_handle, filename, print_enable=False):
+    ret = client_handle.deleteObject(filename)
+    if print_enable:
+        print(f"DeleteObject: {filename} return val: {ret}")
+    return ret
+
+
 def data_integrity_check(endpoint, user, password, prefix, file_name_prefix, size, file_count, debug=False):
     try:
         c = create_client_connection(endpoint, user, password)
@@ -80,6 +87,19 @@ def data_integrity_check(endpoint, user, password, prefix, file_name_prefix, siz
             data_out_chksum = get_object(c, filename, size, debug)
             if data_out_chksum != data_hash_map[filename]:
                 print(f"File {filename} contents mismatched")
+        print("-" * 64)
+
+        print(f"Deleting objects with the name {full_filename_prefix}")
+        print("-" * 64)
+        for i in range(file_count):
+            filename = full_filename_prefix + str(i)
+            if debug:
+                print(f"Deleting file {filename}")
+            ret = del_object(c, filename, debug)
+            if ret == 0:
+                print(f"File {filename} deleted successfully")
+            else:
+                print(f"Failure in deleting the file {filename}")
         print("-" * 64)
 
         print(f"Cleaning up objects with the name {full_filename_prefix} on local disk")
