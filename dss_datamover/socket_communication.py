@@ -147,7 +147,6 @@ class ClientSocket(object):
         The message contains 10 bytes header and body. Read header untill received 10 bytes or timeout.
         Iterate to receive desired number of bytes from socket.
         :format: JSON/String
-        :timeout: default 60 seconds
         :return: Return received data in json format.
         """
         self.socket.settimeout(self.config.get("socket_options", {}).get("recv_timeout", DEFAULT_RECV_TIMEOUT))
@@ -203,21 +202,13 @@ class ClientSocket(object):
                 return msg
         except socket.timeout as e:
             self.logger.error("ClientSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
-            # return status depending on received message size, if incomplete a Runtime Error should have been raised
-            if len(msg_len_in_bytes) == response_header_length and received_data_size == msg_len:
-                return json.loads(msg)
-            else:
-                return json.loads("{}")
-        except socket.error as e:
-            self.logger.error(f"ClientSocket SocketError: {e}")
-            raise socket.error(f"ClientSocket SocketError: {e}")
-        except ValueError as e:
-            raise ValueError(f"ClientSocket: ValueError - {e}")
-        except RuntimeError as e:
-            self.logger.error(f"ClientSocket: RuntimeError {e}")
-            raise RuntimeError(f"ClientSocket: RuntimeError {e}")
         except Exception as e:
-            raise Exception(f"ClientSocket: Exception {e}")
+            self.logger.error(f"ClientSocket: Exception {e}")
+
+        # return status depending on received message size, if incomplete a Runtime Error should have been raised
+        if len(msg_len_in_bytes) == response_header_length and received_data_size == msg_len:
+            return json.loads(msg)
+        return json.loads("{}")
 
     def close(self):
         """
@@ -327,7 +318,6 @@ class ServerSocket(object):
         The message contains 10 bytes header and body. Read header untill received 10 bytes or timeout.
         Iterate to receive desired number of bytes from socket.
         :format: JSON/String
-        :timeout: default 60 seconds
         :return: Return received data in json format.
         """
         self.client_socket.settimeout(self.config.get("socket_options", {}).get("recv_timeout", DEFAULT_RECV_TIMEOUT))
@@ -384,21 +374,13 @@ class ServerSocket(object):
 
         except socket.timeout as e:
             self.logger.error("ServerSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
-            # return status depending on received message size, if incomplete a Runtime Error should have been raised
-            if len(msg_len_in_bytes) == response_header_length and received_data_size == msg_len:
-                return json.loads(msg)
-            else:
-                return json.loads("{}")
-        except socket.error as e:
-            self.logger.error(f"ServerSocket SocketError: {e}")
-            raise socket.error(f"ServerSocket SocketError: {e}")
-        except ValueError as e:
-            raise ValueError(f"ServerSocket: ValueError - {e}")
-        except RuntimeError as e:
-            self.logger.error(f"ServerSocket: RuntimeError {e}")
-            raise RuntimeError(f"ServerSocket: RuntimeError {e}")
         except Exception as e:
-            raise Exception(f"ServerSocket: Exception {e}")
+            self.logger.error(f"ServerSocket: Exception {e}")
+
+        # return status depending on received message size, if incomplete a Runtime Error should have been raised
+        if len(msg_len_in_bytes) == response_header_length and received_data_size == msg_len:
+            return json.loads(msg)
+        return json.loads("{}")
 
     def close(self):
         """
