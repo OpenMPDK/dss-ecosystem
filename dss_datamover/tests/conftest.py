@@ -37,13 +37,23 @@ from logger import MultiprocessingLogger
 from master_application import Master, process_put_operation, process_list_operation, process_get_operation, process_del_operation
 from multiprocessing import Queue, Value, Lock
 
+import json
 import os
 import pytest
+import tempfile
+
+
+@pytest.fixture(scope="session")
+def get_pytest_configs():
+    pytest_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
+    with open(pytest_config_filepath) as f:
+        pytest_configs = json.load(f)
+    return pytest_configs
 
 
 @pytest.fixture(scope="session")
 def get_config_object():
-    test_config_filepath = os.path.dirname(__file__) + "/test_config.json"
+    test_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
     config_obj = config.Config({}, config_filepath=test_config_filepath)
     return config_obj
 
@@ -122,10 +132,10 @@ def get_mock_serversocket(mocker):
 
 
 @pytest.fixture
-def get_master_dryrun(get_system_config_dict):
+def get_master_dryrun(get_system_config_dict, get_pytest_configs):
     def instantiate_master_object(operation):
-        get_system_config_dict["config"] = "/etc/dss/datamover/config.json"
-        get_system_config_dict["dest_path"] = "/tmp/xyz"
+        get_system_config_dict["config"] = get_pytest_configs["config"]
+        get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
         get_system_config_dict["dryrun"] = True
         master = Master(operation, get_system_config_dict)
         print("instantiated master obj")
@@ -136,10 +146,10 @@ def get_master_dryrun(get_system_config_dict):
 
 
 @pytest.fixture
-def get_master(get_system_config_dict):
+def get_master(get_system_config_dict, get_pytest_configs):
     def instantiate_master_object(operation):
-        get_system_config_dict["config"] = "/etc/dss/datamover/config.json"
-        get_system_config_dict["dest_path"] = "/tmp/xyz"
+        get_system_config_dict["config"] = get_pytest_configs["config"]
+        get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
         master = Master(operation, get_system_config_dict)
         print("instantiated master obj")
         master.start()

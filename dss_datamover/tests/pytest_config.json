@@ -1,0 +1,4 @@
+{
+    "config": "/etc/dss/datamover/config.json",
+    "dest_path": "/tmp/xyz"
+}

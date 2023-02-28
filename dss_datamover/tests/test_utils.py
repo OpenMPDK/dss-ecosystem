@@ -40,7 +40,7 @@ from utils import utility
 from logger import MultiprocessingLogger
 
 
-@pytest.mark.usefixtures("get_config_dict", "get_multiprocessing_logger")
+@pytest.mark.usefixtures("get_pytest_configs", "get_config_dict", "get_multiprocessing_logger")
 class TestUtils():
 
     def test_validate_s3_prefix(self, mocker):
