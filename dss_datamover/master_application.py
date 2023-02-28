@@ -39,7 +39,7 @@ import sys
 import time
 
 from utils.utility import remoteExecution, get_s3_prefix, progress_bar, get_ip_address
-from utils.utility import is_prefix_valid_for_nfs_share, validate_s3_prefix
+from utils.utility import is_prefix_valid_for_nfs_share, get_s3_prefix, validate_s3_prefix
 from utils.config import Config, CommandLineArgument
 from utils.signal_handler import SignalHandler
 from utils import __VERSION__
@@ -477,7 +477,7 @@ class Master(object):
         listing_based_on_indexing = False
         if self.operation.upper() == "LIST":
             self.listing_only.value = True
-            dump_object_keys_path = master.config.get("dest_path", None)
+            dump_object_keys_path = self.config.get("dest_path", None)
 
         # Distributed LISTing
         # TODO distributed prefix_dir from dm_resume_* file.

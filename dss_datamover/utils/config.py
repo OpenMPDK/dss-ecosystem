@@ -39,8 +39,8 @@ import argparse
 
 class Config(object):
 
-    def __init__(self, params):
-        self.config_file = self.get_config_file(params.get("config"))
+    def __init__(self, params, config_filepath=None):
+        self.config_file = config_filepath or self.get_config_file(params.get("config"))
         self.params = params
         self.config = self.process_config()
 
