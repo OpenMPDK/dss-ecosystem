@@ -32,12 +32,9 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import os
-import sys
 import pytest
 
 from utils import utility
-from logger import MultiprocessingLogger
 
 
 @pytest.mark.usefixtures("get_pytest_configs", "get_config_dict", "get_multiprocessing_logger")

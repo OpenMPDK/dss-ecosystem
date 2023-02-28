@@ -1,7 +1,6 @@
 import os
 import sys
 import pytest
-import multiprocessing
 
 from master_application import (
     process_put_operation,
@@ -12,7 +11,7 @@ from master_application import (
 from utils.config import Config
 
 
-@pytest.mark.usefixtures("get_master", "shutdown_master", "shutdown_master_without_nfscluster", "get_system_config_dict", "clear_datamover_cache")
+@pytest.mark.usefixtures("get_master", "shutdown_master", "shutdown_master_without_nfscluster", "get_system_config_dict", "get_pytest_configs", "clear_datamover_cache")
 class TestDataMover:
     """
     This class may be used for system level / functional tests. However, it is not confirmed if this is the direction we want to go in,
@@ -42,3 +41,11 @@ class TestDataMover:
         process_del_operation(master)
         assert master.testcase_passed.value
         shutdown_master_without_nfscluster(master)
+
+    def test_remove_cache(self, clear_datamover_cache, get_pytest_configs):
+        cache_files = get_pytest_configs["cache"]
+        cache_exists = False
+        for f in cache_files:
+            if os.path.exists(f):
+                cache_exists = True
+        assert not cache_exists, "Failure: DataMover cache not cleared.."

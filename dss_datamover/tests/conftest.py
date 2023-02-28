@@ -32,15 +32,14 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-from utils import utility, config
+from utils import config
 from logger import MultiprocessingLogger
-from master_application import Master, process_put_operation, process_list_operation, process_get_operation, process_del_operation
+from master_application import Master
 from multiprocessing import Queue, Value, Lock
 
 import json
 import os
 import pytest
-import tempfile
 
 
 @pytest.fixture(scope="session")
@@ -93,8 +92,8 @@ def get_multiprocessing_logger(tmpdir):
 
 
 @pytest.fixture
-def clear_datamover_cache():
-    cache_files = ["/var/log/dss/prefix_index_data.json", "/var/log/dss/dm_resume_prefix_dir_keys.txt"]
+def clear_datamover_cache(get_pytest_configs):
+    cache_files = get_pytest_configs["cache"]
     for f in cache_files:
         if os.path.exists(f):
             os.remove(f)
@@ -106,8 +105,8 @@ class MockSocket():
     """
     # TODO: finish building out MockSocket class
     def __init__(self):
-        self.mockhost = "192.168.300.144"
-        self.mockport = "4000"
+        self.host = "xxx.xxxx.xxxx.xxxx"
+        self.port = "xxxx"
 
     def connect(self):
         return True

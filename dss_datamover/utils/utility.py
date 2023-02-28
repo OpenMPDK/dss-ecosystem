@@ -181,7 +181,7 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
         return client, stdin, stdout, stderr
 
 
-def get_s3_prefix(logger, nfs_cluster, prefix):
+def get_s3_prefix(logger, nfs_cluster, prefix=None):
     """
     Validate prefix for minio S3 and return the same.
     :param logger:
