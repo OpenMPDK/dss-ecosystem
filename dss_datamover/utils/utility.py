@@ -215,18 +215,19 @@ def validate_s3_prefix(logger, prefix, config_nfs=None):
     :param(optional) config_nfs: nfs_share Config dict
     :return: Success/Failure
     """
-    inv_prefix = 0
+    inv_prefix = False
     if prefix.startswith("/") or not prefix.endswith("/"):
         logger.fatal("WRONG specification of prefix. Should be in the format of <nfs_server_ip>/<prefix>/ ")
         return False
-    if config_nfs is not None:
+    if config_nfs:
         cluster_ip = prefix.split('/')[0]
-        if config_nfs and cluster_ip in config_nfs:
+        if cluster_ip in config_nfs:
             for nfs_share in config_nfs[cluster_ip]:
                 nfs_share_prefix = cluster_ip + nfs_share
-                if not prefix.startswith(nfs_share_prefix):
-                    inv_prefix += 1
-            if inv_prefix == len(config_nfs[cluster_ip]):
+                if prefix.startswith(nfs_share_prefix):
+                    inv_prefix = True
+                    break
+            if not inv_prefix:
                 logger.fatal("Specified Prefix: {} does not match any entry in the Config file nfs_share list: "
                              "{}.".format(prefix, config_nfs[cluster_ip]))
                 return False
