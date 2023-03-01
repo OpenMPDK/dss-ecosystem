@@ -176,6 +176,14 @@ class Master(object):
         self.logger.info("Performing {} operation".format(self.operation))
         self.load_prefix_index_data()  # Load prefix metadata.
         self.load_prefix_keys_for_resume_operation()  # Check if resume operation required.
+
+        # Validate S3 prefix before starting the workers, to allow graceful exit of application for bad prefix
+        # (Fix for MIN-1312)
+        if self.prefix:
+            if not validate_s3_prefix(self.logger, self.prefix, self.fs_config.get('nfs', {})):
+                self.stop_logging()
+                sys.exit("Invalid prefix. Shutting down DataMover application")
+
         if not self.start_workers():
             self.logger.info("Exit DataMover!")
             self.stop_logging()
@@ -422,10 +430,15 @@ class Master(object):
                     self.logger.info('start_indexing: Processing prefixes for indexing stopped')
                     break
                 self.logger.info("Processing prefix:{}".format(prefix))
-                (ip_address, nfs_share, ret) = self.nfs_cluster_obj.mount_based_on_prefix(prefix)
+                (ip_address, nfs_share, ret, out) = self.nfs_cluster_obj.mount_based_on_prefix(prefix)
+                if ret != 0:
+                    self.nfs_cluster_obj.umount_all()
+                    self.logger.error("NFS Mounting failed, Error: {}".format(out))
+                    self.logger.fatal("Mounting failed, EXIT indexing!")
+                    self.indexing_started_flag.value = -1
+                    return
                 if ret == 0 and is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address,
                                                               prefix=prefix):
-
                     nfs_share_prefix_path = os.path.abspath("/" + prefix)
                     task = Task(operation="indexing",
                                 data=nfs_share_prefix_path,
