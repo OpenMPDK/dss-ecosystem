@@ -225,25 +225,3 @@ class MultiprocessingLogger(object):
     @exception
     def fatal(self, message):
         self.logger_handle.fatal(message)
-
-
-if __name__ == "__main__":
-    import multiprocessing as mp
-    import time
-    queue = mp.Queue()
-    status = mp.Value('i', 0)
-    logger = MultiprocessingLogger(queue, status)
-    logger.config("/var/log/dss", "test.log")
-    logger.start()
-    logger.create_logger_handle()
-    for i in range(2):
-        logger.info(f"Testing info data - {i}")
-    for i in range(2):
-        logger.error(f"Testing error data - {i}")
-
-    try:
-        out = 1 / 0
-    except:
-        logger.excep("Exception hit with 1/0")
-
-    logger.stop()
