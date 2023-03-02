@@ -89,15 +89,20 @@ class Master(object):
         self.standalone = config.get("standalone", False)
 
         # Logging
-        self.logging_path = "/var/log/dss"
-        self.logging_level = "INFO"
         if "logging" in config:
             self.logging_path = config["logging"].get("path", "/var/log/dss")
             self.logging_level = config["logging"].get("level", "INFO")
+            self.max_log_file_size = config["logging"].get("max_log_file_size", (1024 * 1024))
+            self.log_file_backup_count = config["logging"].get("log_file_backup_count", 5)
+        else:
+            self.logging_path = "/var/log/dss"
+            self.logging_level = "INFO"
+            self.max_log_file_size = (1024 * 1024)
+            self.log_file_backup_count = 5
+
         self.logger = None
         self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
         self.logger_queue = Queue()
-        self.logger_lock = Lock()
 
         self.lock = Lock()
         # Metadata files
@@ -176,14 +181,6 @@ class Master(object):
         self.logger.info("Performing {} operation".format(self.operation))
         self.load_prefix_index_data()  # Load prefix metadata.
         self.load_prefix_keys_for_resume_operation()  # Check if resume operation required.
-
-        # Validate S3 prefix before starting the workers, to allow graceful exit of application for bad prefix
-        # (Fix for MIN-1312)
-        if self.prefix:
-            if not validate_s3_prefix(self.logger, self.prefix, self.fs_config.get('nfs', {})):
-                self.stop_logging()
-                sys.exit("Invalid prefix. Shutting down DataMover application")
-
         if not self.start_workers():
             self.logger.info("Exit DataMover!")
             self.stop_logging()
@@ -386,14 +383,12 @@ class Master(object):
         Start Multiprocessing logger
         :return:
         """
-        self.logger = MultiprocessingLogger(self.logger_queue,
-                                            self.logger_lock,
-                                            self.logger_status
-                                            )
+        self.logger = MultiprocessingLogger(self.logger_queue, self.logger_status, self.max_log_file_size, self.log_file_backup_count)
         self.logger.config(self.logging_path,
                            __file__,
                            self.logging_level)
         self.logger.start()
+        self.logger.create_logger_handle()
         self.logger.info("** DataMover VERSION:{} **".format(__VERSION__))
         self.logger.info("Started Logger with {} mode!".format(self.logging_level))
 
@@ -430,15 +425,10 @@ class Master(object):
                     self.logger.info('start_indexing: Processing prefixes for indexing stopped')
                     break
                 self.logger.info("Processing prefix:{}".format(prefix))
-                (ip_address, nfs_share, ret, out) = self.nfs_cluster_obj.mount_based_on_prefix(prefix)
-                if ret != 0:
-                    self.nfs_cluster_obj.umount_all()
-                    self.logger.error("NFS Mounting failed, Error: {}".format(out))
-                    self.logger.fatal("Mounting failed, EXIT indexing!")
-                    self.indexing_started_flag.value = -1
-                    return
+                (ip_address, nfs_share, ret) = self.nfs_cluster_obj.mount_based_on_prefix(prefix)
                 if ret == 0 and is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address,
                                                               prefix=prefix):
+
                     nfs_share_prefix_path = os.path.abspath("/" + prefix)
                     task = Task(operation="indexing",
                                 data=nfs_share_prefix_path,

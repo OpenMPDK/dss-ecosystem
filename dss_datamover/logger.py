@@ -32,9 +32,12 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+import logging
 import os
 import prctl
 import time
+from logging import FileHandler, StreamHandler
+from logging.handlers import QueueHandler, RotatingFileHandler
 from utils.utility import exception, is_queue_empty
 from multiprocessing import Process, Value
 
@@ -45,14 +48,14 @@ DEBUG: Should include DEBUG message
 ALERT: Shows minimum required messages
 """
 
-LOGGING_LEVEL = [
-    "INFO",
-    "DEBUG",
-    "WARNING",
-    "ERROR",
-    "EXCEPTION",
-    "FATAL"
-]
+LOGGING_LEVEL = {
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+    "WARNING": logging.WARN,
+    "ERROR": logging.ERROR,
+    "EXCEPTION": logging.ERROR,
+    "FATAL": logging.FATAL
+}
 
 LOGGER_STATE = [
     "NOT-STARTED",
@@ -62,12 +65,14 @@ LOGGER_STATE = [
 
 
 class MultiprocessingLogger(object):
-    def __init__(self, queue, lock, status):
+    def __init__(self, queue, status, max_file_size=(1024 * 1024), backup_count=5, name='datamover'):
         self.queue = queue
-        self.logger_lock = lock
         self.logger_status = status  # 0=NOT-STARTED, 1=RUNNING, 2= STOPPED
         self.stop_logging = Value('i', 0)
+        self.app_name = name
         self.process = None
+        self.max_log_file_size = max_file_size
+        self.log_file_backup_count = backup_count
 
     @exception
     def get_log_file(self, file_name):
@@ -86,10 +91,10 @@ class MultiprocessingLogger(object):
         :param level: INFO|DEBUG|WARN|ERROR|EXCEPTION
         :return: Numeric log level.
         """
-        logging_level = 0
         if level in LOGGING_LEVEL:
-            logging_level = LOGGING_LEVEL.index(level, 0, 5)
-
+            logging_level = LOGGING_LEVEL[level]
+        else:
+            logging_level = LOGGING_LEVEL["INFO"]
         return logging_level
 
     def config(self, path, file_name, logging_level="INFO"):
@@ -97,12 +102,27 @@ class MultiprocessingLogger(object):
         self.path = path
         self.logfile = self.get_log_file(file_name)
 
+    def create_logger_handle(self):
+        '''
+        Creates logger handle with Queue. Make sure this is called after starting the logger process.
+        Otherwise it ends up with duplicate data
+        '''
+        try:
+            self.logger_handle = logging.getLogger(self.app_name)
+            self.logger_handle.addHandler(QueueHandler(self.queue))
+            self.logger_handle.setLevel(self.logging_level)
+        except Exception as e:
+            print('Exception in creating logger handle')
+            raise
+
     def start(self):
         if self.logger_status.value == 0:
-            if self.queue and self.logger_lock:
-                self.process = Process(target=self.logging, args=(self.queue, self.logger_lock, self.stop_logging))
+            if self.queue:
+                self.process = Process(target=self.logging, args=(self.app_name, self.queue, self.logging_level, self.logfile))
                 self.process.start()
                 self.logger_status.value = 1
+            else:
+                print("Queue is not present which is required for logger process")
         else:
             self.warn("Logger already started!")
 
@@ -127,8 +147,14 @@ class MultiprocessingLogger(object):
         """
         return LOGGER_STATE[self.logger_status.value]
 
+    def create_rotating_file_handler(self, log_file, max_file_size=(1024 * 1024), backup_count=5):
+        formatter = logging.Formatter(('%(asctime)s - %(levelname)s - %(message)s'))
+        rfh = RotatingFileHandler(log_file, maxBytes=max_file_size, backupCount=backup_count)
+        rfh.setFormatter(formatter)
+        return rfh
+
     @exception
-    def logging(self, queue, lock, stop_logging):
+    def logging(self, app_name, queue, log_level, log_file):
         """
         This is the main function which gets executed in a process.
         It consume messages from shared logger_queue and write into log file.
@@ -141,79 +167,83 @@ class MultiprocessingLogger(object):
         name = "DM_logger"
         prctl.set_name(name)
         prctl.set_proctitle(name)
-        fh = None
         stop_flag = False
         stop_counter = 0
         stop_counter_threshold = 5
+        logger_handle_thr = None
 
         try:
-            print("Log file:{}".format(self.logfile))
-            # Move existing log file to log1
-            if os.path.exists(self.logfile):
-                newfile = self.logfile + ".bak"
-                if os.path.exists(newfile):
-                    os.remove(newfile)
-                os.rename(self.logfile, newfile)
+            logger_handle_thr = logging.getLogger(app_name)
+            logger_handle_thr.setLevel(log_level)
+        except Exception as e:
+            print('Exception in creating logger handle inside the logger thread')
+            raise
+
+        try:
+            rfh = self.create_rotating_file_handler(log_file, self.max_log_file_size, self.log_file_backup_count)
+            logger_handle_thr.addHandler(rfh)
+            logger_handle_thr.addHandler(StreamHandler())
+
             while True:
-                fh = open(self.logfile, "a")
+                message = queue.get()
+                if message is None:
+                    stop_flag = True
+                else:
+                    logger_handle_thr.handle(message)
 
-                while not is_queue_empty(queue):
-                    message = queue.get()
-                    if type(message) == tuple:
-                        (message_level, message_value) = message
-                        print("{}: {}".format(LOGGING_LEVEL[message_level], message_value))
-                        fh.write(str(time.ctime()) + ": " + LOGGING_LEVEL[message_level] + ": " + message_value + "\n")
-                    elif message is None:
-                        stop_flag = True
-                        break
-                    else:
-                        fh.write(str(time.ctime()) + ": " + message + "\n")
-
-                if stop_logging.value:
-                    if stop_flag and queue.qsize() and stop_counter < stop_counter_threshold:
+                if stop_flag:
+                    if queue.qsize() and stop_counter < stop_counter_threshold:
                         print("Queue is not empty, but received a stop signal ...")
                         stop_counter += 1
+                        time.sleep(1)
                     else:
                         break
-                time.sleep(1)
 
         except Exception as e:
-            print("Exception: {}".format(e))
-        finally:
-            if fh:
-                fh.close()
+            print("Exception in logger process: {}".format(e))
 
     @exception
     def info(self, message):
-        msg = (0, message)
-        self.queue.put(msg)
+        self.logger_handle.info(message)
 
     @exception
     def debug(self, message):
-        if self.logging_level < len(LOGGING_LEVEL) and LOGGING_LEVEL[self.logging_level] == "DEBUG":
-            msg = (1, message)
-            self.queue.put(msg)
+        self.logger_handle.debug(message)
 
     @exception
     def warn(self, message):
-        if self.logging_level <= 2:
-            msg = (2, message)
-            self.queue.put(msg)
+        self.logger_handle.warning(message)
 
     @exception
     def error(self, message):
-        if self.logging_level <= 3:
-            msg = (3, message)
-            self.queue.put(msg)
+        self.logger_handle.error(message)
 
     @exception
     def excep(self, message):
-        if self.logging_level <= 4:
-            msg = (4, message)
-            self.queue.put(msg)
+        self.logger_handle.exception(message)
 
     @exception
     def fatal(self, message):
-        if self.logging_level <= 5:
-            msg = (5, message)
-            self.queue.put(msg)
+        self.logger_handle.fatal(message)
+
+
+if __name__ == "__main__":
+    import multiprocessing as mp
+    import time
+    queue = mp.Queue()
+    status = mp.Value('i', 0)
+    logger = MultiprocessingLogger(queue, status)
+    logger.config("/var/log/dss", "test.log")
+    logger.start()
+    logger.create_logger_handle()
+    for i in range(2):
+        logger.info(f"Testing info data - {i}")
+    for i in range(2):
+        logger.error(f"Testing error data - {i}")
+
+    try:
+        out = 1 / 0
+    except:
+        logger.excep("Exception hit with 1/0")
+
+    logger.stop()
