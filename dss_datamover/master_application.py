@@ -442,7 +442,6 @@ class Master(object):
                     return
                 if ret == 0 and is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address,
                                                               prefix=prefix):
-
                     nfs_share_prefix_path = os.path.abspath("/" + prefix)
                     task = Task(operation="indexing",
                                 data=nfs_share_prefix_path,

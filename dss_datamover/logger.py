@@ -36,7 +36,7 @@ import logging
 import os
 import prctl
 import time
-from logging import FileHandler, StreamHandler
+from logging import StreamHandler
 from logging.handlers import QueueHandler, RotatingFileHandler
 from utils.utility import exception, is_queue_empty
 from multiprocessing import Process, Value
