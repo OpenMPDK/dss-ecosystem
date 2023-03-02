@@ -34,7 +34,12 @@
     "client_lib": "dss_client"
   },
   "operations": ["PUT","GET","DEL","LIST"],
-  "logging": { "path": "/var/log/dss", "level": "INFO"},
+  "logging": { 
+    "path": "/var/log/dss", 
+    "level": "INFO",
+    "max_log_file_size": 1048576,
+    "log_file_backup_count": 5 
+  },
   "dss_targets": {
     "subsystem_nqn":{"msl-ssg-vm21.msl.lab":["nqn.2021-10.io:msl-ssg-vm21-kv_data1"],
                   "msl-ssg-vm22.msl.lab":["nqn.2021-10.io:msl-ssg-vm22-kv_data1"],

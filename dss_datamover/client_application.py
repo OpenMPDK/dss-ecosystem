@@ -97,12 +97,20 @@ class ClientApplication(object):
         self.password = self.client_config.get("password", "ansible")
 
         # Multiprocessing Logging
-        self.logging_path = config["logging"].get("path", "/var/log/dss")
-        self.logging_level = config["logging"].get("level", "INFO")
+        if "logging" in config:
+            self.logging_path = config["logging"].get("path", "/var/log/dss")
+            self.logging_level = config["logging"].get("level", "INFO")
+            self.max_log_file_size = config["logging"].get("max_log_file_size", (1024 * 1024))
+            self.log_file_backup_count = config["logging"].get("log_file_backup_count", 5)
+        else:
+            self.logging_path = "/var/log/dss"
+            self.logging_level = "INFO"
+            self.max_log_file_size = (1024 * 1024)
+            self.log_file_backup_count = 5
+
         if self.debug:
             self.logging_level = "DEBUG"
         self.logger_queue = Queue()
-        self.logger_lock = Lock()
         self.logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
         self.logger = None
         self.start_logging()
@@ -553,9 +561,10 @@ class ClientApplication(object):
         Start Multiprocessing logger
         :return:
         """
-        self.logger = MultiprocessingLogger(self.logger_queue, self.logger_lock, self.logger_status)
+        self.logger = MultiprocessingLogger(self.logger_queue, self.logger_status, self.max_log_file_size, self.log_file_backup_count)
         self.logger.config(self.logging_path, __file__, self.logging_level)
         self.logger.start()
+        self.logger.create_logger_handle()
 
     def stop_logging(self):
         """
