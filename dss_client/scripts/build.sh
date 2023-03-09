@@ -45,18 +45,20 @@ rm -rf "$BUILD_DIR"
 rm -f "$DSS_CLIENT_DIR"/*.tgz
 
 # Load GCC
-. "$SCRIPT_DIR/load_gcc.sh"
+#. "$SCRIPT_DIR/load_gcc.sh"
+source /opt/rh/devtoolset-11/enable
 
 # Check for libaws libs
 if [ ! -f /usr/local/lib64/libaws-c-common.so ]
 then
-    die "Missing AWS libs. Build using GCC 5.1.0: https://codeload.github.com/aws/aws-sdk-cpp/tar.gz/refs/tags/1.8.99#/aws-sdk-cpp-1.8.99.tar.gz"
+    echo ""
+    die "Missing AWS libs. Build using devtoolset-11:  https://github.com/breuner/aws-sdk-cpp.git"
 fi
 
 # Build Client Library
 mkdir -p "$BUILD_DIR"
 pushd "$BUILD_DIR"
-    CXX=g++ cmake3 ../
+    CXX=g++ cmake3 ../ -DBYO_CRYPTO=ON
     make -j
 popd
 

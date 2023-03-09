@@ -1,11 +1,12 @@
 # Set the minimum required version of CMake for this project.
-cmake_minimum_required(VERSION 3.7)
+#cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.9.4)
 
 # Set this project's name.
 project("dss")
 
 # Set the C++ standard to use to build this target.
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -37,9 +38,9 @@ separate_arguments(EXT_INCLUDE_FLAGS UNIX_COMMAND "${EXT_INCLUDE_FLAG}")
 
 option(WITH_RELEASE "release build" OFF)
 if (WITH_RELEASE)
-	SET(CMAKE_CXX_FLAGS "-O2 -Wall -Werror ${PYTHON3_LINK_LIBRARIES_FLAG}")
+	SET(CMAKE_CXX_FLAGS "-O2 -Wall -Werror ${PYTHON3_LINK_LIBRARIES_FLAG}  -lrdmacm -libverbs -lcrypto -lcurl")
 else ()
-	SET(CMAKE_CXX_FLAGS "-O0 -g3 -Wall -Werror ${PYTHON3_LINK_LIBRARIES_FLAG}")
+	SET(CMAKE_CXX_FLAGS "-O0 -g3 -Wall -Werror ${PYTHON3_LINK_LIBRARIES_FLAG} -lrdmacm -libverbs -lcrypto -lcurl")
 endif()
 #message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS}")
 
@@ -49,7 +50,7 @@ set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 #message(STATUS " FLAGS: ${CMAKE_CXX_FLAGS}")
-add_executable(test_dss ${SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/src/dss_test.cpp)
+add_executable(test_dss ${SOURCES} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_dss_c_interface.c)
 add_library(${DSS_LIB} SHARED ${SOURCES})
 
 target_compile_definitions(${DSS_LIB} PUBLIC "DSS_DEBUG")

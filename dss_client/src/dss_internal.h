@@ -34,6 +34,9 @@
 #define DSS_INTERNAL_H
 
 #include "pr.h"
+#include "rdd_cl.h"
+#include <unordered_map>
+#include <mutex>
 
 namespace dss {
 
@@ -114,7 +117,7 @@ namespace dss {
 
 	class Endpoint {
 		public:
-			Endpoint(Credentials& cred, const std::string& url, Config& cfg);
+			Endpoint(Aws::Auth::AWSCredentials& cred, const std::string& url, Config& cfg, const std::string transport_type, const std::string uuid);
 
 			Result GetObject(const Aws::String& bn, Request* req);
 			Result GetObject(const Aws::String& bn, const Aws::String& objectName);
@@ -136,14 +139,66 @@ namespace dss {
 
 		private:
 			Aws::S3::S3Client m_ses;
+			std::string m_uuid;
+			std::string m_transport_type;
+	};
+
+	class RDDEndpoint {
+		public:
+			RDDEndpoint(const std::string& rdd_ip, uint32_t rdd_port, const std::string uuid);
+
+			int GetRddHandleAndPort(rdd_cl_conn_ctx_t *rdd_conn, std::string &rdd_ip, uint32_t *rdd_port){
+				*rdd_conn = m_rdd_conn;
+				rdd_ip = m_rdd_ip;
+				*rdd_port = m_rdd_port;
+				return 0;
+			};
+
+			int get_rkey(void* buff, uint32_t* rkey) {
+				int ret = 0;
+				pr_debug("RDDEP: get_rkey before");
+				std::unique_lock<std::mutex> ul(rkey_lock);
+				auto search = m_rkey_map.find((uint64_t)buff);
+				ul.unlock();
+				if (search != m_rkey_map.end()) {
+					*rkey = search->second;
+					pr_debug("RDDEP: rkey found for buff %lu", (uint64_t)buff);
+				} else {
+					ret = -1;
+				} 				
+				return ret;
+			};
+
+			int create_rkey(void* buff, uint64_t buff_len, rdd_cl_conn_ctx_t *rdd_conn, uint32_t* rkey) {
+				pr_debug("RDDEP: create_rkey before");
+				struct ibv_mr *mr = rdd_cl_conn_get_mr(rdd_conn, buff, buff_len);
+				pr_debug("RDDEP: qhandle %x\n", rdd_conn->qhandle);
+				*rkey = mr->rkey;
+				pr_debug("RDDEP: create_rkey after - %u", *rkey);
+				std::unique_lock<std::mutex> ul(rkey_lock);
+				m_rkey_map[(uint64_t)buff] = *rkey;
+				return 0;
+			};
+
+
+
+		private:
+			std::string m_uuid;
+			rdd_cl_conn_ctx_t m_rdd_conn;
+			std::string m_rdd_ip;
+			uint32_t m_rdd_port;
+			std::unordered_map<uint64_t, uint32_t> m_rkey_map = {};
+			std::mutex rkey_lock; 
+
 	};
 
 	class Cluster {
 		public:
 			Cluster(uint32_t id, const std::string& instance_uuid) :
 				m_id(id),
+				m_uuid(instance_uuid),
 				m_bucket(Aws::String(DATA_BUCKET_PREFIX) + Aws::String(std::to_string(id).c_str())),
-                                m_instance_uuid(instance_uuid) {}
+				m_instance_uuid(instance_uuid) {}
 
 			~Cluster()
 			{
@@ -152,7 +207,7 @@ namespace dss {
 			}
 
 			Endpoint* GetEndpoint(Request* r) { return m_endpoints[r->key_hash % m_endpoints.size()]; }
-                        Endpoint* GetEndpoint(std::size_t key_hash) { return m_endpoints[key_hash % m_endpoints.size()]; }
+			Endpoint* GetEndpoint(std::size_t key_hash) { return m_endpoints[key_hash % m_endpoints.size()]; }
 
 			Result GetObject(const Aws::String& objectName);
 			Result GetObject(Request* req, unsigned char* res_buff, long long buffer_size);
@@ -174,15 +229,51 @@ namespace dss {
 			uint32_t GetID() { return m_id; }
 
 			Result ListObjects(Objects *objs);
+			int InsertEndpoint(Client* c, const std::string& ip, uint32_t port, const std::string transport_type, const std::string uuid);
 
-			int InsertEndpoint(Client* c, const std::string& ip, uint32_t port);
+			int CreateRDDConnection(const std::string& rdd_ip, uint32_t rdd_port, const std::string uuid);
+			int GetRddKeyFormat(std::string &key, std::string &value){
+				rdd_cl_conn_ctx_t rdd_conn;
+				uint32_t rdd_port;
+				std::string rdd_ip;
+				key = std::string(m_uuid) + std::string(".dss.rdd.init");
+				for (auto e: m_rdd_endpoints){
+					e->GetRddHandleAndPort(&rdd_conn, rdd_ip, &rdd_port);
+					value += rdd_ip + std::string("-") + std::to_string(rdd_port) + std::string("::");
+					value += std::to_string(int(rdd_conn.qhandle)) + std::string("##");
+				}
+				value += std::string("END##");
+				return 0;
+			}
+
+			int GetOneRDDConnection(rdd_cl_conn_ctx_t *rdd_conn, unsigned char* res_buff, long long buffer_size, uint32_t *rkey){
+				//printf("GetOneRDD func called\n");
+				RDDEndpoint *ep = m_rdd_endpoints.back();
+				rdd_cl_conn_ctx_t t_rdd_conn;
+				std::string rdd_ip;
+				uint32_t rdd_port;
+				uint32_t t_rKey;
+				ep->GetRddHandleAndPort(&t_rdd_conn, rdd_ip, &rdd_port);
+				if (ep->get_rkey(res_buff, &t_rKey) != 0) {
+					ep->create_rkey(res_buff, buffer_size, &t_rdd_conn, &t_rKey);
+				}
+				std::memcpy(rdd_conn, &t_rdd_conn, sizeof(rdd_cl_conn_ctx_t));
+				*rkey = t_rKey;
+				//printf("GetOneRDD IP %d, %x, %s\n", rdd_conn->conn_id, rdd_conn->qhandle, rdd_ip.c_str());
+				return 0;
+			}
+			std::vector<Endpoint*> GetEndpoints(){ return m_endpoints; }
+			Aws::String GetBucket(){ return m_bucket;}
+
 		private:
 			uint32_t m_id;
+			std::string m_uuid;
 			Aws::String m_bucket;
 			std::vector<Endpoint*> m_endpoints;
+			std::vector<RDDEndpoint*> m_rdd_endpoints;
 
 			static constexpr char* DATA_BUCKET_PREFIX = (char*)"dss";
-                        std::string m_instance_uuid;
+			std::string m_instance_uuid;
 	};
 
 

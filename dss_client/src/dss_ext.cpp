@@ -34,7 +34,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>
 
-#include "dss.h"
+#include "dss_client.hpp"
 
 using namespace dss;
 
@@ -123,7 +123,7 @@ PYBIND11_MODULE(dss, m) {
 				py::arg("key"),
 				py::arg("file_path"))
 
-		.def("getObjectBuffer", &Client::GetObjectBuffer,
+		.def("getObjectBuffer", &Client::GetObjectBufferPython,
 				"Download object to bytearray buffer from dss cluster. Returns actual data length in the buffer",
 				py::arg("key"),
 				py::arg("buffer"))

@@ -1,6 +1,6 @@
 #include <unistd.h>
 
-#include "dss.h"
+#include "dss_client.hpp"
 
 	void
 test_put_done(void* ptr, std::string key, std::string message, int err)

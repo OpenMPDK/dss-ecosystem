@@ -1,0 +1,25 @@
+# Full elbencho deb install of latest github master on Ubuntu 18.04
+
+FROM ubuntu:18.04 as builder
+
+RUN export DEBIAN_FRONTEND=noninteractive && \
+    apt update && \
+    apt -y upgrade && \
+    apt install -y build-essential debhelper devscripts fakeroot git libaio-dev libboost-filesystem-dev libboost-program-options-dev libboost-thread-dev libncurses-dev libnuma-dev lintian && \
+    cd /root && git clone https://github.com/breuner/elbencho.git && \
+    cd elbencho && \
+    make -j "$(nproc)" && \
+    make deb
+
+FROM ubuntu:18.04
+
+COPY --from=builder /root/elbencho/packaging/elbencho*.deb /tmp/
+
+RUN export DEBIAN_FRONTEND=noninteractive && \
+    apt update && \
+    apt install -y /tmp/elbencho*.deb && \
+    rm -f /tmp/elbencho*.deb && \
+    apt clean all && \
+    /usr/bin/elbencho --version
+
+ENTRYPOINT ["/usr/bin/elbencho"]

@@ -1,0 +1,269 @@
+# elbencho bash completion
+
+# echo shortopts (incl. single dash) and longopts (incl. double dash).
+_elbencho_opts()
+{
+   local shortopts longopts
+
+   shortopts="
+        -b
+        -c
+        -d
+        -D
+        -F
+        -h
+        -i
+        -n
+        -N
+        -r
+        -s
+        -t
+        -w
+        "
+
+   longopts="
+        --allelapsed
+        --althttpsvc
+        --backward
+        --block
+        --blockvaralgo
+        --blockvarpct
+        --configfile
+        --cores
+        --cpu
+        --csvfile
+        --cufile
+        --cufiledriveropen
+        --cuhostbufreg
+        --deldirs
+        --delfiles
+        --direct
+        --dirs
+        --dirsharing
+        --dirstats
+        --dropcache
+        --dryrun
+        --files
+        --foreground
+        --gdsbufreg
+        --gpuids
+        --gpuperservice
+        --help
+        --help-all
+        --help-bdev
+        --help-dist
+        --help-large
+        --help-multi
+        --help-s3
+        --hosts
+        --hostsfile
+        --infloop
+        --interrupt
+        --iodepth
+        --iterations
+        --lat
+        --lathisto
+        --latpercent
+        --latpercent9s
+        --limitread
+        --limitwrite
+        --live1
+        --live1n
+        --livecsv
+        --livecsvex
+        --liveint
+        --log
+        --mkdirs
+        --no0usecerr
+        --nocsvlabels
+        --nodelerr
+        --nodetach
+        --nodiocheck
+        --nofdsharing
+        --nolive
+        --nosvcshare
+        --perthread
+        --port
+        --preallocfile
+        --quit
+        --rand
+        --randalgo
+        --randalign
+        --randamount
+        --rankoffset
+        --read
+        --resfile
+        --rwmixpct
+        --rwmixthr
+        --s3endpoints
+        --s3fastget
+        --s3key
+        --s3listobj
+        --s3listobjpar
+        --s3listverify
+        --s3log
+        --s3objprefix
+        --s3randobj
+        --s3region
+        --s3secret
+        --s3transman
+        --service
+        --sharesize
+        --size
+        --start
+        --stat
+        --svcupint
+        --sync
+        --threads
+        --timelimit
+        --treefile
+        --treerand
+        --treeroundup
+        --trunc
+        --trunctosize
+        --verify
+        --verifydirect
+        --version
+        --write
+        --zones
+        "
+
+    echo "$shortopts $longopts"
+}
+
+_elbencho()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    opts="$(_elbencho_opts)"
+ 
+    case "${prev}" in
+        # options that take a string argument
+        -b)
+        ;&
+        --block)
+        ;&
+        --blockvaralgo)
+        ;&
+        --blockvarpct)
+        ;&
+        --cores)
+        ;&
+        --dirs)
+        ;&
+        --files)
+        ;&
+        --gpuids)
+        ;&
+        -i)
+        ;&
+        --iterations)
+        ;&
+        --iodepth)
+        ;&
+        --latpercent9s)
+        ;&
+        --limitread)
+        ;&
+        --limitwrite)
+        ;&
+        --liveint)
+        ;&
+        --log)
+        ;&
+        -N)
+        ;&
+        -n)
+        ;&
+        --port)
+        ;&
+        --randalgo)
+        ;&
+        --randamount)
+        ;&
+        --rankoffset)
+        ;&
+        --rwmixpct)
+        ;&
+        --rwmixthr)
+        ;&
+        -s)
+        ;&
+        --s3endpoints)
+        ;&
+        --s3key)
+        ;&
+        --s3listobj)
+        ;&
+        --s3objprefix)
+        ;&
+        --s3region)
+        ;&
+        --s3secret)
+        ;&
+        --sharesize)
+        ;&
+        --size)
+        ;&
+        --start)
+        ;&
+        --svcupint)
+        ;&
+        -t)
+        ;&
+        --threads)
+        ;&
+        --timelimit)
+        ;&
+        --treeroundup)
+        ;&
+        --verify)
+        ;&
+        --zones)
+            return 0
+        ;;
+
+        # options that take a file/dir argument
+        -c)
+        ;&
+        --configfile)
+        ;&
+        --csvfile)
+        ;&
+        --hostsfile)
+        ;&
+        --livecsv)
+        ;&
+        --resfile)
+        ;&
+        --treefile)
+            compopt -o filenames 2>/dev/null
+            COMPREPLY=( $(compgen -f ${cur}) )
+            return 0
+        ;;
+
+        # options that take a hostname argument
+        --hosts)
+            compopt -o nospace 2>/dev/null
+            COMPREPLY=( $(compgen -A hostname ${cur}) )
+            return 0
+        ;;
+
+        # all others
+        *)
+        ;;
+    esac
+
+    if [[ "${cur}" = -* ]]; then
+        compopt -o filenames 2>/dev/null
+        COMPREPLY=( $(compgen -f -W "${opts}" -- ${cur}) )
+    else
+        compopt -o filenames 2>/dev/null
+        COMPREPLY=( $(compgen -f -W "" -- ${cur}) )
+    fi
+}
+
+complete -F _elbencho elbencho
