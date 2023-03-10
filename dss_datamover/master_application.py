@@ -691,7 +691,7 @@ class Client(object):
         if "environment" in config and "gcc" in config["environment"]:
             self.env_gcc_required = config["environment"]["gcc"].get("required", True)
             if self.env_gcc_required:
-                self.env_gcc_source = config["environment"]["gcc"].get("source", "/usr/local/bin/setenv-for-gcc510.sh")
+                self.env_gcc_source = config["environment"]["gcc"].get("source", "/opt/rh/devtoolset-11/enable")
                 self.logger.debug("Sourcing GCC environment from {} for GCC v-{}".format(
                     self.env_gcc_source, config["environment"]["gcc"].get("version", "GCC-VERSION-NOT-SPECIFIED")))
 
