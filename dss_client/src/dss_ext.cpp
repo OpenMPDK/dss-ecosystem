@@ -1,7 +1,7 @@
 /**
   The Clear BSD License
 
-  Copyright (c) 2022 Samsung Electronics Co., Ltd.
+  Copyright (c) 2023 Samsung Electronics Co., Ltd.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -97,7 +97,7 @@ PYBIND11_MODULE(dss, m) {
 				py::arg("key"),
 				py::arg("file_path"),
 				py::arg("async") = false)
-		.def("putObjectBuffer", &Client::PutObjectBuffer,
+		.def("putObjectBuffer", &Client::PutObjectBufferPython,
 				"Upload object from bytearray buffer to dss cluster",
 				py::arg("key"),
 				py::arg("buffer"),

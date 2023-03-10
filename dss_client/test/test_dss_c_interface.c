@@ -34,7 +34,7 @@ int main() {
 		printf("Failed to read random data\n");
 		goto out;
 	}
-    char endpoint[] = "206.0.0.214:9000";
+    char endpoint[] = "msl-ssg-vm41-tcp-0:9000";
     char access[] = "minio";
     char secret[] = "minio123";
     char uuid[] = "12345";

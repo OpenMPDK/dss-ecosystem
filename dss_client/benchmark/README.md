@@ -4,8 +4,8 @@ to distribute the files or objects across the MINIO cluster. It uses the files i
 The tool tests the performance of PUT/GET/DEL/LIST calls.
 
 ## Prerequisites
-* aws-sdk-cpp library - Can be downloaded from wget https://codeload.github.com/aws/aws-sdk-cpp/tar.gz/1.8.99
-and build with gcc 9.3
+* aws-sdk-cpp library - Can be downloaded from https://github.com/breuner/aws-sdk-cpp.git using git clone and do git checkout 1.9.343-elbencho-tag
+and build with devtoolset-11's gcc
 * dss library - Samsung's proprietary library for data distribution across single or multi cluster setup
 
 ## Usage
@@ -13,7 +13,7 @@ The tool can be used to generate files with a set prefix.
 For a given prefix, the thread count and the number of IOs
 per thread, the tool generates files of the format \<prefix\>-object-\<thread_ID\>-\<IO_num_per_thread\>
 
-It is the responsibility of the user to prepare data (```-o 8```) and cleanup data (```-o 9```) before performing 
+It is the responsibility of the user to prepare data (```-o 8```) and cleanup data (```-o 9```) before performing
 PUT/GET/DEL calls.
 
 The help usage for this tool is
@@ -68,7 +68,7 @@ The above command prepares the files, perform PUT/GET/DEL on all the files and p
 [ansible@msl-dpe-da1 benchmark]# python3 benchmark.py -u http://202.0.0.1:9000 -a minio -s minio123 -n 1000 -o 1
 -t 20 -z 1024 -p <myprefix> -x <mydir>
 ```
-** Running performance test for  PUT requires the files to be present before. Use "-o 8" option to create files prior **
+*** Running performance test for  PUT requires the files to be present before. Use "-o 8" option to create files prior ***
 
 * To run the performance test for only PUT calls in a particular custom directory of the destination folder for the above 
 configuration, run

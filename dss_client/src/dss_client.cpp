@@ -1,7 +1,7 @@
 /**
   The Clear BSD License
 
-  Copyright (c) 2022 Samsung Electronics Co., Ltd.
+  Copyright (c) 2023 Samsung Electronics Co., Ltd.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -1259,6 +1259,9 @@ namespace dss {
 	extern "C" int GetObject(DSSClient c, void* key_name, int key_len, char* dst_file) 
 	{
 		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
 		std::string key_str ((char*) key_name, key_len);
 		int ret = -1;
 
@@ -1273,6 +1276,9 @@ namespace dss {
 	extern "C" int GetObjectBuffer(DSSClient c, void* key_name, int key_len, unsigned char* buffer, long int buffer_size)
 	{
 		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
 		std::string key_str ((char*) key_name, key_len);
 		int ret = -1;
 
@@ -1289,6 +1295,9 @@ namespace dss {
 	extern "C" int PutObjectBuffer(DSSClient c, void* key_name, int key_len, unsigned char* buffer, long int content_length)
 	{
 		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
 		std::string key_str ((char*) key_name, key_len);
 		int ret = -1;
 
@@ -1303,6 +1312,9 @@ namespace dss {
 	extern "C" int DeleteObject(DSSClient c, void* key_name, int key_len)
 	{
 		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
 		std::string key_str ((char*) key_name, key_len);
 		int ret = -1;
 
