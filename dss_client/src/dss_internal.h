@@ -159,13 +159,13 @@ namespace dss {
 				pr_debug("RDDEP: get_rkey before");
 				std::unique_lock<std::mutex> ul(rkey_lock);
 				auto search = m_rkey_map.find((uint64_t)buff);
-				ul.unlock();
 				if (search != m_rkey_map.end()) {
 					*rkey = search->second;
 					pr_debug("RDDEP: rkey found for buff %lu", (uint64_t)buff);
 				} else {
 					ret = -1;
 				} 				
+				ul.unlock();
 				return ret;
 			};
 
@@ -248,7 +248,8 @@ namespace dss {
 
 			int GetOneRDDConnection(rdd_cl_conn_ctx_t *rdd_conn, unsigned char* res_buff, long long buffer_size, uint32_t *rkey){
 				//printf("GetOneRDD func called\n");
-				RDDEndpoint *ep = m_rdd_endpoints.back();
+				int random_index = rand() % m_rdd_endpoint_size;
+				RDDEndpoint *ep = m_rdd_endpoints[random_index];
 				rdd_cl_conn_ctx_t t_rdd_conn;
 				std::string rdd_ip;
 				uint32_t rdd_port;
@@ -267,6 +268,7 @@ namespace dss {
 
 		private:
 			uint32_t m_id;
+			uint32_t m_rdd_endpoint_size;
 			std::string m_uuid;
 			Aws::String m_bucket;
 			std::vector<Endpoint*> m_endpoints;

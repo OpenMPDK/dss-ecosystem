@@ -55,18 +55,19 @@ then
     die "Missing AWS libs. Build using devtoolset-11:  https://github.com/breuner/aws-sdk-cpp.git"
 fi
 
-# Build Client Library
-mkdir -p "$BUILD_DIR"
-pushd "$BUILD_DIR"
-    CXX=g++ cmake3 ../ -DBYO_CRYPTO=ON
-    make -j
-popd
-
 # Get dss-ecosystem release string
 pushd "$DSS_ECOSYSTEM_DIR"
     # Get release string
     git fetch --tags
     RELEASESTRING=$(git describe --tags --exact-match || git rev-parse --short HEAD)
+    sed -i "s/DSS_VER    \"20210217\"/DSS_VER    \"$RELEASESTRING\"/g"  "$DSS_CLIENT_DIR"/include/dss_client.hpp
+popd
+
+# Build Client Library
+mkdir -p "$BUILD_DIR"
+pushd "$BUILD_DIR"
+    CXX=g++ cmake3 ../ -DBYO_CRYPTO=ON
+    make -j
 popd
 
 # Create dss_client staging dir

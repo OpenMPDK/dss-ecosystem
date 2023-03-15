@@ -197,17 +197,15 @@ namespace dss {
 		Endpoint::GetObject(const Aws::String& bn, Request* req, unsigned char* res_buff, long long buffer_size)
 		{
 			std::string key;
-			std::string rddParam;
+			std::string rddParam(512, '\0');
 			if (!m_transport_type.compare("rdd")) {
 				unsigned int rKey;
-				char rdd_param[256];
 				rdd_cl_conn_ctx_t rdd_conn;
 				pr_debug("Get RDD conn from endpoints\n");
 				req->cluster->GetOneRDDConnection(&rdd_conn, res_buff, buffer_size, &rKey);
 				pr_debug("RDD conn %d\n", rdd_conn.qhandle);
 				//get_rkey(res_buff, buffer_size, &rdd_conn, &rKey);
-				std::sprintf(rdd_param,"%lx-rdd-%llu-rdd-%x-rdd-%s-rdd-", (unsigned long)res_buff, buffer_size, rKey, m_uuid.c_str());
-				rddParam = std::string(rdd_param);
+				std::sprintf(&rddParam[0],"%lx-rdd-%llu-rdd-%x-rdd-%s-rdd-", (unsigned long)res_buff, buffer_size, rKey, m_uuid.c_str());
 				pr_debug("GET RDDPARAM: %s\n", rddParam.c_str());
 			} else {
 				rddParam = std::string("");
@@ -720,6 +718,7 @@ namespace dss {
 		{
 			RDDEndpoint* ep = new RDDEndpoint(rdd_ip, rdd_port, uuid);
 			m_rdd_endpoints.push_back(ep);
+			m_rdd_endpoint_size++;
 			pr_debug("Insert RDD endpoint %s\n", (rdd_ip + ":" + std::to_string(rdd_port)).c_str());
 			return 0;
 		}

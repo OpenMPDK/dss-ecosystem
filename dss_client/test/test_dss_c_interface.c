@@ -18,7 +18,7 @@ int hexdump(unsigned char* buff, int size)
 	return 0;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
 	DSSClient *c;
 	int fd = -1;
 	int ret = -1;
@@ -27,6 +27,16 @@ int main() {
 	unsigned char* buff1 = (unsigned char*)calloc(1, size);
 	char obj_name[256];
 
+	if (argc < 4){
+		printf("Invalid number of arguments given\n");
+		printf("Usage: %s <endpoint_url> <access_key> <secret_key>\n");
+		printf("Endpoint URL format is '<minio_host_name_or_ip>:<port>'\n");
+		return -1;
+	}
+	if (strchr(argv[1], ':') == NULL) {
+		printf("Invalid endpoint URL\n");
+		return -1;
+	}
 	strcpy(obj_name, "testfile1");
 	
 	fd = open("/dev/urandom", O_RDONLY);
@@ -34,11 +44,8 @@ int main() {
 		printf("Failed to read random data\n");
 		goto out;
 	}
-    char endpoint[] = "msl-ssg-vm41-tcp-0:9000";
-    char access[] = "minio";
-    char secret[] = "minio123";
     char uuid[] = "12345";
-	c = (DSSClient *)DSSClientInit(endpoint, access, secret, uuid, 256);
+	c = (DSSClient *)DSSClientInit(argv[1], argv[2], argv[3], uuid, 256);
 	if (c == NULL) {
 		printf("Client init failed\n");
 		goto out;
