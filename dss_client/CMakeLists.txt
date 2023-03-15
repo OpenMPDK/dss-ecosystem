@@ -1,6 +1,5 @@
 # Set the minimum required version of CMake for this project.
-#cmake_minimum_required(VERSION 3.7)
-cmake_minimum_required(VERSION 3.9.4)
+cmake_minimum_required(VERSION 3.7)
 
 # Set this project's name.
 project("dss")
