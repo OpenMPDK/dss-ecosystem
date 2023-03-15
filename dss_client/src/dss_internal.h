@@ -196,6 +196,7 @@ namespace dss {
 		public:
 			Cluster(uint32_t id, const std::string& instance_uuid) :
 				m_id(id),
+				m_rdd_endpoint_size(0),
 				m_uuid(instance_uuid),
 				m_bucket(Aws::String(DATA_BUCKET_PREFIX) + Aws::String(std::to_string(id).c_str())),
 				m_instance_uuid(instance_uuid) {}
@@ -246,10 +247,10 @@ namespace dss {
 				return 0;
 			}
 
-			int GetOneRDDConnection(rdd_cl_conn_ctx_t *rdd_conn, unsigned char* res_buff, long long buffer_size, uint32_t *rkey){
-				//printf("GetOneRDD func called\n");
-				int random_index = rand() % m_rdd_endpoint_size;
-				RDDEndpoint *ep = m_rdd_endpoints[random_index];
+			int GetOneRDDConnection(rdd_cl_conn_ctx_t *rdd_conn, unsigned char* res_buff, long long buffer_size, uint32_t *rkey, uint32_t key_hash){
+				int index = key_hash % m_rdd_endpoint_size;
+				pr_debug("GetOneRDD func called rdd_endpoint_size %d, index %d\n", m_rdd_endpoint_size, index);
+				RDDEndpoint *ep = m_rdd_endpoints[index];
 				rdd_cl_conn_ctx_t t_rdd_conn;
 				std::string rdd_ip;
 				uint32_t rdd_port;
@@ -260,7 +261,7 @@ namespace dss {
 				}
 				std::memcpy(rdd_conn, &t_rdd_conn, sizeof(rdd_cl_conn_ctx_t));
 				*rkey = t_rKey;
-				//printf("GetOneRDD IP %d, %x, %s\n", rdd_conn->conn_id, rdd_conn->qhandle, rdd_ip.c_str());
+				pr_debug("GetOneRDD IP %d, %x, %s\n", rdd_conn->conn_id, rdd_conn->qhandle, rdd_ip.c_str());
 				return 0;
 			}
 			std::vector<Endpoint*> GetEndpoints(){ return m_endpoints; }
@@ -268,7 +269,7 @@ namespace dss {
 
 		private:
 			uint32_t m_id;
-			uint32_t m_rdd_endpoint_size;
+			int m_rdd_endpoint_size;
 			std::string m_uuid;
 			Aws::String m_bucket;
 			std::vector<Endpoint*> m_endpoints;

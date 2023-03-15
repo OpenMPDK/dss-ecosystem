@@ -197,15 +197,16 @@ namespace dss {
 		Endpoint::GetObject(const Aws::String& bn, Request* req, unsigned char* res_buff, long long buffer_size)
 		{
 			std::string key;
-			std::string rddParam(512, '\0');
+			std::string rddParam;
 			if (!m_transport_type.compare("rdd")) {
 				unsigned int rKey;
+				char rdd_param[512];
 				rdd_cl_conn_ctx_t rdd_conn;
 				pr_debug("Get RDD conn from endpoints\n");
-				req->cluster->GetOneRDDConnection(&rdd_conn, res_buff, buffer_size, &rKey);
+				req->cluster->GetOneRDDConnection(&rdd_conn, res_buff, buffer_size, &rKey, req->key_hash);
 				pr_debug("RDD conn %d\n", rdd_conn.qhandle);
-				//get_rkey(res_buff, buffer_size, &rdd_conn, &rKey);
-				std::sprintf(&rddParam[0],"%lx-rdd-%llu-rdd-%x-rdd-%s-rdd-", (unsigned long)res_buff, buffer_size, rKey, m_uuid.c_str());
+				std::sprintf(rdd_param,"%lx-rdd-%llu-rdd-%x-rdd-%s-rdd-", (unsigned long)res_buff, buffer_size, rKey, m_uuid.c_str());
+				rddParam = std::string(rdd_param);
 				pr_debug("GET RDDPARAM: %s\n", rddParam.c_str());
 			} else {
 				rddParam = std::string("");
@@ -719,7 +720,7 @@ namespace dss {
 			RDDEndpoint* ep = new RDDEndpoint(rdd_ip, rdd_port, uuid);
 			m_rdd_endpoints.push_back(ep);
 			m_rdd_endpoint_size++;
-			pr_debug("Insert RDD endpoint %s\n", (rdd_ip + ":" + std::to_string(rdd_port)).c_str());
+			pr_debug("Insert RDD endpoint %s, size %d\n", (rdd_ip + ":" + std::to_string(rdd_port)).c_str(), m_rdd_endpoint_size);
 			return 0;
 		}
 
@@ -966,8 +967,10 @@ namespace dss {
 			auto err = r.GetErrorType();
 			if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND){
 				throw NoSuchResourceError();
-			}else
+			} else {
+    				pr_err("Exception %s for object %s\n", r.GetErrorMsg().c_str(), objectName.c_str());
 				throw GenericError(r.GetErrorMsg().c_str());
+			}
 
 			return -1;
 		}

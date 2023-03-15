@@ -23,13 +23,14 @@ int main(int argc, char* argv[]) {
 	int fd = -1;
 	int ret = -1;
 	int size = 1024*1024;
-	unsigned char* buff = (unsigned char*)calloc(1, size);
-	unsigned char* buff1 = (unsigned char*)calloc(1, size);
+	unsigned char* buff;
+	unsigned char* buff1;
 	char obj_name[256];
+    	char uuid[] = "12345";
 
 	if (argc < 4){
 		printf("Invalid number of arguments given\n");
-		printf("Usage: %s <endpoint_url> <access_key> <secret_key>\n");
+		printf("Usage: %s <endpoint_url> <access_key> <secret_key> <size_in_kb(default 1MB)>\n");
 		printf("Endpoint URL format is '<minio_host_name_or_ip>:<port>'\n");
 		return -1;
 	}
@@ -37,6 +38,11 @@ int main(int argc, char* argv[]) {
 		printf("Invalid endpoint URL\n");
 		return -1;
 	}
+	if (argc == 5)
+		size = atoi(argv[4]) * 1024;
+	buff = (unsigned char*)calloc(1, size);
+	buff1 = (unsigned char*)calloc(1, size);
+
 	strcpy(obj_name, "testfile1");
 	
 	fd = open("/dev/urandom", O_RDONLY);
@@ -44,7 +50,7 @@ int main(int argc, char* argv[]) {
 		printf("Failed to read random data\n");
 		goto out;
 	}
-    char uuid[] = "12345";
+
 	c = (DSSClient *)DSSClientInit(argv[1], argv[2], argv[3], uuid, 256);
 	if (c == NULL) {
 		printf("Client init failed\n");
@@ -56,10 +62,14 @@ int main(int argc, char* argv[]) {
 	ret = GetObjectBuffer(c, (void*) obj_name, strlen(obj_name), buff1, size);
 	printf("Object testfile1 downloaded. return value: %d\n", ret);
 	//printf("Buffer Size <%d> Content  <%s>\n", ret, buff);
-	if (memcmp(buff, buff1, size) != 0) {
+	if (ret >= 0 && memcmp(buff, buff1, size) != 0) {
 		printf("Invalid data [%x] -> [%x]\n", buff, buff1);
-		hexdump(buff, size);
-		hexdump(buff1, size);
+		printf("Printing partial data of 128 bytes of the data sent and received");
+		hexdump(buff, 128);
+		hexdump(buff1, 128);
+		goto out;
+	}
+	else {
 		goto out;
 	}
 	printf("Object testfile1 verified\n");
