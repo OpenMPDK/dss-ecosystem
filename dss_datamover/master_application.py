@@ -87,12 +87,10 @@ class Master(object):
 
         self.fs_config = self.config.get("fs_config", {})
         # override NFS configs with CLI args if applicable
-        nfs_cli_args = ['nfs_server', 'nfs_port', 'nfs_share']
-        if set(nfs_cli_args).issubset(self.config):
-            if self.config['nfs_server'] and self.config['nfs_share']:
-                self.fs_config['nfs'] = {self.config['nfs_server']: [self.config['nfs_share']]}
-            if self.config['nfs_port']:
-                self.fs_config['nfsport'] = config['nfs_port']
+        if self.config['nfs_server'] and self.config['nfs_share']:
+            self.fs_config['nfs'] = {self.config['nfs_server']: [self.config['nfs_share']]}
+        if self.config['nfs_port']:
+            self.fs_config['nfsport'] = config['nfs_port']
 
         self.standalone = config.get("standalone", False)
 
