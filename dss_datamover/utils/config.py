@@ -206,11 +206,11 @@ class CommandLineArgument(object):
                                help='Profiling of PUT operation (Not Implemented)')
         subparser.add_argument("--standalone", "-sa", required=False, action='store_true',
                                help='Run in standalone mode')
-        subparser.add_argument("--nfs-server", "-ns", type=str, required='--nfs-port' in sys.argv or '--nfs-share' in sys.argv,
+        subparser.add_argument("--nfs-server", "-ns", type=str, required='--nfs-share' in sys.argv,
                                help='specify NFS server ip addr')
-        subparser.add_argument("--nfs-port", "-np", type=str, required='--nfs-server' in sys.argv or '--nfs-share' in sys.argv,
+        subparser.add_argument("--nfs-port", "-np", type=str, required=False,
                                help='specify NFS server port')
-        subparser.add_argument("--nfs-share", "-nsh", type=str, required='--nfs-server' in sys.argv or '--nfs-port' in sys.argv,
+        subparser.add_argument("--nfs-share", "-nsh", type=str, required='--nfs-server' in sys.argv,
                                help='specify NFS share/directory to use')
 
     def get(self, subparser):
@@ -261,11 +261,11 @@ class CommandLineArgument(object):
                                help='Run DataMover in debug mode')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of DEL operation (Not Implemented)')
-        subparser.add_argument("--nfs-server", "-ns", type=str, required='--nfs-port' in sys.argv or '--nfs-share' in sys.argv,
+        subparser.add_argument("--nfs-server", "-ns", type=str, required='--nfs-share' in sys.argv,
                                help='specify NFS server ip addr')
-        subparser.add_argument("--nfs-port", "-np", type=str, required='--nfs-server' in sys.argv or '--nfs-share' in sys.argv,
+        subparser.add_argument("--nfs-port", "-np", type=str, required=False,
                                help='specify NFS server port')
-        subparser.add_argument("--nfs-share", "-nsh", type=str, required='--nfs-server' in sys.argv or '--nfs-port' in sys.argv,
+        subparser.add_argument("--nfs-share", "-nsh", type=str, required='--nfs-server' in sys.argv,
                                help='specify NFS share/directory to use')
 
     def test(self, subparser):

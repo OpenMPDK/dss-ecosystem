@@ -84,7 +84,15 @@ class Master(object):
         self.client_password = config["client"]["password"]
 
         self.s3_config = config.get("s3_storage", {})
+
         self.fs_config = self.config.get("fs_config", {})
+        # override NFS configs with CLI args if applicable
+        nfs_cli_args = ['nfs_server', 'nfs_port', 'nfs_share']
+        if set(nfs_cli_args).issubset(self.config):
+            if self.config['nfs_server'] and self.config['nfs_share']:
+                self.fs_config['nfs'] = {self.config['nfs_server']: [self.config['nfs_share']]}
+            if self.config['nfs_port']:
+                self.fs_config['nfsport'] = config['nfs_port']
 
         self.standalone = config.get("standalone", False)
 
@@ -422,7 +430,7 @@ class Master(object):
                 return
 
         # Create NFS cluster object
-        self.nfs_cluster_obj = NFSCluster(self.config, "root", "", self.logger)
+        self.nfs_cluster_obj = NFSCluster(self.fs_config, "root", "", self.logger)
 
         if self.resume_flag:
             self.prefixes = self.dir_prefixes_to_resume
