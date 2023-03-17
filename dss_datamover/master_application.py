@@ -84,7 +84,13 @@ class Master(object):
         self.client_password = config["client"]["password"]
 
         self.s3_config = config.get("s3_storage", {})
+
         self.fs_config = self.config.get("fs_config", {})
+        # override NFS configs with CLI args if applicable
+        if self.config['nfs_server'] and self.config['nfs_share']:
+            self.fs_config['nfs'] = {self.config['nfs_server']: [self.config['nfs_share']]}
+        if self.config['nfs_port']:
+            self.fs_config['nfsport'] = config['nfs_port']
 
         self.standalone = config.get("standalone", False)
 
