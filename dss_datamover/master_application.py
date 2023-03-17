@@ -422,7 +422,7 @@ class Master(object):
                 return
 
         # Create NFS cluster object
-        self.nfs_cluster_obj = NFSCluster(self.fs_config, "root", "", self.logger)
+        self.nfs_cluster_obj = NFSCluster(self.config, "root", "", self.logger)
 
         if self.resume_flag:
             self.prefixes = self.dir_prefixes_to_resume

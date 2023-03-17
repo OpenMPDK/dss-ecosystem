@@ -165,7 +165,7 @@ class ClientApplication(object):
         # self.start_logging()
         self.check_and_stop_stale_processes_using_pgid()
         self.logger.info("Started Client Application for id:{} on node {}".format(self.id, self.host_name))
-        self.nfs_cluster = NFSCluster(self.fs_config, "root", self.password, self.logger)
+        self.nfs_cluster = NFSCluster(self.config, "root", self.password, self.logger)
         if not self.start_workers():
             self.stop_logging()
             sys.exit("Workers were not started.")
