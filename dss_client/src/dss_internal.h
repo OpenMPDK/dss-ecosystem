@@ -247,7 +247,7 @@ namespace dss {
 				return 0;
 			}
 
-			int GetOneRDDConnection(rdd_cl_conn_ctx_t *rdd_conn, unsigned char* res_buff, long long buffer_size, uint32_t *rkey, uint32_t key_hash){
+			int GetOneRDDConnection(unsigned char* res_buff, long long buffer_size, uint32_t *rkey, uint32_t key_hash){
 				int index = key_hash % m_rdd_endpoint_size;
 				pr_debug("GetOneRDD func called rdd_endpoint_size %d, index %d\n", m_rdd_endpoint_size, index);
 				RDDEndpoint *ep = m_rdd_endpoints[index];
@@ -259,9 +259,7 @@ namespace dss {
 				if (ep->get_rkey(res_buff, &t_rKey) != 0) {
 					ep->create_rkey(res_buff, buffer_size, &t_rdd_conn, &t_rKey);
 				}
-				std::memcpy(rdd_conn, &t_rdd_conn, sizeof(rdd_cl_conn_ctx_t));
 				*rkey = t_rKey;
-				pr_debug("GetOneRDD IP %d, %x, %s\n", rdd_conn->conn_id, rdd_conn->qhandle, rdd_ip.c_str());
 				return 0;
 			}
 			std::vector<Endpoint*> GetEndpoints(){ return m_endpoints; }

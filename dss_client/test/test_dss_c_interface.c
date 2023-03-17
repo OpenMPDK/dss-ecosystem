@@ -62,16 +62,17 @@ int main(int argc, char* argv[]) {
 	ret = GetObjectBuffer(c, (void*) obj_name, strlen(obj_name), buff1, size);
 	printf("Object testfile1 downloaded. return value: %d\n", ret);
 	//printf("Buffer Size <%d> Content  <%s>\n", ret, buff);
-	if (ret >= 0 && memcmp(buff, buff1, size) != 0) {
+	if (ret < 0) 
+		goto out;
+
+	if (memcmp(buff, buff1, size) != 0) {
 		printf("Invalid data [%x] -> [%x]\n", buff, buff1);
 		printf("Printing partial data of 128 bytes of the data sent and received");
 		hexdump(buff, 128);
 		hexdump(buff1, 128);
 		goto out;
 	}
-	else {
-		goto out;
-	}
+
 	printf("Object testfile1 verified\n");
 	ret = DeleteObject(c, (void*) obj_name, strlen(obj_name));
 	printf("Object testfile1 deleted\n");

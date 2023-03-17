@@ -201,10 +201,7 @@ namespace dss {
 			if (!m_transport_type.compare("rdd")) {
 				unsigned int rKey;
 				char rdd_param[512];
-				rdd_cl_conn_ctx_t rdd_conn;
-				pr_debug("Get RDD conn from endpoints\n");
-				req->cluster->GetOneRDDConnection(&rdd_conn, res_buff, buffer_size, &rKey, req->key_hash);
-				pr_debug("RDD conn %d\n", rdd_conn.qhandle);
+				req->cluster->GetOneRDDConnection(res_buff, buffer_size, &rKey, req->key_hash);
 				std::sprintf(rdd_param,"%lx-rdd-%llu-rdd-%x-rdd-%s-rdd-", (unsigned long)res_buff, buffer_size, rKey, m_uuid.c_str());
 				rddParam = std::string(rdd_param);
 				pr_debug("GET RDDPARAM: %s\n", rddParam.c_str());
