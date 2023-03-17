@@ -81,7 +81,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
       - name: Run pycodestyle on CodeBuild
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
         uses: aws-actions/aws-codebuild-run-build@v1
         with:
           project-name: OpenMPDK_dss-ecosystem
