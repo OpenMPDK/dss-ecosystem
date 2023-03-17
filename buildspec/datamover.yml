@@ -1,0 +1,23 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    SONAR_TOKEN: Codebuild-DSS:SONAR_TOKEN
+    DSSMAINS3URI: Codebuild-DSS:DSSMAINS3URI
+  variables:
+    DSSGLOBLIST: "nkv-datamover-*.tgz"
+
+phases:
+  build:
+    commands:
+      - |
+        git fetch --tags; \
+        RELEASESTRING=$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD); \
+        git archive --format=tgz -19 --output="nkv-datamover-$RELEASESTRING.tgz" HEAD:dss_datamover
+      - /stagemainartifacts.sh
+
+artifacts:
+  files:
+    - nkv-datamover-*.tgz
+  discard-paths: yes
+  name: builds/OpenMPDK_dss-ecosystem/$CODEBUILD_BUILD_NUMBER

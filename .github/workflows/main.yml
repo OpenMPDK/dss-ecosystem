@@ -1,5 +1,9 @@
 name: Build dss-ecosystem
 on:
+  push:
+    branches:
+      - master
+      - stable/*
   pull_request:
     branches:
       - master
@@ -9,7 +13,7 @@ on:
       - reopened
       - synchronize
 jobs:
-  build:
+  build_dss-client:
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS Credentials
@@ -19,20 +23,54 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
       - name: Transform ECR Image name
-        if: startsWith(github.base_ref, 'stable') || startsWith(github.base_ref, 'master')
         id: ecr_image_name
         run: |
-          ECR_IMAGE_NAME=${{ github.base_ref }}
-          ECR_IMAGE_NAME=$(echo $ECR_IMAGE_NAME | tr '/' '_')
-          echo "ECR_IMAGE_NAME=$ECR_IMAGE_NAME" >> $GITHUB_OUTPUT
+          if [[ "${{ github.base_ref }}" == "stable"* ]] || [ "${{ github.base_ref }}" == "master" ]; then
+            ECR_IMAGE_NAME=${{ github.base_ref }}
+            ECR_IMAGE_NAME=$(echo $ECR_IMAGE_NAME | tr '/' '_')
+            echo "ECR_IMAGE_NAME=$ECR_IMAGE_NAME" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "stable"* ]] || [ "${{ github.ref_name }}" == "master" ]; then
+            ECR_IMAGE_NAME=${{ github.ref_name }}
+            ECR_IMAGE_NAME=$(echo $ECR_IMAGE_NAME | tr '/' '_')
+            echo "ECR_IMAGE_NAME=$ECR_IMAGE_NAME" >> $GITHUB_OUTPUT
+          fi
       - name: Build dss-ecosystem on CodeBuild
-        if: startsWith(github.base_ref, 'stable') || startsWith(github.base_ref, 'master')
         uses: aws-actions/aws-codebuild-run-build@v1
         with:
           project-name: OpenMPDK_dss-ecosystem
           compute-type-override: BUILD_GENERAL1_SMALL
-          buildspec-override: ./buildspec/buildspec.yml
+          buildspec-override: ./buildspec/dss-client.yml
           image-override: "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-1.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:dss-build_${{ steps.ecr_image_name.outputs.ECR_IMAGE_NAME }}"
+  
+  build_datamover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1
+      - name: Transform ECR Image name
+        id: ecr_image_name
+        run: |
+          if [[ "${{ github.base_ref }}" == "stable"* ]] || [ "${{ github.base_ref }}" == "master" ]; then
+            ECR_IMAGE_NAME=${{ github.base_ref }}
+            ECR_IMAGE_NAME=$(echo $ECR_IMAGE_NAME | tr '/' '_')
+            echo "ECR_IMAGE_NAME=$ECR_IMAGE_NAME" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "stable"* ]] || [ "${{ github.ref_name }}" == "master" ]; then
+            ECR_IMAGE_NAME=${{ github.ref_name }}
+            ECR_IMAGE_NAME=$(echo $ECR_IMAGE_NAME | tr '/' '_')
+            echo "ECR_IMAGE_NAME=$ECR_IMAGE_NAME" >> $GITHUB_OUTPUT
+          fi
+      - name: Build dss-ecosystem on CodeBuild
+        uses: aws-actions/aws-codebuild-run-build@v1
+        with:
+          project-name: OpenMPDK_dss-ecosystem
+          compute-type-override: BUILD_GENERAL1_SMALL
+          buildspec-override: ./buildspec/datamover.yml
+          image-override: "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-1.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:dss-build_${{ steps.ecr_image_name.outputs.ECR_IMAGE_NAME }}"
+
   pycodestyle:
     runs-on: ubuntu-latest
     steps:
@@ -43,7 +81,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-1
       - name: Run pycodestyle on CodeBuild
-        if: startsWith(github.base_ref, 'stable') || startsWith(github.base_ref, 'master')
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         uses: aws-actions/aws-codebuild-run-build@v1
         with:
           project-name: OpenMPDK_dss-ecosystem
