@@ -5,7 +5,7 @@ env:
     SONAR_TOKEN: Codebuild-DSS:SONAR_TOKEN
     DSSMAINS3URI: Codebuild-DSS:DSSMAINS3URI
   variables:
-    DSSGLOBLIST: "nkv-datamover-*.tgz dss_client-*.tgz"
+    DSSGLOBLIST: "dss_client-*.tgz"
 
 phases:
   build:
@@ -26,17 +26,10 @@ phases:
           -Dsonar.pullrequest.base=${GITHUB_BASE_REF} \
           -Dsonar.pullrequest.branch=${GITHUB_HEAD_REF} \
           -Dsonar.pullrequest.github.repository=${GITHUB_REPOSITORY}
-
-      # Create dss-datamover Artifact
-      - |
-        git fetch --tags; \
-        RELEASESTRING=$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD); \
-        git archive --format=tgz -19 --output="nkv-datamover-$RELEASESTRING.tgz" HEAD:dss_datamover
       - /stagemainartifacts.sh
 
 artifacts:
   files:
     - dss_client/dss_client-*.tgz
-    - nkv-datamover-*.tgz
   discard-paths: yes
   name: builds/OpenMPDK_dss-ecosystem/$CODEBUILD_BUILD_NUMBER
