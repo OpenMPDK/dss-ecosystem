@@ -55,5 +55,5 @@
       "required": true
     }
   },
-  "compaction": "YES"
+  "compaction": "yes"
 }
