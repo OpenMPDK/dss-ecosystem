@@ -57,7 +57,8 @@ class Config(object):
             config = json.loads(cfg.read().decode('UTF-8', "ignore"))
         if self.params:
             for param in self.params:
-                config[param] = self.params[param]
+                if self.params[param] is not None:  # must explicitly check for None since we still want False values to be overriden onto the config dict
+                    config[param] = self.params[param]
         return config
 
     def get_config_file(self, config_file):
@@ -195,9 +196,8 @@ class CommandLineArgument(object):
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
-        subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
-        subparser.add_argument("--compaction", "-com", required=False, action='store_true',
-                               help='Enable target compaction')
+        subparser.add_argument("--config", "-cfg", type=str, default='/etc/dss/datamover/config.json', required=False, help='Specify configuration file path')
+        subparser.add_argument("--compaction", "-com", type=str, required=False, help='Enable target compaction')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual upload')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
@@ -213,7 +213,7 @@ class CommandLineArgument(object):
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
-        subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--config", "-cfg", type=str, default='/etc/dss/datamover/config.json', required=False, help='Specify configuration file path')
         subparser.add_argument("--dest_path", "-dp", type=str, required=True, help='Specify destination file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual download')
@@ -228,7 +228,7 @@ class CommandLineArgument(object):
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
-        subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--config", "-cfg", type=str, default='/etc/dss/datamover/config.json', required=False, help='Specify configuration file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual listing')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
@@ -246,9 +246,8 @@ class CommandLineArgument(object):
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
-        subparser.add_argument("--compaction", "-com", required=False, action='store_true',
-                               help='Enable target compaction')
-        subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--compaction", "-com", type=str, required=False, help='Enable target compaction')
+        subparser.add_argument("--config", "-cfg", type=str, default='/etc/dss/datamover/config.json', required=False, help='Specify configuration file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual delete')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
@@ -263,7 +262,7 @@ class CommandLineArgument(object):
                                help='Skip data upload operation')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
-        subparser.add_argument("--config", "-cfg", type=str, required=False, help='Specify configuration file path')
+        subparser.add_argument("--config", "-cfg", type=str, default='/etc/dss/datamover/config.json', required=False, help='Specify configuration file path')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
                                help='Run DataMover in debug mode')
         subparser.add_argument("--dest_path", "-dp", type=str, required=True, help='Specify destination file path')
