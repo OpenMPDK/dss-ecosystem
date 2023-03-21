@@ -1184,7 +1184,7 @@ if __name__ == "__main__":
                 master.logger.error("###### DataIntegrity Test Status: FAILED ######")
 
     # Start Compaction
-    if not master.process_monitor_event.is_set() and "compaction" in params and params["compaction"]:
+    if not master.process_monitor_event.is_set() and config['compaction']:
         master.logger.info('Performing compaction')
         master.compaction()
     if master.process_monitor_event.is_set():

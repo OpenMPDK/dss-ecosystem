@@ -39,7 +39,7 @@ is part of sudoers file.
 
 ```bash
 sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  '
-sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  --compaction'
+sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT  --compaction yes'
 sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST --dest_path <Destiniation Path> '
 sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py LIST  --prefix <prefix>/ --dest_path <Destiniation Path>'
 sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py DEL '
@@ -202,11 +202,16 @@ Supported operations are PUT/DEL/GET
 
 ### Target Compaction
 
-  The DSS target compaction can be initiated after actual upload is done. Use the "--compaction" switch
-  along with regular upload command.
+  The DSS target compaction is by default initiated. The compaction can be toggled off by overriding using `"--compaction no"` CLI arg
+  along with regular upload command, or by specifying the compaction field in the config file with the desired compaction option `"compaction": "no"`
 
   ```json
-  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction'
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction yes'
+  ```
+
+  Config file
+  ```
+  "compaction": "yes"
   ```
 
 ### Partial upload of data from a NFS share
@@ -216,7 +221,7 @@ Supported operations are PUT/DEL/GET
   `<nfs_server_ip>/<prefix>/`
 
   ```bash
-  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction 
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT 
               --prefix <nfs_server_ip>/<prefix path>/ '
   ```
 

@@ -55,5 +55,6 @@
       "source" : "/usr/local/bin/setenv-for-gcc510.sh",
       "required": true
     }
-  }
+  },
+  "compaction": "yes"
 }
