@@ -59,6 +59,8 @@ class Config(object):
             for param in self.params:
                 if self.params[param] is not None:  # must explicitly check for None since we still want False values to be overriden onto the config dict
                     config[param] = self.params[param]
+        # process compaction options accordingly
+        config['compaction'] = True if 'compaction' not in config else config['compaction'] == 'yes'
         return config
 
     def get_config_file(self, config_file):
