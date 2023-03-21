@@ -190,8 +190,8 @@ Supported operations are PUT/DEL/GET
 
 ### Target Compaction
 
-  The DSS target compaction can be initiated after actual upload is done. Use the "--compaction yes" switch
-  along with regular upload command, else the value specified in the config file will be used for the compaction option.
+  The DSS target compaction is by default initiated. The compaction can be toggled off by overriding using `"--compaction no"` CLI arg
+  along with regular upload command, or by specifying the compaction field in the config file with the desired compaction option `"compaction": "no"`
 
   ```json
   sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction yes'
@@ -209,7 +209,7 @@ Supported operations are PUT/DEL/GET
   `<nfs_server_ip>/<prefix>/`
 
   ```bash
-  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT --compaction yes 
+  sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py PUT 
               --prefix <nfs_server_ip>/<prefix path>/ '
   ```
 

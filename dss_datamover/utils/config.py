@@ -58,8 +58,6 @@ class Config(object):
         if self.params:
             for param in self.params:
                 if self.params[param] is not None:  # must explicitly check for None since we still want False values to be overriden onto the config dict
-                    if param == 'compaction' and 'compaction' in config:
-                        continue  # don't override config file setting
                     config[param] = self.params[param]
         return config
 
@@ -201,7 +199,7 @@ class CommandLineArgument(object):
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
         subparser.add_argument("--config", "-cfg", type=str, default='/etc/dss/datamover/config.json', required=False, help='Specify configuration file path')
-        subparser.add_argument("--compaction", "-com", type=str, default='yes', required=False, help='Enable target compaction')
+        subparser.add_argument("--compaction", "-com", type=str, default=argparse.SUPPRESS, required=False, help='Enable target compaction')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual upload')
         subparser.add_argument("--debug", "-d", required=False, action='store_true',
@@ -250,7 +248,7 @@ class CommandLineArgument(object):
         subparser.add_argument("--bucket", "-b", type=str, required=False, help='Specify bucket name.. ')
         subparser.add_argument("--prefix", "-p", type=str, required=False,
                                help='Specify object-key prefix, should be <nfs server ip>/<any prefix key>/')
-        subparser.add_argument("--compaction", "-com", type=str, default='yes', required=False, help='Enable target compaction')
+        subparser.add_argument("--compaction", "-com", type=str, default=argparse.SUPPRESS, required=False, help='Enable target compaction')
         subparser.add_argument("--config", "-cfg", type=str, default='/etc/dss/datamover/config.json', required=False, help='Specify configuration file path')
         subparser.add_argument("--dryrun", "-dr", required=False, action='store_true',
                                help='Dry run - Just check operation is working , but does not actual delete')
