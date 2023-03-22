@@ -1,9 +1,6 @@
 version: 0.2
 
 env:
-  secrets-manager:
-    SONAR_TOKEN: Codebuild-DSS:SONAR_TOKEN
-    DSSMAINS3URI: Codebuild-DSS:DSSMAINS3URI
   variables:
     DSSGLOBLIST: "nkv-datamover-*.tgz"
 
