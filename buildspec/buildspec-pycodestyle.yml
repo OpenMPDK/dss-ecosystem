@@ -1,0 +1,17 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - |
+        cd dss_ai_benchmark && \
+        pycodestyle . && \
+        cd ..
+      - |
+        cd dss_client && \
+        pycodestyle . && \
+        cd ..
+      - |
+        cd dss_datamover && \
+        pycodestyle . && \
+        cd ..
