@@ -323,6 +323,7 @@ def is_prefix_valid_for_nfs_share(logger, **kwargs):
     ip_address = kwargs["ip_address"]
     nfs_mount_prefix = ip_address + nfs_share
 
+    # TODO: may need to potentiall add logic here to handle --server-as-prefix
     if prefix.startswith(nfs_mount_prefix) or nfs_mount_prefix.startswith(prefix):
         return True
     # logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete

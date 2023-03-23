@@ -83,16 +83,19 @@ class NFSCluster:
         :param prefix:
         :return: touple => ( cluster_ip, mounted_path , return code)
         """
+        # TODO: this logic needs to change / be flexible to support without nfs server prefix, may want to build other function
         first_delimiter_pos = first_delimiter_index(prefix, "/")
         cluster_ip = prefix[0:first_delimiter_pos]
         ret = -1
         nfs_share = ""
         console = ""
         for nfs_share in self.config[cluster_ip]:
+            # TODO: Configue here based on config --server-as-prefix
             nfs_share_prefix = cluster_ip + nfs_share
             if prefix.startswith(nfs_share_prefix):
                 if (cluster_ip in self.local_mounts
                         and nfs_share in self.local_mounts[cluster_ip]):
+                    # TODO: also need to add --server-as-prefix option here for logging statement
                     self.logger.info("Prefix -{} is already mounted to {}".format(
                         prefix, "/" + nfs_share_prefix))
                     return cluster_ip, nfs_share, 0, console
@@ -118,6 +121,7 @@ class NFSCluster:
         ret = None
         console = None
         # Generate a unique md5sum hash key for NFS shares
+        # TODO: configure based on server as prefix option
         nfs_share_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
         nfs_share_already_mounted = False
 
@@ -135,7 +139,7 @@ class NFSCluster:
                 command = "mkdir -p {}".format(nfs_share_mount)
                 dir_ret, console = exec_cmd(command, True, True, self.user_id)
                 if dir_ret:
-                    self.logger.fatal("Faild to create the directory {} for mount".format(nfs_share_mount))
+                    self.logger.fatal("Failed to create the directory {} for mount".format(nfs_share_mount))
                     return dir_ret, console
             # Mount FS
             if not nfs_share_already_mounted:
@@ -170,6 +174,7 @@ class NFSCluster:
             nfs_unmount_failed = []
             for nfs_share in self.local_mounts[cluster_ip]:
                 if nfs_share in self.mounted_nfs_shares:
+                    # TODO: edit logic here based on --server-as-prefix option
                     local_nfs_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
                     ret, console = self.umount(local_nfs_mount)
                     if ret == 0:
