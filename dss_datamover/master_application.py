@@ -91,7 +91,7 @@ class Master(object):
             if self.config['nfs_server'] and self.config['nfs_share']:
                 self.fs_config['nfs'] = {self.config['nfs_server']: [self.config['nfs_share']]}
         if 'nfs_port' in self.config:
-            self.fs_config['nfsport'] = config['nfs_port']
+            self.fs_config['nfsport'] = self.config['nfs_port']
 
         self.standalone = config.get("standalone", False)
 
