@@ -216,6 +216,7 @@ class CommandLineArgument(object):
                                help='specify NFS server port')
         subparser.add_argument("--nfs-share", "-nsh", type=str, required='--nfs-server' in sys.argv,
                                help='specify NFS share/directory to use')
+        subparser.add_argument("--server-as-prefix", "-sp", type=str, default=argparse.SUPPRESS, required=False, help='Option to start prefix w/ nfs server ip')
 
     def get(self, subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
