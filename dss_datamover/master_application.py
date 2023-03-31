@@ -205,7 +205,11 @@ class Master(object):
         if not self.standalone:
             if not (self.operation.upper() == "LIST" and not self.config.get("distributed", False)):
                 self.stop_client_stale_process_on_clients()
-                self.spawn_clients()
+                if not self.spawn_clients():
+                    self.logger.info("Exit DataMover!")
+                    self.stop_workers()
+                    self.stop_logging()
+                    sys.exit("Clients connections all failed. Shutting down DataMover application")
 
         if not self.process_monitor_event.is_set() and self.operation.upper() in ["PUT", "TEST"]:
             self.start_indexing()
@@ -322,7 +326,7 @@ class Master(object):
     def spawn_clients(self):
         """
         Spawn the clients
-        :return:
+        :return: Length of list of clients started successfully
         """
         index = 0
         for client_ip in self.client_ip_list:
@@ -338,6 +342,7 @@ class Master(object):
             except Exception as e:
                 self.logger.error(f'Error in starting client application on node {client_ip} - {e}')
             index += 1
+        return len(self.clients)
 
     def stop_clients(self, force_flag=False):
         """
@@ -585,10 +590,12 @@ class Master(object):
                 command += " --installation_path " + self.config["dss_targets"]["installation_path"]
 
             self.logger.info("Started Compaction for target-ip:{}".format(target_ip))
-            ssh_client_handler, stdin, stdout, stderr = remoteExecution(target_ip, self.client_user_id,
-                                                                        self.client_password, command)
-            compaction_status[target_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout": stdout,
-                                            "stderr": stderr}
+            try:
+                ssh_client_handler, stdin, stdout, stderr = remoteExecution(target_ip, self.client_user_id, self.client_password, command)
+            except Exception as e:
+                self.logger.error(f'Error in starting compaction on target node {target_ip} - {e}')
+            else:
+                compaction_status[target_ip] = {"status": False, "ssh_remote_client": ssh_client_handler, "stdout": stdout, "stderr": stderr}
         # Wait for target compaction to finish.
         while True:
             is_compaction_done = True
