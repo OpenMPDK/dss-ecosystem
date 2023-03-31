@@ -170,7 +170,7 @@ The following CLI args are also supported
 
 Command using NFS CLI args
 ```
-sh -c "source  /usr/local/bin/setenv-for-gcc510.sh  && python3 /usr/dss/nkv-datamover/master_application.py  PUT --config /etc/dss/datamover/config.json  --compaction --nfs-server <nfs server ip> --nfs-port <nfs port #> --nfs-share <path to nfs share>"
+sh -c "source  /usr/local/bin/setenv-for-gcc510.sh  && python3 /usr/dss/nkv-datamover/master_application.py  PUT --config /etc/dss/datamover/config.json  --compaction yes --nfs-server <nfs server ip> --nfs-port <nfs port #> --nfs-share <path to nfs share>"
 ```
 
 ## S3 Client Library
