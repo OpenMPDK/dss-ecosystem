@@ -22,10 +22,16 @@ inputs:
   component:
     description: Name of the component you want to build (for display only)
     required: true
+  aws_account_id:
+    description: AWS Account ID
+    required: true
+  repo-name:
+    description: AWS ECR repository name
+    required: true
   image:
     description: Path to ECR Image to build with
     required: false
-    default: "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-1.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:dss-build_${{ steps.nice_branchname.outputs.NICE_BRANCHNAME }}"
+    default: "${{ inputs.aws_account_id }}.dkr.ecr.us-west-1.amazonaws.com/${{ inputs.repo-name }}:dss-build_${{ steps.nice_branchname.outputs.NICE_BRANCHNAME }}"
 
 runs:
   using: composite

@@ -23,6 +23,8 @@ jobs:
           buildspec: dss-client.yml
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          repo-name: ${{ secrets.REPOSITORY_NAME }}
 
   build_datamover:
     runs-on: ubuntu-latest
@@ -34,6 +36,8 @@ jobs:
           buildspec: datamover.yml
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          repo-name: ${{ secrets.REPOSITORY_NAME }}
 
   pycodestyle:
     runs-on: ubuntu-latest
@@ -46,3 +50,5 @@ jobs:
           image: "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-1.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:pycodestyle"
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          repo-name: ${{ secrets.REPOSITORY_NAME }}
