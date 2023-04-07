@@ -15,19 +15,19 @@ on:
 
 jobs:
   dss-client:
-    uses: ./.github/actions/build-aws.yml
+    uses: ./.github/workflows/build-aws.yml
     with:
       component: dss-client
     secrets: inherit
 
   datamover:
-    uses: ./.github/actions/build-aws.yml
+    uses: ./.github/workflows/build-aws.yml
     with:
       component: datamover
     secrets: inherit
 
   pycodestyle:
-    uses: ./.github/actions/build-aws.yml
+    uses: ./.github/workflows/build-aws.yml
     with:
       component: pycodestyle
       image: pycodestyle
