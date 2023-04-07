@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: ./.github/actions/build-aws
+      - uses: ./.github/actions/build-aws.yml
         with:
           component: dss-client
           buildspec: dss-client.yml
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: ./.github/actions/build-aws
+      - uses: ./.github/actions/build-aws.yml
         with:
           component: datamover
           buildspec: datamover.yml
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: ./.github/actions/build-aws
+      - uses: ./.github/actions/build-aws.yml
         with:
           component: pycodestyle
           buildspec: pycodestyle.yml
