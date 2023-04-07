@@ -3,7 +3,7 @@ version: 0.2
 env:
   secrets-manager:
     SONAR_TOKEN: Codebuild-DSS:SONAR_TOKEN
-    DSSMAINS3URI: Codebuild-DSS:DSSMAINS3URI
+    DSSS3URI: Codebuild-DSS:DSSS3URI
   variables:
     DSSGLOBLIST: "dss_client-*.tgz"
 
@@ -26,7 +26,7 @@ phases:
           -Dsonar.pullrequest.base=${GITHUB_BASE_REF} \
           -Dsonar.pullrequest.branch=${GITHUB_HEAD_REF} \
           -Dsonar.pullrequest.github.repository=${GITHUB_REPOSITORY}
-      - /stagemainartifacts.sh
+      - /stagemergeartifacts.sh
 
 artifacts:
   files:
