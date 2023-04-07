@@ -28,10 +28,6 @@ inputs:
   repo-name:
     description: AWS ECR repository name
     required: true
-  image:
-    description: Path to ECR Image to build with
-    required: false
-    default: "${{ inputs.aws_account_id }}.dkr.ecr.us-west-1.amazonaws.com/${{ inputs.repo-name }}:dss-build_${{ steps.nice_branchname.outputs.NICE_BRANCHNAME }}"
 
 runs:
   using: composite
@@ -60,6 +56,6 @@ runs:
         project-name: ${{ inputs.project-name }}
         compute-type-override: ${{ inputs.compute-type-override }}
         buildspec-override: "./buildspec/${{ inputs.buildspec }}"
-        image-override: ${{ inputs.image }}
+        image-override: "${{ inputs.aws_account_id }}.dkr.ecr.us-west-1.amazonaws.com/${{ inputs.repo-name }}:dss-build_${{ steps.nice_branchname.outputs.NICE_BRANCHNAME }}"
     - run: echo "${{ github.action_path }}" >> "$GITHUB_PATH"
       shell: bash
