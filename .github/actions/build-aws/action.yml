@@ -48,7 +48,7 @@ runs:
         else
             BRANCH_NAME="${{ github.base_ref }}"
         fi
-        echo "random-number=$(echo "$BRANCH_NAME" | tr '/' '_')" >> "$GITHUB_OUTPUT"
+        echo "NICE_BRANCHNAME=$(echo "$BRANCH_NAME" | tr '/' '_')" >> "$GITHUB_OUTPUT"
       shell: bash
     - name: "Build ${{ inputs.component }} on CodeBuild"
       uses: aws-actions/aws-codebuild-run-build@v1
