@@ -16,6 +16,7 @@ jobs:
   build_dss-client:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
       - uses: ./.github/actions/build-aws
         with:
           component: dss-client
@@ -26,6 +27,7 @@ jobs:
   build_datamover:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
       - uses: ./.github/actions/build-aws
         with:
           component: datamover
@@ -36,6 +38,7 @@ jobs:
   pycodestyle:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v2
       - uses: ./.github/actions/build-aws
         with:
           component: pycodestyle
