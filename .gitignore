@@ -1,2 +1,8 @@
+# dss-client build files
 dss_client/build/
 dss_client/*.tgz
+
+# Sonar-related files
+bw-output/
+**/build-wrapper*
+.scannerwork/
