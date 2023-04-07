@@ -391,6 +391,7 @@ class Monitor(object):
         prctl.set_proctitle(name)
 
         successful_socket_connection = 0
+
         for client in self.clients:
             try:
                 client.socket_status = ClientSocket(self.config, self.logger)

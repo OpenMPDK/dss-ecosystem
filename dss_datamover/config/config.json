@@ -27,7 +27,8 @@
     "nfs": {
         "202.0.0.103": ["/dir1", "/dir2"]
     },
-    "nfsport": 2049
+    "nfsport": 2049,
+    "server_as_prefix": "yes"
   },
   "s3_storage": {
     "minio": {"url": "202.0.0.104:9000", "access_key": "minio", "secret_key": "minio123"},

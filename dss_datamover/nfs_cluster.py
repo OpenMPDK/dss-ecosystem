@@ -43,6 +43,7 @@ class NFSCluster:
     def __init__(self, config={}, user_id="ansible", password="password", logger=None):
         self.config = config.get("nfs", {})
         self.nfs_port = config.get("nfsport", 2049)
+        self.server_as_prefix = config.get("server_as_prefix", True)
         self.local_mounts = {}
         self.mounted_nfs_shares = []
         self.nfs_cluster = []
@@ -91,7 +92,7 @@ class NFSCluster:
         console = ""
         for nfs_share in self.config[cluster_ip]:
             # TODO: Configue here based on config --server-as-prefix
-            nfs_share_prefix = cluster_ip + nfs_share
+            nfs_share_prefix = cluster_ip + nfs_share if self.server_as_prefix else nfs_share
             if prefix.startswith(nfs_share_prefix):
                 if (cluster_ip in self.local_mounts
                         and nfs_share in self.local_mounts[cluster_ip]):
@@ -122,7 +123,7 @@ class NFSCluster:
         console = None
         # Generate a unique md5sum hash key for NFS shares
         # TODO: configure based on server as prefix option
-        nfs_share_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
+        nfs_share_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share) if self.server_as_prefix else os.path.abspath("/" + nfs_share)
         nfs_share_already_mounted = False
 
         # Already File System path is mounted
@@ -145,14 +146,14 @@ class NFSCluster:
             if not nfs_share_already_mounted:
                 command = "mount -o port={} {}:{} {}".format(self.nfs_port, cluster_ip, nfs_share, nfs_share_mount)
                 ret, console = exec_cmd(command, True, True, self.user_id)
-
+                prefix_string = cluster_ip + ":" + nfs_share if self.server_as_prefix else nfs_share
                 if ret == 0:
                     self.mounted_nfs_shares.append(nfs_share)
-                    self.logger.info("NFS mounting {}:{} => {} successful".format(
-                        cluster_ip, nfs_share, nfs_share_mount))
+                    self.logger.info("NFS mounting {} => {} successful".format(
+                        prefix_string, nfs_share_mount))
                 elif ret:
-                    self.logger.error("NFS mounting {}:{} failed \n {}".format(
-                        cluster_ip, nfs_share, console))
+                    self.logger.error("NFS mounting {} failed \n {}".format(
+                        prefix_string, console))
 
         if ret == 0 or nfs_share_already_mounted:
             if cluster_ip not in self.local_mounts:
@@ -175,7 +176,7 @@ class NFSCluster:
             for nfs_share in self.local_mounts[cluster_ip]:
                 if nfs_share in self.mounted_nfs_shares:
                     # TODO: edit logic here based on --server-as-prefix option
-                    local_nfs_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share)
+                    local_nfs_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share) if self.server_as_prefix else os.path.abspath("/" + nfs_share)
                     ret, console = self.umount(local_nfs_mount)
                     if ret == 0:
                         nfs_unmount_success.append(nfs_share)
@@ -183,11 +184,11 @@ class NFSCluster:
                         nfs_unmount_failed.append(nfs_share)
             if self.mounted_nfs_shares:
                 if nfs_unmount_success:
-                    self.logger.info("Un-mounted local NFS mount => NFS Cluster-{}:{}".format(
-                        cluster_ip, nfs_unmount_success))
+                    local_nfs_mount_string = cluster_ip + ":" + str(nfs_unmount_success) if self.server_as_prefix else str(nfs_unmount_success)
+                    self.logger.info("Un-mounted local NFS mount => NFS Cluster-{}".format(local_nfs_mount_string))
                 if nfs_unmount_failed:
-                    self.logger.info("Un-mount failed for local NFS mount => NFS Cluster-{}:{}".format(
-                        cluster_ip, nfs_unmount_failed))
+                    local_nfs_mount_string = cluster_ip + ":" + str(nfs_unmount_failed) if self.server_as_prefix else str(nfs_unmount_failed)
+                    self.logger.info("Un-mount failed for local NFS mount => NFS Cluster-{}".format(local_nfs_mount_string))
         self.mounted = False
 
     @exception

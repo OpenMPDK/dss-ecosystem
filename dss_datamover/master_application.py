@@ -38,8 +38,14 @@ import os
 import sys
 import time
 
-from utils.utility import remoteExecution, get_s3_prefix, progress_bar, get_ip_address
-from utils.utility import is_prefix_valid_for_nfs_share, get_s3_prefix, validate_s3_prefix
+from utils.utility import (
+    is_prefix_valid_for_nfs_share,
+    get_s3_prefix,
+    validate_s3_prefix,
+    remoteExecution,
+    progress_bar,
+    get_ip_address
+)
 from utils.config import Config, CommandLineArgument
 from utils.signal_handler import SignalHandler
 from utils import __VERSION__
@@ -86,12 +92,15 @@ class Master(object):
         self.s3_config = config.get("s3_storage", {})
 
         self.fs_config = self.config.get("fs_config", {})
+        self.server_as_prefix = self.fs_config.get("server_as_prefix", True)
         # override NFS configs with CLI args if applicable
         if {'nfs_server', 'nfs_share'}.issubset(self.config):
             if self.config['nfs_server'] and self.config['nfs_share']:
                 self.fs_config['nfs'] = {self.config['nfs_server']: [self.config['nfs_share']]}
         if 'nfs_port' in self.config:
             self.fs_config['nfsport'] = self.config['nfs_port']
+        # pass through server-as-prefix option as part of NFS configs
+        # self.fs_config['server_as_prefix'] = self.config['server_as_prefix']
 
         self.standalone = config.get("standalone", False)
 
@@ -192,7 +201,7 @@ class Master(object):
         # Validate S3 prefix before starting the workers, to allow graceful exit of application for bad prefix
         # (Fix for MIN-1312)
         if self.prefix:
-            if not validate_s3_prefix(self.logger, self.prefix, self.fs_config.get('nfs', {})):
+            if not validate_s3_prefix(self.logger, self.prefix, self.fs_config.get('nfs', {}), server_as_prefix=self.server_as_prefix):
                 self.stop_logging()
                 sys.exit("Invalid prefix. Shutting down DataMover application")
 
@@ -307,11 +316,14 @@ class Master(object):
         """
         index = 0
         for client_ip in self.client_ip_list:
-            client = Client(index,
-                            client_ip,
-                            self.operation,
-                            self.logger,
-                            self.config)
+            client = Client(
+                index,
+                client_ip,
+                self.operation,
+                self.logger,
+                self.config,
+                self.server_as_prefix
+            )
             try:
                 self.logger.info(f"Stopping stale ClientApplication on node {client_ip}")
                 client.stop_process_on_remote_client()
@@ -326,11 +338,14 @@ class Master(object):
         """
         index = 0
         for client_ip in self.client_ip_list:
-            client = Client(index,
-                            client_ip,
-                            self.operation,
-                            self.logger,
-                            self.config)
+            client = Client(
+                index,
+                client_ip,
+                self.operation,
+                self.logger,
+                self.config,
+                self.server_as_prefix
+            )
             try:
                 client.start()
                 self.logger.info("Started ClientApplication-{} at node - {}".format(client.id, client_ip))
@@ -421,7 +436,7 @@ class Master(object):
         """
         # Validate S3 prefix
         if self.prefix:
-            if validate_s3_prefix(self.logger, self.prefix):
+            if validate_s3_prefix(self.logger, self.prefix, server_as_prefix=self.server_as_prefix):
                 self.prefixes = [self.prefix]
             else:
                 self.logger.fatal("Bad prefix specified, exit application.")
@@ -448,7 +463,7 @@ class Master(object):
                     self.indexing_started_flag.value = -1
                     return
                 if ret == 0 and is_prefix_valid_for_nfs_share(self.logger, share=nfs_share, ip_address=ip_address,
-                                                              prefix=prefix):
+                                                              prefix=prefix, server_as_prefix=self.server_as_prefix):
                     nfs_share_prefix_path = os.path.abspath("/" + prefix)
                     task = Task(operation="indexing",
                                 data=nfs_share_prefix_path,
@@ -480,7 +495,7 @@ class Master(object):
                     if self.nfs_cluster_obj.mounted:
                         nfs_share_mount = nfs_share
                     else:
-                        nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share)
+                        nfs_share_mount = os.path.abspath("/" + ip_address + "/" + nfs_share) if self.server_as_prefix else os.path.abspath("/" + nfs_share)
                     task = Task(operation="indexing",
                                 data=nfs_share_mount,
                                 nfs_cluster=ip_address,
@@ -518,7 +533,9 @@ class Master(object):
             self.index_data_generation_complete.value = 1
         else:
             # Standalone LISTing on single node.
+            self.logger.info("Standalone LISTing..")
             if self.prefix_index_data:
+                self.logger.info("PREFIX INDEX DATA..")
                 listing_based_on_indexing = True
                 self.logger.info("Using {} file for LISTing".format(self.index_data_json_file))
                 for prefix in self.prefix_index_data.keys():
@@ -536,10 +553,12 @@ class Master(object):
                                 )
                     self.task_queue.put(task)
             else:
-                for prefix in get_s3_prefix(self.logger, self.fs_config.get("nfs", {}), self.prefix):
+                self.logger.info("NOT IN PREFIX INDEX DATA..")
+                for prefix in get_s3_prefix(self.logger, self.fs_config.get("nfs", {}), self.prefix, server_as_prefix=self.server_as_prefix):
                     bad_prefix_no_listing = False
                     with self.listing_progress.get_lock():
                         self.listing_progress.value += 1
+                    self.logger.info(f"^^^^^^^^^^^^^^^^^^^ PREFIX BEING PROCESSED IS {prefix}")
                     task = Task(operation="list",
                                 data={"prefix": prefix},
                                 s3config=self.config["s3_storage"],
@@ -661,7 +680,7 @@ class Master(object):
 
 class Client(object):
 
-    def __init__(self, id, host_or_ip_address, operation, logger, config):
+    def __init__(self, id, host_or_ip_address, operation, logger, config, server_as_prefix):
         """
         Client object initiation
         :param id: A id for each ClientApplication
@@ -675,6 +694,7 @@ class Client(object):
         self.ip_address = get_ip_address(logger, host_or_ip_address)
         self.operation = operation
         self.config = config
+        self.server_as_prefix = server_as_prefix
         # Logger
         self.logger = logger
         self.debug = config.get("debug", False)
@@ -747,6 +767,8 @@ class Client(object):
             command += " --dryrun "
         if self.debug:
             command += " --debug "
+
+        command += f" --server-as-prefix {self.server_as_prefix}"
 
         if self.env_gcc_required and self.env_gcc_source:
             command = "source {} && {} ".format(self.env_gcc_source, command)
