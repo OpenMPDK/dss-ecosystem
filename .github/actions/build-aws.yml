@@ -1,0 +1,59 @@
+name: Build in AWS CodeBuild
+description: Build in AWS CodeBuild
+
+inputs:
+  aws-access-key-id:
+    description: AWS Access Key
+    required: true
+  aws-secret-access-key:
+    description: AWS Secret Key
+    required: true
+  project-name:
+    description: Name of the CodeBuild Project
+    required: false
+    default: OpenMPDK_dss-ecosystem
+  compute-type-override:
+    description: Compute type for CodeBuild runtime
+    required: false
+    default: BUILD_GENERAL1_SMALL
+  buildspec:
+    description: CodeBuild buildspec filename (inside ./buildspec/)
+    required: true
+  component:
+    description: Name of the component you want to build (for display only)
+    required: true
+  image:
+    description: Path to ECR Image to build with
+    required: false
+    default: "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-1.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:dss-build_${{ steps.nice_branchname.outputs.NICE_BRANCHNAME }}"
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: us-west-1
+    - name: Derive the branchname for ECR tag (replace '/' with '_')
+      id: nice_branchname
+      run: |
+        # Use REF to get branch name if a merge, else use BASE_REF
+        if [[ "${{ github.ref_name }}" == "refs/heads"* ]]
+        then
+            BRANCH_NAME=$(echo "${{ github.ref_name }}" | cut --complement -c 1-11)
+        else
+            BRANCH_NAME="${{ github.base_ref }}"
+        fi
+        echo "random-number=$(echo "$BRANCH_NAME" | tr '/' '_')" >> "$GITHUB_OUTPUT"
+      shell: bash
+    - name: "Build ${{ inputs.component }} on CodeBuild"
+      uses: aws-actions/aws-codebuild-run-build@v1
+      with:
+        project-name: ${{ inputs.project-name }}
+        compute-type-override: ${{ inputs.compute-type-override }}
+        buildspec-override: "./buildspec/${{ inputs.buildspec }}"
+        image-override: ${{ inputs.image }}
+    - run: echo "${{ github.action_path }}" >> "$GITHUB_PATH"
+      shell: bash
