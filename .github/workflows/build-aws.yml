@@ -32,7 +32,6 @@ on:
       buildspec:
         description: CodeBuild buildspec filename (inside ./buildspec/) - Derived from 'component' by default
         required: false
-        default: "${{ inputs.component }}.yml"
         type: string
       image:
         description: Custom image to use for CodeBuild runtime, if not the default dss-build image
@@ -61,13 +60,10 @@ jobs:
           fi
           echo "NICE_BRANCHNAME=$(echo "$BRANCH_NAME" | tr '/' '_')" >> "$GITHUB_OUTPUT"
         shell: bash
-      - name: Debug image-override
-        run: |
-          echo "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-1.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:${{ inputs.image != '' && inputs.image || format('dss-build_{0}', steps.nice_branchname.outputs.NICE_BRANCHNAME) }}"
       - name: "Execute ${{ inputs.component }} workflow on CodeBuild"
         uses: aws-actions/aws-codebuild-run-build@v1
         with:
           project-name: ${{ inputs.project-name }}
           compute-type-override: ${{ inputs.compute-type-override }}
-          buildspec-override: "./buildspec/${{ inputs.buildspec }}"
+          buildspec-override: "./buildspec/${{ inputs.buildspec != '' && inputs.buildspec || format('{0}.yml', inputs.component) }}"
           image-override: "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-1.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:${{ inputs.image != '' && inputs.image || format('dss-build_{0}', steps.nice_branchname.outputs.NICE_BRANCHNAME) }}"
