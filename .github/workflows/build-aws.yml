@@ -61,6 +61,9 @@ jobs:
           fi
           echo "NICE_BRANCHNAME=$(echo "$BRANCH_NAME" | tr '/' '_')" >> "$GITHUB_OUTPUT"
         shell: bash
+      - name: Debug image-override
+        run: |
+          echo "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-west-1.amazonaws.com/${{ secrets.REPOSITORY_NAME }}:{{ inputs.image != '' && inputs.image || format('dss-build_{0}', steps.nice_branchname.outputs.NICE_BRANCHNAME) }}"
       - name: "Execute ${{ inputs.component }} workflow on CodeBuild"
         uses: aws-actions/aws-codebuild-run-build@v1
         with:
