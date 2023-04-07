@@ -22,7 +22,7 @@ inputs:
   component:
     description: Name of the component you want to build (for display only)
     required: true
-  aws_account_id:
+  aws-account-id:
     description: AWS Account ID
     required: true
   repo-name:
@@ -56,6 +56,6 @@ runs:
         project-name: ${{ inputs.project-name }}
         compute-type-override: ${{ inputs.compute-type-override }}
         buildspec-override: "./buildspec/${{ inputs.buildspec }}"
-        image-override: "${{ inputs.aws_account_id }}.dkr.ecr.us-west-1.amazonaws.com/${{ inputs.repo-name }}:dss-build_${{ steps.nice_branchname.outputs.NICE_BRANCHNAME }}"
+        image-override: "${{ inputs.aws-account-id }}.dkr.ecr.us-west-1.amazonaws.com/${{ inputs.repo-name }}:dss-build_${{ steps.nice_branchname.outputs.NICE_BRANCHNAME }}"
     - run: echo "${{ github.action_path }}" >> "$GITHUB_PATH"
       shell: bash
