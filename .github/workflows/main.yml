@@ -12,42 +12,23 @@ on:
       - opened
       - reopened
       - synchronize
-jobs:
-  build_dss-client:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: ./.github/actions/build-aws
-        with:
-          component: dss-client
-          buildspec: dss-client.yml
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
-          repo-name: ${{ secrets.REPOSITORY_NAME }}
 
-  build_datamover:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: ./.github/actions/build-aws
-        with:
-          component: datamover
-          buildspec: datamover.yml
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
-          repo-name: ${{ secrets.REPOSITORY_NAME }}
+jobs:
+  dss-client:
+    uses: ./.github/actions/build-aws.yml
+    with:
+      component: dss-client
+    secrets: inherit
+
+  datamover:
+    uses: ./.github/actions/build-aws.yml
+    with:
+      component: datamover
+    secrets: inherit
 
   pycodestyle:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: ./.github/actions/build-aws
-        with:
-          component: pycodestyle
-          buildspec: pycodestyle.yml
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
-          repo-name: ${{ secrets.REPOSITORY_NAME }}
+    uses: ./.github/actions/build-aws.yml
+    with:
+      component: pycodestyle
+      image: pycodestyle
+    secrets: inherit
