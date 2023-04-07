@@ -4,14 +4,14 @@ phases:
   build:
     commands:
       - |
-        pushd dss_ai_benchmark && \
+        cd dss_ai_benchmark && \
         pycodestyle . && \
-        popd
+        cd ..
       - |
-        pushd dss_client && \
+        cd dss_client && \
         pycodestyle . && \
-        popd
+        cd ..
       - |
-        pushd dss_datamover && \
+        cd dss_datamover && \
         pycodestyle . && \
-        popd ..
+        cd ..
