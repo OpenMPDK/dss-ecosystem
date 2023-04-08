@@ -18,14 +18,14 @@ jobs:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@test-workflows
     with:
       component: dss-client
-      project-name: OpenMPDK_dss-ecosystem
+      #project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
 
   datamover:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@test-workflows
     with:
       component: datamover
-      project-name: OpenMPDK_dss-ecosystem
+      #project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
 
   pycodestyle:
@@ -33,5 +33,5 @@ jobs:
     with:
       component: pycodestyle
       image: pycodestyle
-      project-name: OpenMPDK_dss-ecosystem
+      #project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
