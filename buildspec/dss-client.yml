@@ -15,8 +15,8 @@ phases:
           ./dss_client/scripts/build.sh
       - |
         sonar-scanner \
-          -Dsonar.branch.name="$([[ "$GITHUB_REF_NAME" == *"/merge" ]] && echo "$GITHUB_HEAD_REF" || echo "$GITHUB_REF_NAME")" \
-          "$([[ "$GITHUB_REF_NAME" != *"/merge" ]] && echo "-Dsonar.branch.target=$GITHUB_REF_NAME" || echo '')" \
+          -Dsonar.branch.name="$([[ "$GITHUB_REF_NAME" != *"/merge" ]] && echo "$GITHUB_HEAD_REF")" \
+          -Dsonar.branch.target="$([[ "$GITHUB_REF_NAME" != *"/merge" ]] && echo "$GITHUB_REF_NAME")" \
           -Dsonar.pullrequest.key=$(echo $GITHUB_REF | grep -oP "^refs/pull/\K[^/]+") \
           -Dsonar.pullrequest.base=${GITHUB_BASE_REF} \
           -Dsonar.pullrequest.branch=${GITHUB_HEAD_REF}
