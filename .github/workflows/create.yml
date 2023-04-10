@@ -1,0 +1,30 @@
+name: Build dss-ecosystem on stable branch creation
+on:
+  create
+
+jobs:
+  dss-client:
+    if: ${{ contains(github.ref, 'refs/heads/stable/') }}
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
+    with:
+      component: dss-client
+      project-name: OpenMPDK_dss-ecosystem
+      image: dss-build_stable_v1.0
+    secrets: inherit
+
+  datamover:
+    if: ${{ contains(github.ref, 'refs/heads/stable/') }}
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
+    with:
+      component: datamover
+      project-name: OpenMPDK_dss-ecosystem
+    secrets: inherit
+
+  pycodestyle:
+    if: ${{ contains(github.ref, 'refs/heads/stable/') }}
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
+    with:
+      component: pycodestyle
+      image: pycodestyle
+      project-name: OpenMPDK_dss-ecosystem
+    secrets: inherit
