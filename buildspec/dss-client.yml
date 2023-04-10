@@ -15,23 +15,15 @@ phases:
           ./dss_client/scripts/build.sh
       - |
         sonar-scanner \
-          -Dsonar.organization=openmpdk \
-          -Dsonar.projectKey=OpenMPDK_dss-ecosystem \
-          -Dsonar.sources=. \
-          -Dsonar.cfamily.build-wrapper-output=bw-output \
-          -Dsonar.host.url=https://sonarcloud.io \
           -Dsonar.branch.name="$([[ "$GITHUB_REF_NAME" == *"/merge" ]] && echo "$GITHUB_HEAD_REF" || echo "$GITHUB_REF_NAME")" \
           -Dsonar.branch.target="$(if [[ "$GITHUB_REF_NAME" == *"/merge" ]]; then echo "$GITHUB_BASE_REF"; else echo "$GITHUB_REF_NAME"; fi)" \
-          -Dsonar.pullrequest.github.summary_comment=true \
-          -Dsonar.pullrequest.provider=GitHub \
           -Dsonar.pullrequest.key=$(echo $GITHUB_REF | grep -oP "^refs/pull/\K[^/]+") \
           -Dsonar.pullrequest.base=${GITHUB_BASE_REF} \
           -Dsonar.pullrequest.branch=${GITHUB_HEAD_REF} \
-          -Dsonar.pullrequest.github.repository=${GITHUB_REPOSITORY}
       - /stagemergeartifacts.sh
 
 artifacts:
   files:
     - dss_client/dss_client-*.tgz
   discard-paths: yes
-  name: builds/OpenMPDK_dss-ecosystem/$CODEBUILD_BUILD_NUMBER
+  name: builds/dss-ecosystem/dss_client/$CODEBUILD_BUILD_NUMBER

@@ -20,4 +20,4 @@ artifacts:
   files:
     - nkv-datamover-*.tgz
   discard-paths: yes
-  name: builds/OpenMPDK_dss-ecosystem/$CODEBUILD_BUILD_NUMBER
+  name: builds/dss-ecosystem/dss_datamover/$CODEBUILD_BUILD_NUMBER

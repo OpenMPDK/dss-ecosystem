@@ -19,6 +19,7 @@ jobs:
     with:
       component: dss-client
       project-name: OpenMPDK_dss-ecosystem
+      image: dss-build_stable_v1.0
     secrets: inherit
 
   datamover:
