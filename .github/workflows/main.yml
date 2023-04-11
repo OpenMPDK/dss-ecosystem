@@ -21,7 +21,7 @@ jobs:
           - dss-client
           - datamover
           - pycodestyle
-    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@fix_branchname_for_ecr_image_tag
     with:
       component: ${{ matrix.component }}
       project-name: OpenMPDK_dss-ecosystem
