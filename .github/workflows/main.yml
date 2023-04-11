@@ -14,25 +14,15 @@ on:
       - synchronize
 
 jobs:
-  dss-client:
+  dss-ecosystem:
+    strategy:
+      matrix:
+        component:
+          - dss-client
+          - datamover
+          - pycodestyle
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
-      component: dss-client
-      project-name: OpenMPDK_dss-ecosystem
-      image: dss-build_stable_v1.0
-    secrets: inherit
-
-  datamover:
-    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
-    with:
-      component: datamover
-      project-name: OpenMPDK_dss-ecosystem
-    secrets: inherit
-
-  pycodestyle:
-    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
-    with:
-      component: pycodestyle
-      image: pycodestyle
+      component: ${{ matrix.component }}
       project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
