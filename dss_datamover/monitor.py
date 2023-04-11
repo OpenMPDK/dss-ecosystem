@@ -552,7 +552,8 @@ class Monitor(object):
                         self.resume_prefix_dir_keys_file_handle.writelines([prefix, '\n'])
                         self.resume_prefix_dir_keys_file_handle.flush()
                 elif self.operation.upper() in ["DEL"] and not self.dryrun:
-                    if self.prefix_index_data_persist[prefix]["files"] == processed_prefix[prefix]["success"]:
+                    # ensure all files were deleted from dir
+                    if processed_prefix[prefix]["failure"] == 0:
                         prefix_dir_deleted.append(prefix)
 
                 file_index_count = operation_success_count + operation_failure_count

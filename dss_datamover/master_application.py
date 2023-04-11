@@ -99,8 +99,6 @@ class Master(object):
                 self.fs_config['nfs'] = {self.config['nfs_server']: [self.config['nfs_share']]}
         if 'nfs_port' in self.config:
             self.fs_config['nfsport'] = self.config['nfs_port']
-        # pass through server-as-prefix option as part of NFS configs
-        # self.fs_config['server_as_prefix'] = self.config['server_as_prefix']
 
         self.standalone = config.get("standalone", False)
 
@@ -534,39 +532,42 @@ class Master(object):
         else:
             # Standalone LISTing on single node.
             self.logger.info("Standalone LISTing..")
-            if self.prefix_index_data:
-                self.logger.info("PREFIX INDEX DATA..")
-                listing_based_on_indexing = True
-                self.logger.info("Using {} file for LISTing".format(self.index_data_json_file))
-                for prefix in self.prefix_index_data.keys():
-                    if self.prefix and not prefix.startswith(self.prefix):
-                        continue
-                    bad_prefix_no_listing = False
-                    with self.listing_progress.get_lock():
-                        self.listing_progress.value += 1
-                    task = Task(operation="list",
-                                data={"prefix": prefix},
-                                s3config=self.config["s3_storage"],
-                                max_index_size=self.config["master"].get("max_index_size", 10),
-                                listing_based_on_indexing=listing_based_on_indexing,
-                                dest_path=dump_object_keys_path
-                                )
-                    self.task_queue.put(task)
-            else:
-                self.logger.info("NOT IN PREFIX INDEX DATA..")
-                for prefix in get_s3_prefix(self.logger, self.fs_config.get("nfs", {}), self.prefix, server_as_prefix=self.server_as_prefix):
-                    bad_prefix_no_listing = False
-                    with self.listing_progress.get_lock():
-                        self.listing_progress.value += 1
-                    self.logger.info(f"^^^^^^^^^^^^^^^^^^^ PREFIX BEING PROCESSED IS {prefix}")
-                    task = Task(operation="list",
-                                data={"prefix": prefix},
-                                s3config=self.config["s3_storage"],
-                                max_index_size=self.config["master"].get("max_index_size", 10),
-                                listing_based_on_indexing=listing_based_on_indexing,
-                                dest_path=dump_object_keys_path
-                                )
-                    self.task_queue.put(task)
+            for prefix in get_s3_prefix(self.logger, self.fs_config.get("nfs", {}), self.prefix, server_as_prefix=self.server_as_prefix):
+                bad_prefix_no_listing = False
+                with self.listing_progress.get_lock():
+                    self.listing_progress.value += 1
+                task = Task(operation="list",
+                            data={"prefix": prefix},
+                            s3config=self.config["s3_storage"],
+                            max_index_size=self.config["master"].get("max_index_size", 10),
+                            listing_based_on_indexing=listing_based_on_indexing,
+                            dest_path=dump_object_keys_path
+                            )
+                self.task_queue.put(task)
+
+            """
+            Following code block implements listing using prefix_index_data.json file
+            """
+            # if self.prefix_index_data:
+            #     listing_based_on_indexing = True
+            #     self.logger.info("Using {} file for LISTing".format(self.index_data_json_file))
+            #     for prefix in self.prefix_index_data.keys():
+            #         self.logger.info(f"checking prefix {prefix} against self.prefix {self.prefix}")
+            #         # ensure prefix is in correct format for accurate comparison
+            #         if self.prefix and not prefix.startswith((self.prefix if self.server_as_prefix else '/' + self.prefix)):
+            #             continue
+            #         bad_prefix_no_listing = False
+            #         with self.listing_progress.get_lock():
+            #             self.listing_progress.value += 1
+            #         task = Task(operation="list",
+            #                     data={"prefix": prefix},
+            #                     s3config=self.config["s3_storage"],
+            #                     max_index_size=self.config["master"].get("max_index_size", 10),
+            #                     listing_based_on_indexing=listing_based_on_indexing,
+            #                     dest_path=dump_object_keys_path
+            #                     )
+            #         self.task_queue.put(task)
+
         if bad_prefix_no_listing:
             self.logger.error("LISTING failure!")
             self.listing_status.value = 1
@@ -768,7 +769,8 @@ class Client(object):
         if self.debug:
             command += " --debug "
 
-        command += f" --server-as-prefix {self.server_as_prefix}"
+        server_as_prefix_string = "yes" if self.server_as_prefix else "no"
+        command += f" --server-as-prefix {server_as_prefix_string}"
 
         if self.env_gcc_required and self.env_gcc_source:
             command = "source {} && {} ".format(self.env_gcc_source, command)

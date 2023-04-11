@@ -84,25 +84,31 @@ class NFSCluster:
         :param prefix:
         :return: touple => ( cluster_ip, mounted_path , return code)
         """
-        # TODO: this logic needs to change / be flexible to support without nfs server prefix, may want to build other function
-        first_delimiter_pos = first_delimiter_index(prefix, "/")
-        cluster_ip = prefix[0:first_delimiter_pos]
         ret = -1
         nfs_share = ""
         console = ""
+        cluster_ip = ""
+        if not self.server_as_prefix:
+            # the cluster ip needs to be determined for the prefix, since that information is not prepended on the prefix
+            for nfs_share, ip in self.config.items():
+                if prefix.startswith(nfs_share):
+                    cluster_ip = ip
+        else:
+            first_delimiter_pos = first_delimiter_index(prefix, "/")
+            cluster_ip = prefix[0:first_delimiter_pos]
+
         for nfs_share in self.config[cluster_ip]:
-            # TODO: Configue here based on config --server-as-prefix
             nfs_share_prefix = cluster_ip + nfs_share if self.server_as_prefix else nfs_share
             if prefix.startswith(nfs_share_prefix):
                 if (cluster_ip in self.local_mounts
                         and nfs_share in self.local_mounts[cluster_ip]):
-                    # TODO: also need to add --server-as-prefix option here for logging statement
                     self.logger.info("Prefix -{} is already mounted to {}".format(
                         prefix, "/" + nfs_share_prefix))
                     return cluster_ip, nfs_share, 0, console
                 else:
                     ret, console = self.mount(cluster_ip, nfs_share)
                 break
+
         if ret == 0:
             self.logger.info("Mounted NFS shares {}:{}".format(cluster_ip, nfs_share))
             self.nfs_cluster.append(cluster_ip)

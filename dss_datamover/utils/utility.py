@@ -210,8 +210,8 @@ def validate_s3_prefix(logger, prefix, config_nfs=None, server_as_prefix=True):
     if prefix.startswith("/") or not prefix.endswith("/"):
         logger.fatal(f"WRONG specification of prefix {prefix}. Should be in the format of <nfs_server_ip>/<prefix>/ or <prefix>/ ")
         return False
-    if config_nfs:
 
+    if config_nfs:
         if server_as_prefix:
             cluster_ip = prefix.split('/')[0]
             if cluster_ip not in config_nfs:
@@ -221,13 +221,9 @@ def validate_s3_prefix(logger, prefix, config_nfs=None, server_as_prefix=True):
                 )
                 return False
 
-        logger.info(f"config_nfs: {config_nfs}")
         for cluster_ip, shares in config_nfs.items():
             for nfs_share in shares:
                 nfs_share_prefix = cluster_ip + nfs_share if server_as_prefix else nfs_share
-                logger.info(f"prefix: {prefix}")
-                logger.info(f"nfs_share_prefix: {nfs_share_prefix}")
-                # (prefix if server_as_prefix else '/' + prefix)
                 if (prefix if server_as_prefix else '/' + prefix).startswith(nfs_share_prefix):
                     inv_prefix = True
                     break
@@ -236,8 +232,6 @@ def validate_s3_prefix(logger, prefix, config_nfs=None, server_as_prefix=True):
                 "Specified Prefix: {} does not match any entry in the Config file nfs_share list: {}".format(prefix, config_nfs[cluster_ip])
             )
             return False
-
-        
     return True
 
 
@@ -327,10 +321,8 @@ def is_prefix_valid_for_nfs_share(logger, **kwargs):
     server_as_prefix = kwargs['server_as_prefix']
     nfs_mount_prefix = ip_address + nfs_share if server_as_prefix else nfs_share
 
-    # TODO: may need to potentiall add logic here to handle --server-as-prefix
     if prefix.startswith(nfs_mount_prefix) or nfs_mount_prefix.startswith(prefix):
         return True
-    # logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete
     return False
 
 
