@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
 
 	if (argc < 4){
 		printf("Invalid number of arguments given\n");
-		printf("Usage: %s <endpoint_url> <access_key> <secret_key> <size_in_kb(default 1MB)>\n");
+		printf("Usage: %s <endpoint_url> <access_key> <secret_key> <size_in_kb(default 1MB)>\n", argv[0]);
 		printf("Endpoint URL format is '<minio_host_name_or_ip>:<port>'\n");
 		return -1;
 	}
