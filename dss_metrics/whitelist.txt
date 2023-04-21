@@ -1,0 +1,6 @@
+target.subsystem1.kvio.puts
+target.subsystem1.kvio.gets
+target.subsystem1.kvio.dels
+target.subsystem1.kvio.putBandwidth
+target.subsystem1.kvio.getBandwidth
+minio_upstream.outstanding.s3_get_req
