@@ -52,6 +52,7 @@ from utils.signal_handler import SignalHandler
 
 BASE_DIR = os.path.dirname(__file__)
 MONITOR_INACTIVE_WAIT_TIME = 1800  # 30 Mins
+NFS_MOUNT_FAIL_WAIT_TIME = 600 # 10 Mins
 DEBUG_MESSAGE_INTERVAL = 600  # 10 Mins
 
 
@@ -78,6 +79,9 @@ class ClientApplication(object):
         self.index_data_receive_completed_lock = Lock()
         self.operation_status_send_completed = Value('i', 0)
         self.message_count = Value('i', 0)
+        self.index_data_receive_failed = Value('i', 0)
+        self.operation_status_send_failed = Value('i', 0)
+        self.mount_failed = Value('i', 0)
 
         # self.operation_status_send_completed_lock = Lock()
         # Task
@@ -298,15 +302,12 @@ class ClientApplication(object):
         Message Handler process incoming file index
         index message:{"dir":<>,"files":["f1","f2"],"size":<size of all files>, "nfs_cluster":<IP>, "nfs_share":<path>}
         end message: {"indexing" : 1 }
-
         Once indexing is completed at Master application side, master send a end message to all clients to finish their
         operation.
-
         Termination of Process:
         - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
         - Gracefully: The client application stop the message handler with "stop_messaging" shared variable.
         - Forcefully, process gets terminated on receiving termination signal.
-
         ## TODO
         - Gracefully: Once receive end message exit the loop, thus finish "file index" handling msg handler.
         - Forcefully: process gets terminated on receiving termination signal. Need to add signal handler.
@@ -331,7 +332,7 @@ class ClientApplication(object):
         objects_count = 0
         start_time_no_response = 0  # Start time of no response from master
         debug_message_timer = datetime.now()
-
+        nfs_mount_retry_list = []
         while True:
             # Check messaging flag  and break the  , generally multiprocessing Queue and value is thread/process safe.
             if self.stop_messaging.value == 0:
@@ -365,6 +366,7 @@ class ClientApplication(object):
                                     is_index_data_added = True
                                 else:
                                     self.logger.error("Issue with mounting! NFS-Share {}".format(message["nfs_share"]))
+                                    nfs_mount_retry_list.append((message, datetime.now()))
                         else:
                             self.logger.error("Bad formed message -{}".format(message))
                     elif self.operation.upper() == "DEL" or self.operation.upper() == "GET":
@@ -388,13 +390,13 @@ class ClientApplication(object):
                     if start_time_no_response == 0:
                         start_time_no_response = datetime.now()
                     else:
-                        # Check for 30 Min inactivity
+                        # Check for inactivity
                         if (datetime.now() - start_time_no_response).seconds > MONITOR_INACTIVE_WAIT_TIME:
                             start_time_no_response = datetime.now()
-                            self.logger.error("No message received from master in last 30 mins.")
-                            # self.index_data_receive_completed.value = 1
-                            # break
-
+                            self.logger.error("No message received from master in last {} mins.".format(MONITOR_INACTIVE_WAIT_TIME/60))
+                            self.index_data_receive_failed.value = 1
+                            break
+                
                 # Debug message
                 if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
                     self.logger.info(
@@ -405,8 +407,25 @@ class ClientApplication(object):
             except Exception as e:
                 self.logger.excep("Monitor-Index - {}".format(e))
 
+        while len(nfs_mount_retry_list) > 0:
+            retry_message, start_time = nfs_mount_retry_list.pop(0)
+            if (datetime.now() - start_time).seconds > NFS_MOUNT_FAIL_WAIT_TIME:
+                self.logger.error('Retry mounting {} failed in last {} mins, abort.'.format(retry_message["nfs_share"], NFS_MOUNT_FAIL_WAIT_TIME/60))
+                self.mount_failed.value = 1
+            else:
+                if self.nfs_mount(retry_message["nfs_cluster"], retry_message["nfs_share"]):
+                    self.add_task(retry_message)
+                    is_index_data_added = True
+                    if retry_message["dir"] in self.index_buffer:
+                        self.index_buffer[retry_message["dir"]] += len(retry_message["files"])
+                    else:
+                        self.index_buffer[retry_message["dir"]] = len(retry_message["files"])
+                else:
+                    nfs_mount_retry_list.append((retry_message, start_time))
+        
         self.logger.info(
             "Total messages received from master-{}, Objects Count: {}".format(self.message_count.value, objects_count))
+
         # Close socket connection and destroy context
         try:
             socket.close()
@@ -491,12 +510,12 @@ class ClientApplication(object):
                     if start_time_not_receiving_status_message == 0:
                         start_time_not_receiving_status_message = datetime.now()
                     else:
-                        # Check for 30 Min inactivity, shutdown forcefully
+                        # Check for inactivity, shutdown forcefully
                         if (datetime.now() - start_time_not_receiving_status_message).seconds > MONITOR_INACTIVE_WAIT_TIME:
                             start_time_not_receiving_status_message = datetime.now()
-                            self.logger.error("No message received from workers in last 30 mins.")
-                            # self.operation_status_send_completed.value = 1
-                            # break
+                            self.logger.error("No message received from workers in last {} mins.".format(MONITOR_INACTIVE_WAIT_TIME/60))
+                            self.operation_status_send_failed.value = 1
+                            break
 
                 # Debugging message, print in every 5 mints
                 if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
@@ -669,7 +688,8 @@ if __name__ == "__main__":
     ca.logger.info("Starting client application ...")
 
     while not ca.event.is_set():
-        if ca.index_data_receive_completed.value and ca.operation_status_send_completed.value:
+        if (ca.index_data_receive_completed.value and ca.operation_status_send_completed.value) or \
+            (ca.index_data_receive_failed.value or ca.operation_status_send_failed.value or ca.mount_failed.value):
             # Un-mount local NFS shares
             while ca.nfs_share_list.qsize() > 0:
                 nfs_share = ca.nfs_share_list.get()
@@ -685,7 +705,7 @@ if __name__ == "__main__":
             # Stop workers
             ca.stop_workers()
             ca.logger.info("All workers terminated !")
-            break
+            break 
         else:
             # if not ca.monitor_workers():
             #    break

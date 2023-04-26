@@ -51,7 +51,8 @@ Monitor the progress of operation.
 """
 manager = Manager()
 MONITOR_INACTIVE_WAIT_TIME = 1800  # 30 Mins
-DEBUG_MESSAGE_INTERVAL = 120  # 10 Mins
+RESEND_WAIT_TIME = 1800
+DEBUG_MESSAGE_INTERVAL = 120
 PERSIST_FLUSH_INTERVAL = 60
 MSG_SEND_RETRY_COUNT = 2
 
@@ -221,7 +222,7 @@ class Monitor(object):
         object_count = 0
         debug_message_timer = datetime.now()
         client_count = len(self.clients)
-
+        resend_index_data = [] # For failed index data
         while True:
             # Forcefully stop the process
             if self.stop_status_poller.value:
@@ -269,6 +270,7 @@ class Monitor(object):
                 else:  # Re-send once again
                     previous_client_operation_status = 0
                     self.logger.error("Monitor-Index-Distributor: Failed to send message to Client-{} ".format(client.id))
+                    resend_index_data.append((data, client_index, datetime.now()))
 
                 # Debug message , for success
                 if previous_client_operation_status == 1:
@@ -277,13 +279,33 @@ class Monitor(object):
                         self.received_index_msg_count.value += 1
 
                     object_count += object_count_under_prefix
+            
+            # resend failed data
+            elif len(resend_index_data) > 0:
+                data, last_client_index, start_time = resend_index_data.pop(0)
+                if (datetime.now() - start_time).seconds > RESEND_WAIT_TIME:
+                    self.logger.error("Monitor-Index-Distributor: resending {} failed after {} mins, abort.".format(data["dir"], RESEND_WAIT_TIME / 60))
+                else:
+                    next_client_index = (last_client_index + 1) % client_count # try another client this time
+                    next_client = self.clients[next_client_index]
+                    if self.send_index_data(next_client, data):
+                        if first_index_distribution == 0:
+                            index_distribution_start_time = datetime.now()
+                            first_index_distribution = 1
+                        message_count += 1
+                        with self.received_index_msg_count.get_lock():
+                            self.received_index_msg_count.value += 1
+                        object_count += len(data["files"])
+                    else:
+                        resend_index_data.append((data, next_client_index, start_time))
+
             # Debug message
             if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
                 self.logger.info("Monitor-Index-Distributor: Messages distributed to clients-{}, Objects Count: {}".format(
                     message_count, object_count))
                 debug_message_timer = datetime.now()
 
-            if self.index_data_generation_complete.value == 1 and (self.index_msg_count.value == message_count):
+            if self.index_data_generation_complete.value == 1 and (self.index_msg_count.value == message_count) and (len(resend_index_data) == 0):
                 self.logger.info("Monitor-Index-Distributor: Indexed-msg distribution is completed! Time:{} sec".format(
                     (datetime.now() - index_distribution_start_time).seconds))
                 self.logger.info(
@@ -356,7 +378,7 @@ class Monitor(object):
                 if message_sent:
                     self.logger.info("Notified ClientApplication-{} -> {}".format(client.id, message))
                 else:
-                    self.logger.error("Unable to send message-{} to ClientApplication-{}".format(client.id, message))
+                    self.logger.error("Unable to send message-{} to ClientApplication-{}".format(message, client.id))
         else:
             self.logger.error("Invalid message type - {}".format(message))
 
@@ -409,6 +431,8 @@ class Monitor(object):
 
         client_application_exit_count = 0
         received_status_msg_count = 0
+        current_time = datetime.now()
+        last_response_time = {client.id : current_time for client in self.clients}
         while True:
             # Condition to break the loop:
             # - Received all the operation status messages from all ClientApplications
@@ -436,6 +460,7 @@ class Monitor(object):
                         # Check status message or end message for that Client
                         self.logger.debug(
                             "Monitor-Poller Operation Status for client-{}, Status - {}".format(client.id, status))
+                        last_response_time[client.id] = datetime.now()
                         if "exit" in status and status["exit"]:
                             client.socket_status.close()
                             client.socket_status = None
@@ -454,6 +479,12 @@ class Monitor(object):
                                 self.logger.info("Monitor-Status-Poller received all the status messages = {} , Exit!".format(received_status_msg_count))
                                 self.stop_status_poller.value = 1
                                 break
+                    else:
+                        if (datetime.now() - last_response_time[client.id]).seconds > MONITOR_INACTIVE_WAIT_TIME:
+                            self.logger.warn("No valid response from client-{} for {} seconds. closing socket!".format(client.id, MONITOR_INACTIVE_WAIT_TIME))
+                            client.socket_status.close()
+                            client.socket_status = None
+                            client_application_exit_count += 1
                 except socket.timeout as e:
                     # Actual clientApp is terminated and receiving socket doesn't have any data left.
                     # Should close the receiving end socket.
