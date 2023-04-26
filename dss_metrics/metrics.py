@@ -29,114 +29,86 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-
-from prometheus_client import start_http_server, Summary, REGISTRY
+from collections import namedtuple
+from prometheus_client import start_http_server, Summary, REGISTRY, Metric
 import argparse
+import json
 import multiprocessing
-import os
 import time
 
-import nvmf_target
-import minio
-
-REQUEST_TIME = Summary(
-    'request_processing_seconds',
-    'Time spent processing request'
-)
+import nvmftarget_collector
+import minio_collector
+import utils
 
 
-def launch_collector(obj, stats_dict):
-    root = ''
-    if type(obj) is nvmf_target.NVMFTarget:
-        root = 'target'
-    elif type(obj) is minio.Minio:
-        root = 'minio'
-    stats_dict[root] = obj.poll_statistics()
+MetricInfo = namedtuple("MetricInfo", "key, name, value, tags, timestamp")
 
 
-def get_blacklist_keys():
-    blacklist = []
-    curr_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = curr_dir + os.sep + 'blacklist.txt'
-    with open(file_path) as f:
-        blacklist = f.read().splitlines()
-    return blacklist
-
-
-def get_whitelist_keys():
-    whitelist = []
-    curr_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = curr_dir + os.sep + 'whitelist.txt'
-    with open(file_path) as f:
-        whitelist = f.read().splitlines()
-    return whitelist
-
-
-def get_metrics():
-    manager = multiprocessing.Manager()
-    stats_dict = manager.dict()
-
-    num_seconds = 1
-    num_iterations = 1
-
-    # TODO: read in CLI params / config file
-    print("collecting metrics from DSS cluster..")
-
-    target_obj = nvmf_target.NVMFTarget(num_seconds, num_iterations)
-    minio_obj = minio.Minio(num_seconds, num_iterations)
-
-    target_proc = multiprocessing.Process(
-        target=launch_collector,
-        args=[target_obj, stats_dict]
-    )
-    minio_proc = multiprocessing.Process(
-        target=launch_collector,
-        args=[minio_obj, stats_dict]
-    )
-
-    target_proc.start()
-    minio_proc.start()
-
-    target_proc.join()
-    minio_proc.join()
-
-    dss_metrics = {}
-    for k in dict(stats_dict).copy().keys():
-        dss_metrics.update(dict(stats_dict[k]))
-
-    # TODO: populate Metric objects here
-
-    return dss_metrics
-
-
-# TODO: implement whitelist with REGEX
 class MetricsCollector(object):
-    def __init__(self, filter=False, whitelist_keys=[]):
-        self.filter = filter
-        self.whitelist_keys = whitelist_keys
+    def __init__(self, configs):
+        self.configs = configs
+        self.filter = self.configs['filter']
+        self.whitelist_patterns = utils.get_whitelist_keys()
 
-    @REQUEST_TIME.time()
     def collect(self):
-        # yield metric
-        blacklist_keys = get_blacklist_keys()
-        stats = get_metrics()
-
-        # we always filter out black list keys
-        for k in stats.copy().keys():
-            if k in blacklist_keys:
-                stats.pop(k, None)
-
-        # check if whitelist filtering is needed
-        if self.filter and self.whitelist_keys:
-            for k in stats.copy().keys():
-                if k not in whitelist_keys:
-                    stats.pop(k, None)
-
-        for metric in stats.values():
+        metrics = self.get_metrics()
+        for metric in metrics:
             yield metric
+
+    def get_metrics(self):
+        manager = multiprocessing.Manager()
+        metrics_data_buffer = manager.list()
+        metrics = []
+
+        print("collecting metrics from DSS cluster..")
+
+        num_seconds = self.configs['polling_interval_secs']
+        num_iterations = 1
+        target_obj = nvmftarget_collector.NVMFTargetCollector(
+            self.configs['ustat_binary_path'],
+            num_seconds,
+            num_iterations,
+            self.whitelist_patterns,
+            filter=self.filter
+        )
+        minio_obj = minio_collector.MinioCollector(
+            self.configs['ustat_binary_path'],
+            num_seconds,
+            num_iterations,
+            self.whitelist_patterns,
+            filter=self.filter
+        )
+
+        target_proc = multiprocessing.Process(
+            target=target_obj.poll_statistics,
+            args=[metrics_data_buffer]
+        )
+        minio_proc = multiprocessing.Process(
+            target=minio_obj.poll_statistics,
+            args=[metrics_data_buffer]
+        )
+
+        target_proc.start()
+        minio_proc.start()
+
+        target_proc.join()
+        minio_proc.join()
+
+        # populate Prometheus metric objects
+        for m in metrics_data_buffer:
+            metric = Metric(m.name, m.key, 'gauge')
+            metric.add_sample(
+                m.name,
+                value=m.value,
+                labels=m.tags,
+                timestamp=m.timestamp
+            )
+            metrics.append(metric)
+        return metrics
 
 
 if __name__ == '__main__':
+    # load CLI args
     parser = argparse.ArgumentParser(description='DSS Metrics Agent CLI')
     parser.add_argument(
         "--filter",
@@ -145,14 +117,30 @@ if __name__ == '__main__':
         action='store_true',
         help='Filter DSS metrics to only export metric listed in whitelist.txt'
     )
-    args = vars(parser.parse_args())
+    parser.add_argument(
+        "--config",
+        "-cfg",
+        required=True,
+        type=str,
+        help='Specify configuration file path'
+    )
+    cli_args = vars(parser.parse_args())
 
-    whitelist_keys = get_whitelist_keys()
+    # load config file args
+    configs = {}
+    with open(cli_args['config'], "rb") as cfg:
+        configs = json.loads(cfg.read().decode('UTF-8', "ignore"))
 
+    # merge configs
+    configs.update(cli_args)
+
+    # expose metrics on promotheus endpoint
     print("\n\n starting http server.... \n\n")
     start_http_server(8000)
     REGISTRY.register(
-        MetricsCollector(filter=args['filter'], whitelist_keys=whitelist_keys)
+        MetricsCollector(configs)
     )
     while True:
         time.sleep(1)
+
+    # TODO: add logic to insert into prometheus DB

@@ -1,3 +1,0 @@
-target.counters.instantaneous
-target.counters.constant
-target.subsystem1.id.c_nqn

@@ -270,3 +270,12 @@ def get_device_subsystem_map():
                     transport = f.readline().strip()
                 """
     return device_subsystem_map
+
+
+def get_whitelist_keys():
+    whitelist = []
+    curr_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = curr_dir + os.sep + 'whitelist.txt'
+    with open(file_path) as f:
+        whitelist = f.read().splitlines()
+    return whitelist

@@ -30,28 +30,35 @@ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-from prometheus_client import Metric
-
 import json
 import os
-import pexpect
 import uuid
 import re
 import socket
+import subprocess
 import time
 
-import config
+import metrics
 import utils
 
 
-class Minio():
-    def __init__(self, seconds, num_iterations):
+class MinioCollector():
+    def __init__(
+        self,
+        ustat_binary_path,
+        seconds,
+        num_iterations,
+        whitelist_patterns,
+        filter=False
+    ):
         self.seconds = seconds
         self.num_iterations = num_iterations
-        self.ustat_path = config.USTAT_BINARY
+        self.whitelist_patterns = whitelist_patterns
+        self.ustat_path = ustat_binary_path
+        self.filter = filter
         self.TYPE = 'minio'
 
-    def poll_statistics(self):
+    def poll_statistics(self, metrics_data_buffer):
         minio_uuid = None
         stats_output = {}
         minio_proc_map = {}  # uuid: proc
@@ -71,22 +78,30 @@ class Minio():
                 with open(proc_file) as f:
                     proc_cmd = f.readline()
                 minio_uuid = uuid.uuid3(uuid.NAMESPACE_DNS, proc_cmd)
-                # TODO: use Popen instead of pexpect
-                proc = pexpect.spawn(cmd, timeout=1+self.seconds)
+                proc = subprocess.Popen(cmd.split(' '), stdout=subprocess.PIPE)
                 stats_output['time'] = collection_time
                 minio_proc_map[minio_uuid] = proc
             except Exception as error:
                 print(f'Caught exception while running USTAT {str(error)}')
 
-        minio_metrics = {}  # { full_key: metric }
         device_subsystem_map = utils.get_device_subsystem_map()
         for minio_uuid, proc in minio_proc_map.items():
-            while not proc.eof():
-                line = proc.readline().decode('utf-8')
+            while True:
+                line = proc.stdout.readline().decode('utf-8')
+                if not line:
+                    break
                 line = line.strip()
                 if line:
                     try:
                         full_key, value = line.split('=')
+                        whitelist_match = False
+
+                        # filter using whitelist patterns if required
+                        if self.filter:
+                            for regex in self.whitelist_patterns:
+                                if re.match(regex, full_key):
+                                    whitelist_match = True
+                                    break
 
                         # check if value is a valid promotheus metric value
                         valid_value_flag = value.replace('.', '').isdigit()
@@ -109,15 +124,23 @@ class Minio():
                         elif fields[0] == 'minio_upstream':
                             tags['subsystem_id'] = 'minio_upstream'
 
-                        if valid_value_flag:
-                            metric = Metric(metric_name, full_key, 'gauge')
-                            metric.add_sample(
-                                metric_name,
-                                value=value,
-                                labels=tags,
-                                timestamp=time.time()
+                        """
+                        XOR operation
+                        check if filter, then whitelist match should be True
+                        if not filter, than whitelist match should be False
+                        """
+                        if (
+                            valid_value_flag
+                            and (self.filter == whitelist_match)
+                        ):
+                            metrics_data_buffer.append(
+                                metrics.MetricInfo(
+                                    full_key,
+                                    metric_name,
+                                    value, tags,
+                                    time.time()
+                                )
                             )
-                            minio_metrics[full_key] = metric
 
                     except Exception as error:
                         print(
@@ -127,10 +150,10 @@ class Minio():
                         )
 
             try:
-                ret = proc.terminate()
+                proc.terminate()
             except Exception:
                 print('ustat process termination exception ', exc_info=True)
-        return minio_metrics
+                proc.kill()
 
     def get_minio_instances(self):
         proc_name = re.compile(r"^minio$")

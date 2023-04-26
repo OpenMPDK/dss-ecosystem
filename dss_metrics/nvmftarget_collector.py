@@ -30,26 +30,33 @@ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-from prometheus_client import Metric
-import pexpect
+import re
+import subprocess
 import socket
 import time
 
-import config
+import metrics
 import utils
 
 
-# TODO: process at the top level --> metrics.py
-class NVMFTarget():
-    def __init__(self, seconds, num_iterations):
-        self.ustat_path = config.USTAT_BINARY
+class NVMFTargetCollector():
+    def __init__(
+        self,
+        ustat_binary_path,
+        seconds,
+        num_iterations,
+        whitelist_patterns,
+        filter=False
+    ):
+        self.ustat_path = ustat_binary_path
         self.nvmf_pid, status = utils.check_spdk_running()
         self.seconds = seconds
         self.num_iterations = num_iterations
+        self.whitelist_patterns = whitelist_patterns
+        self.filter = filter
         self.TYPE = 'target'
 
-    # TODO: perform whitelisting at this level
-    def poll_statistics(self):
+    def poll_statistics(self, metrics_data_buffer):
         try:
             cmd = (
                 self.ustat_path + ' -p '
@@ -57,20 +64,30 @@ class NVMFTarget():
                 + str(self.seconds) + ' '
                 + str(self.num_iterations)
             )
-            proc = pexpect.spawn(cmd, timeout=self.seconds + 1)
+            proc = subprocess.Popen(cmd.split(' '), stdout=subprocess.PIPE)
         except Exception as e:
             print(f'Caught exception while running USTAT {str(e)}')
             return
 
         subsystem_num_to_nqn_map = {}
         drive_num_to_drive_serial_map = {}
-        target_metrics = {}  # {full_key: metric}
-        while not proc.eof():
-            line = proc.readline().decode('utf-8')
+
+        while True:
+            line = proc.stdout.readline().decode('utf-8')
+            if not line:
+                break
             line = line.strip()
             if line:
                 try:
                     full_key, value = line.split('=')
+                    whitelist_match = False
+
+                    # filter using whitelist patterns if required
+                    if self.filter:
+                        for regex in self.whitelist_patterns:
+                            if re.match(regex, full_key):
+                                whitelist_match = True
+                                break
 
                     # check if value is a valid promotheus metric value
                     valid_value_flag = value.replace('.', '').isdigit()
@@ -98,21 +115,26 @@ class NVMFTarget():
                     else:
                         continue  # skip if subsystem not mentioned
 
-                    if valid_value_flag:
-                        metric = Metric(metric_name, full_key, 'gauge')
-                        metric.add_sample(
-                            metric_name,
-                            value=value,
-                            labels=tags,
-                            timestamp=time.time()
+                    # TODO: return tuple with metric info instead of populating
+                    """
+                    XOR operation
+                    check if filter, then whitelist match should be True
+                    if not filter, than whitelist match should be False
+                    """
+                    if valid_value_flag and (self.filter == whitelist_match):
+                        metrics_data_buffer.append(
+                            metrics.MetricInfo(
+                                full_key,
+                                metric_name,
+                                value,
+                                tags,
+                                time.time()
+                            )
                         )
-                        target_metrics[full_key] = metric
                 except Exception as error:
                     print(f'Failed to handle line {line}, Error: {str(error)}')
-
         try:
-            ret = proc.terminate()
+            proc.terminate()
         except Exception:
             print('ustat process termination exception ', exc_info=True)
-
-        return target_metrics
+            proc.kill()
