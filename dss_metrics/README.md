@@ -13,12 +13,12 @@ exporting all available metrics from the system or a smaller subset of metrics a
 
 Without filter
 ```
-python3 metrics.py --config /home/nadim.s/datamover/dss-ecosystem/dss_metrics/config.json
+python3 metrics.py --config <path to config.json>
 ```
 
 With filter
 ```
-python3 metrics.py --filter --config /home/nadim.s/datamover/dss-ecosystem/dss_metrics/config.json
+python3 metrics.py --filter --config <path to config.json>
 ```
 
 ## Architecture
@@ -27,3 +27,17 @@ collector are run in parallel using Multiprocess and store information of the me
 includes unique identifiers to assist with data analysis / correlation later, such as; minio_id, target_id, subsystem_id, timestamp, etc. 
 The collected metric information later gets converted into actual Prometheus Metric objects and then "exported" or yielded to an endpoint 
 that can be consumed by users
+
+## Prometheus DB
+Prometheus must be run locally from the node. Prometheus will continuosuly scrape the endpoint at which metrics are exported to and store 
+in the local prometheus DB. The configuration for DSS Metrics Agent for Prometheus can be found in the "config/prometheus.yml" file. 
+In order to start prometheus run the following from where prometheus is installed and specify the DSS Metrics Agent prometheus.yml file;
+```
+./prometheus --config.file=<path to prometheus.yml>
+```
+
+## Resources
+Refer to Prometheus Getting Started section for download, installation, and execution of Prometheus
+```
+https://prometheus.io/docs/prometheus/latest/getting_started/
+```
