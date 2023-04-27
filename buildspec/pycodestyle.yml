@@ -14,4 +14,5 @@ batch:
 phases:
   build:
     commands:
+      - echo "pycodestyle $PROJECT --show-source --show-pep8"
       - pycodestyle $PROJECT --show-source --show-pep8
