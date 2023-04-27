@@ -25,4 +25,6 @@ jobs:
     with:
       component: ${{ matrix.component }}
       project-name: OpenMPDK_dss-ecosystem
+      # Set hard-coded image until gen2 is merged
+      image: dss-build_stable_v1.0
     secrets: inherit
