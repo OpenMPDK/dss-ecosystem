@@ -1,17 +1,22 @@
 version: 0.2
 
+batch:
+  fast-fail: false
+  build-list:
+    - identifier: dss_ai_benchmark
+      env:
+        variables:
+          PROJECT: dss_ai_benchmark
+    - identifier: dss_client
+      env:
+        variables:
+          PROJECT: dss_client
+    - identifier: dss_datamover
+      env:
+        variables:
+          PROJECT: dss_datamover
+
 phases:
   build:
     commands:
-      - |
-        cd dss_ai_benchmark && \
-        pycodestyle . && \
-        cd ..
-      - |
-        cd dss_client && \
-        pycodestyle . && \
-        cd ..
-      - |
-        cd dss_datamover && \
-        pycodestyle . && \
-        cd ..
+      - pycodestyle $PROJECT --show-source --show-pep8
