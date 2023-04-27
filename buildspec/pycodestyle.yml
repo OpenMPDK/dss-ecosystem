@@ -1,19 +1,8 @@
 version: 0.2
 
-batch:
-  build-matrix:
-    static:
-      fast-fail: false
-    dynamic:
-      env:
-        variables:
-          PROJECT:
-            - dss_ai_benchmark
-            - dss_client
-            - dss_datamover
-
 phases:
   build:
     commands:
-      - echo "pycodestyle $PROJECT --show-source --show-pep8"
-      - pycodestyle $PROJECT --show-source --show-pep8
+      - pycodestyle dss_ai_benchmark --show-source --show-pep8
+      - pycodestyle dss_client --show-source --show-pep8
+      - pycodestyle dss_datamover --show-source --show-pep8
