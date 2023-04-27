@@ -2,19 +2,14 @@ version: 0.2
 
 batch:
   fast-fail: false
-  build-list:
-    - identifier: dss_ai_benchmark
+  build-matrix:
+    dynamic:
       env:
         variables:
-          PROJECT: dss_ai_benchmark
-    - identifier: dss_client
-      env:
-        variables:
-          PROJECT: dss_client
-    - identifier: dss_datamover
-      env:
-        variables:
-          PROJECT: dss_datamover
+          PROJECT:
+            - dss_ai_benchmark
+            - dss_client
+            - dss_datamover
 
 phases:
   build:
