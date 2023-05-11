@@ -9,6 +9,8 @@ To leverage this tool, the following prerequisites apply:
 *	Ubuntu Linux shell programming skills
 *	Access to a Go 1.7 development system (only if the OS is not Ubuntu Linux 16.04)
 *	Access to the appropriate AWS EC2 (or equivalent) compute resource (optimal performance is realized using m4.10xlarge EC2 Ubuntu with 10 GB ENA)
+*	Dependency nkv-sdk-bin artifact (tar ball) from github.com/openMPDK/dss-sdk repo and to be installed in the directory of dss-ecosystem
+
 
 
 # Building the Program
@@ -35,7 +37,7 @@ Otherwise, to build the s3-benchmark executable, you must issue this following c
 
 *	go get -u github.com/aws/aws-sdk-go/aws/...
 *	go get -u github.com/aws/aws-sdk-go/service/...
-*	go get -u github.com/pivotal-golang/bytefmt/...
+*	go get -u code.cloudfoundry.org/bytefmt
 
 *	go build s3-benchmark.go
  

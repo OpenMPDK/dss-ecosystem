@@ -34,6 +34,7 @@
 #define DSS_INTERNAL_H
 
 #include "pr.h"
+#include "rdd_cl_api.h"
 #include "rdd_cl.h"
 #include <unordered_map>
 #include <mutex>

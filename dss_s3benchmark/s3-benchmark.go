@@ -2,6 +2,7 @@
 // Copyright (c) 2017 Wasabi Technology, Inc.
 package main
 /*
+#include "rdd_cl_api.h"
 #include "rdd_cl.h"
 #include "dss.h"
 #include <stdio.h>

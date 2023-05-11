@@ -34,20 +34,11 @@ set -e
 
 # Set path variables
 SCRIPT_DIR=$(readlink -f "$(dirname "$0")")
-DSS_CLIENT_DIR=$(realpath "$SCRIPT_DIR/..")
-DSS_ECOSYSTEM_DIR=$(realpath "$DSS_CLIENT_DIR/..")
-BUILD_DIR="$DSS_CLIENT_DIR/build"
-STAGING_DIR="$BUILD_DIR/staging"
-# ARTIFACTS_DIR="$ANSIBLE_DIR/artifacts"
-NKV_SDK_DIR="$DSS_ECOSYSTEM_DIR/nkv-sdk/"
-
-# Remove Client Library build dir and artifacts if they exist
-rm -rf "$BUILD_DIR"
-rm -f "$DSS_CLIENT_DIR"/*.tgz
-
-# Load GCC
-#. "$SCRIPT_DIR/load_gcc.sh"
-source /opt/rh/devtoolset-11/enable
+DSS_S3BENCHMARK_DIR=$(realpath "$SCRIPT_DIR/..")
+DSS_ECOSYSTEM_DIR=$(realpath "$DSS_S3BENCHMARK_DIR/..")
+DSS_SDK_DIR="$DSS_ECOSYSTEM_DIR/nkv-sdk/"
+LIB_DIR="-L$DSS_SDK_DIR/lib -L$DSS_ECOSYSTEM_DIR/dss_client/build"
+INCLUDE_DIR="-I$DSS_SDK_DIR/include -I$DSS_ECOSYSTEM_DIR/dss_client/include"
 
 # Print a message to console and return non-zero
 die()
@@ -56,45 +47,39 @@ die()
     exit 1
 }
 
-# Check for libaws libs
-if [ ! -f /usr/local/lib64/libaws-c-common.so ]
-then
-    die "Missing AWS libs. Build using devtoolset-11:  https://github.com/breuner/aws-sdk-cpp.git" 
-fi
-
-if [ ! -d ${NKV_SDK_DIR} -o ! -f ${NKV_SDK_DIR}/include/rdd_cl.h -o ! -f ${NKV_SDK_DIR}/lib/librdd_cl.so ]; then
+if [ ! -d "${DSS_SDK_DIR}" -o ! -f "${DSS_SDK_DIR}/include/rdd_cl.h" -o ! -f "${DSS_SDK_DIR}/lib/librdd_cl.so" ]; then
     die "nkv_sdk_bin artifact is missing or one of the libraries (librdd_cl.so/rdd_cl.h) is missing"
 fi
 
-# Get dss-ecosystem release string
-pushd "$DSS_ECOSYSTEM_DIR"
-    # Get release string
-    git fetch --tags
-    RELEASESTRING=$(git describe --tags --exact-match || git rev-parse --short HEAD)
-    sed -i "s/DSS_VER    \"20210217\"/DSS_VER    \"$RELEASESTRING\"/g"  "$DSS_CLIENT_DIR"/include/dss_client.hpp
-popd
+if [ ! -f "${DSS_ECOSYSTEM_DIR}/dss_client/build/libdss.so" ]; then
+    die "dss_client library is missing"
+fi
 
-# Build Client Library
-mkdir -p "$BUILD_DIR"
-pushd "$BUILD_DIR"
-    CXX=g++ cmake3 ../ -DBYO_CRYPTO=ON
-    make -j
-popd
+# Install golang RPMs
+#rpm -q golang || yum install -y golang
 
-# Create dss_client staging dir
-mkdir -p "$STAGING_DIR"
+export CGO_CFLAGS="-std=gnu99 $INCLUDE_DIR"
+export CGO_LDFLAGS="$LIB_DIR -lrdmacm -libverbs -ldss -lrdd_cl"
+export GO111MODULE=off
+export GODIR="$DSS_ECOSYSTEM_DIR/go-repos"
+export GOPATH="$GODIR"
+export PATH="$PATH:$GODIR/bin"
+export GOCACHE="$GODIR/cache"
 
-# Stage release and create release tarball
-cp "$BUILD_DIR"/*.so "$STAGING_DIR"
+echo 'Downloading go repos'
+if [ -d "$GODIR" ]; then
+    rm -rf "$GODIR"
+    rm -rf "$GOCACHE"
+fi
+mkdir -p "$GODIR"
+mkdir -p "$GOCACHE"
+go get -u github.com/aws/aws-sdk-go/aws/...
+go get -u github.com/aws/aws-sdk-go/service/...
+go get -u code.cloudfoundry.org/bytefmt
 
-# Copy Client benchmark directory to staging directory
-cp -r "$DSS_CLIENT_DIR/benchmark" "$STAGING_DIR"
+echo 'Building S3 benchmark'
+go build s3-benchmark.go -o s3-benchmark
 
-# Create Client Library release tarball
-pushd "$STAGING_DIR"
-    tar czfv "dss_client-$RELEASESTRING.tgz" ./*
-    mv "dss_client-$RELEASESTRING.tgz" "$DSS_CLIENT_DIR"
-popd
-
-# Remove staging directory
-rm -rf "$STAGING_DIR"
+echo 'cleaning cache and repos'
+rm -rf "$GODIR"
+rm -rf "$GOCACHE"

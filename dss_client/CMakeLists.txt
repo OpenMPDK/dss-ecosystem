@@ -8,7 +8,7 @@ project("dss")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
-#set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_VERBOSE_MAKEFILE ON)
 
 
 # Enable CTest for testing these code examples.
@@ -26,7 +26,6 @@ endif()
 find_package(AWSSDK REQUIRED COMPONENTS s3)
 find_package(Python ${PYTHON_VERSION} REQUIRED COMPONENTS Interpreter)
 
-
 execute_process(COMMAND python3-config --libs OUTPUT_VARIABLE PYTHON3_LINK_LIBRARIES_FLAG OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE)
 separate_arguments(PYTHON3_LINK_LIBRARIES_FLAGS UNIX_COMMAND "${PYTHON3_LINK_LIBRARIES_FLAG}")
 
@@ -37,9 +36,9 @@ separate_arguments(EXT_INCLUDE_FLAGS UNIX_COMMAND "${EXT_INCLUDE_FLAG}")
 
 option(WITH_RELEASE "release build" OFF)
 if (WITH_RELEASE)
-	SET(CMAKE_CXX_FLAGS "-O2 -Wall -Werror ${PYTHON3_LINK_LIBRARIES_FLAG}  -lrdmacm -libverbs -lcrypto -lcurl")
+	SET(CMAKE_CXX_FLAGS "-O2 -Wall -Werror")
 else ()
-	SET(CMAKE_CXX_FLAGS "-O0 -g3 -Wall -Werror ${PYTHON3_LINK_LIBRARIES_FLAG} -lrdmacm -libverbs -lcrypto -lcurl")
+	SET(CMAKE_CXX_FLAGS "-O0 -g3 -Wall -Werror")
 endif()
 #message(STATUS "CXX FLAGS: ${CMAKE_CXX_FLAGS}")
 
@@ -57,19 +56,22 @@ target_compile_definitions(test_dss PUBLIC "DSS_DEBUG")
 
 target_include_directories(test_dss PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 target_include_directories(${DSS_LIB} PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/include>
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
 target_link_libraries(test_dss ${AWSSDK_LINK_LIBRARIES})
 target_link_libraries(${DSS_LIB} ${AWSSDK_LINK_LIBRARIES})
-target_link_libraries(test_dss ${EXT_INCLUDE_FLAGS})
-target_link_libraries(${DSS_LIB} ${EXT_INCLUDE_FLAGS})
+target_link_libraries(test_dss "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES}  -L${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
+target_link_libraries(${DSS_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
 
 
 target_compile_options(${DSS_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
 target_compile_options(test_dss PRIVATE ${EXT_INCLUDE_FLAGS})
+target_link_options(test_dss PUBLIC "-Wl,--disable-new-dtags" "-Wl,-rpath,/usr/lib/x86_64-linux-gnu/")
 
 string(REGEX REPLACE "\\.[^.]*$" "" PYTHON_LIB_SUFFIX ${EXT_NAME_SUFFIX})
 string(CONCAT DSS_PYTHON_LIB ${DSS_LIB} ${PYTHON_LIB_SUFFIX})
@@ -79,9 +81,10 @@ add_compile_definitions(GIT_VERSION=${GIT_COMMIT})
 add_library(${DSS_PYTHON_LIB} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/dss_ext.cpp)
 target_include_directories(${DSS_PYTHON_LIB}  PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/include>
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
-target_link_libraries(${DSS_PYTHON_LIB} PUBLIC ${DSS_LIB})
+target_link_libraries(${DSS_PYTHON_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
 
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE "-fvisibility=hidden")
