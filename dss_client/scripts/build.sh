@@ -36,10 +36,13 @@ set -e
 SCRIPT_DIR=$(readlink -f "$(dirname "$0")")
 DSS_CLIENT_DIR=$(realpath "$SCRIPT_DIR/..")
 DSS_ECOSYSTEM_DIR=$(realpath "$DSS_CLIENT_DIR/..")
+TOP_DIR="$DSS_ECOSYSTEM_DIR/.."
 BUILD_DIR="$DSS_CLIENT_DIR/build"
 STAGING_DIR="$BUILD_DIR/staging"
 # ARTIFACTS_DIR="$ANSIBLE_DIR/artifacts"
-NKV_SDK_DIR="$DSS_ECOSYSTEM_DIR/nkv-sdk/"
+LIB_DIR="$TOP_DIR/dss-sdk/host_out/lib"
+INCLUDE_DIR="$TOP_DIR/dss-sdk/host_out/include"
+
 
 # Remove Client Library build dir and artifacts if they exist
 rm -rf "$BUILD_DIR"
@@ -62,8 +65,8 @@ then
     die "Missing AWS libs. Build using devtoolset-11:  https://github.com/breuner/aws-sdk-cpp.git" 
 fi
 
-if [ ! -d ${NKV_SDK_DIR} -o ! -f ${NKV_SDK_DIR}/include/rdd_cl.h -o ! -f ${NKV_SDK_DIR}/lib/librdd_cl.so ]; then
-    die "nkv_sdk_bin artifact is missing or one of the libraries (librdd_cl.so/rdd_cl.h) is missing"
+if [ ! -d ${LIB_DIR} -o ! -f ${INCLUDE_DIR}/rdd_cl.h -o ! -f ${LIB_DIR}/librdd_cl.so ]; then
+    die "dss-sdk repo is missing or one of the libraries (librdd_cl.so/rdd_cl.h) is missing. Please download the repo (github.com/openMPDK/dss-sdk) and compile"
 fi
 
 # Get dss-ecosystem release string

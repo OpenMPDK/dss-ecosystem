@@ -56,17 +56,17 @@ target_compile_definitions(test_dss PUBLIC "DSS_DEBUG")
 
 target_include_directories(test_dss PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 target_include_directories(${DSS_LIB} PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/include>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
 target_link_libraries(test_dss ${AWSSDK_LINK_LIBRARIES})
 target_link_libraries(${DSS_LIB} ${AWSSDK_LINK_LIBRARIES})
-target_link_libraries(test_dss "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES}  -L${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
-target_link_libraries(${DSS_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
+target_link_libraries(test_dss "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES}  -L${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
+target_link_libraries(${DSS_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
 
 
 target_compile_options(${DSS_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
@@ -81,10 +81,10 @@ add_compile_definitions(GIT_VERSION=${GIT_COMMIT})
 add_library(${DSS_PYTHON_LIB} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/dss_ext.cpp)
 target_include_directories(${DSS_PYTHON_LIB}  PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/include>
+        	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/include>
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
-target_link_libraries(${DSS_PYTHON_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${CMAKE_CURRENT_SOURCE_DIR}/../nkv-sdk/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
+target_link_libraries(${DSS_PYTHON_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
 
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE "-fvisibility=hidden")

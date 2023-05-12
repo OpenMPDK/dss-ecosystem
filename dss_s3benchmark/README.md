@@ -9,9 +9,7 @@ To leverage this tool, the following prerequisites apply:
 *	Ubuntu Linux shell programming skills
 *	Access to a Go 1.7 development system (only if the OS is not Ubuntu Linux 16.04)
 *	Access to the appropriate AWS EC2 (or equivalent) compute resource (optimal performance is realized using m4.10xlarge EC2 Ubuntu with 10 GB ENA)
-*	Dependency nkv-sdk-bin artifact (tar ball) from github.com/openMPDK/dss-sdk repo and to be installed in the directory of dss-ecosystem
-
-
+*	Dependency: Download github.com/openMPDK/dss-sdk repo and compile
 
 # Building the Program
 Obtain a local copy of the repository using the following git command with any directory that is convenient:

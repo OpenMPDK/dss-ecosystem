@@ -6,7 +6,7 @@
 - gcc that fully supports C++11, cmake 3.13 or above
 - Python 3.8 (3.6 and 3.7 are probably ok but not verfied)
 - Library dependencies: aws-cpp-sdk v1.9 with core, S3 services enabled, pybind11, python3-config
-- Dependency nkv-sdk-bin artifact (tar ball) from github.com/openMPDK/dss-sdk repo and to be installed in the directory of dss-ecosystem
+- Dependency: github.com/openMPDK/dss-sdk repo is required and to be compiled
 
 ## Build
 

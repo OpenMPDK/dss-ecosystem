@@ -36,7 +36,7 @@ set -e
 SCRIPT_DIR=$(readlink -f "$(dirname "$0")")
 DSS_S3BENCHMARK_DIR=$(realpath "$SCRIPT_DIR/..")
 DSS_ECOSYSTEM_DIR=$(realpath "$DSS_S3BENCHMARK_DIR/..")
-DSS_SDK_DIR="$DSS_ECOSYSTEM_DIR/nkv-sdk/"
+DSS_SDK_DIR="$DSS_ECOSYSTEM_DIR/../dss-sdk/host_out"
 LIB_DIR="-L$DSS_SDK_DIR/lib -L$DSS_ECOSYSTEM_DIR/dss_client/build"
 INCLUDE_DIR="-I$DSS_SDK_DIR/include -I$DSS_ECOSYSTEM_DIR/dss_client/include"
 
@@ -48,7 +48,7 @@ die()
 }
 
 if [ ! -d "${DSS_SDK_DIR}" -o ! -f "${DSS_SDK_DIR}/include/rdd_cl.h" -o ! -f "${DSS_SDK_DIR}/lib/librdd_cl.so" ]; then
-    die "nkv_sdk_bin artifact is missing or one of the libraries (librdd_cl.so/rdd_cl.h) is missing"
+    die "dss-sdk repo is missing. Download the repo github.com/OpenMPDK/dss-sdk and compile"
 fi
 
 if [ ! -f "${DSS_ECOSYSTEM_DIR}/dss_client/build/libdss.so" ]; then
@@ -78,7 +78,7 @@ go get -u github.com/aws/aws-sdk-go/service/...
 go get -u code.cloudfoundry.org/bytefmt
 
 echo 'Building S3 benchmark'
-go build s3-benchmark.go -o s3-benchmark
+go build -o s3-benchmark s3-benchmark.go 
 
 echo 'cleaning cache and repos'
 rm -rf "$GODIR"
