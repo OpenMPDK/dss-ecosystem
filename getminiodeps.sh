@@ -18,7 +18,7 @@ then
 fi
 
 # Check if GITHUB_REF_NAME or CI_COMMIT_BRANCH is defined
-if [[ "$GITHUB_REF_NAME" == '' &&  "$CI_COMMIT_BRANCH" == '' ]]
+if [[ "$GITHUB_REF_NAME" == '' &&  "$CI_PIPELINE_SOURCE" == '' ]]
 then
     echo "*** ERROR: GITHUB_REF_NAME or CI_COMMIT_BRANCH var not defined"
     exit 1
