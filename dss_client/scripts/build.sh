@@ -39,7 +39,6 @@ DSS_ECOSYSTEM_DIR=$(realpath "$DSS_CLIENT_DIR/..")
 TOP_DIR="$DSS_ECOSYSTEM_DIR/.."
 BUILD_DIR="$DSS_CLIENT_DIR/build"
 STAGING_DIR="$BUILD_DIR/staging"
-# ARTIFACTS_DIR="$ANSIBLE_DIR/artifacts"
 LIB_DIR="$TOP_DIR/dss-sdk/host_out/lib"
 INCLUDE_DIR="$TOP_DIR/dss-sdk/host_out/include"
 
@@ -49,7 +48,6 @@ rm -rf "$BUILD_DIR"
 rm -f "$DSS_CLIENT_DIR"/*.tgz
 
 # Load GCC
-#. "$SCRIPT_DIR/load_gcc.sh"
 source /opt/rh/devtoolset-11/enable
 
 # Print a message to console and return non-zero
@@ -65,18 +63,18 @@ then
     die "Missing AWS libs. Build using devtoolset-11: https://github.com/breuner/aws-sdk-cpp.git" 
 fi
 
-# Check rdd_cl.h
-if [ ! -f "$INCLUDE_DIR/rdd_cl.h" ]
-then
-    echo "Searching for $INCLUDE_DIR/rdd_cl.h"
-    die "rdd_cl.h is missing. Please clone and build dss-sdk: https://github.com/openMPDK/dss-sdk"
-fi
+rdddeps=()
+rdddeps+=("$INCLUDE_DIR/rdd_cl.h")
+rdddeps+=("$INCLUDE_DIR/rdd_cl_api.h")
+rdddeps+=("$LIB_DIR/librdd_cl.so")
 
-# Check librdd_cl.so
-if [ ! -f "$LIB_DIR/librdd_cl.so" ]
-then
-    die "librdd_cl.so is missing. Please clone and build dss-sdk: https://github.com/openMPDK/dss-sdk"
-fi
+for dep in "${rdddeps[@]}"
+do
+    if [ ! -f "$dep" ]
+    then
+        die "$dep is missing. Please clone and build dss-sdk: https://github.com/openMPDK/dss-sdk"
+    fi
+done
 
 # Get dss-ecosystem release string
 pushd "$DSS_ECOSYSTEM_DIR"

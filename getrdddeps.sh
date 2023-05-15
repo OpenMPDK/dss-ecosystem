@@ -1,14 +1,11 @@
 #! /usr/bin/env bash
-# Stage dependencies required to build dss-minio.
-# MinIO relies on dss-sdk NKV headers and libs, compiled from the dss-sdk repo.
-# This script downloads the latest compiled 'main' dss-sdk artifact and stages them for the MinIO build.
-# Additionally, s3-benchmark is downloaded to test client functionality.
+# Stage RDD dependencies required to build dss-ecosystem (dss-client).
+# dss-client relies on RDD headers and libs, compiled from the dss-sdk repo.
+# This script downloads the latest compiled dss-sdk artifact and stages them for the MinIO build.
 set -e
 
 # Path vars
 DSSSDKGLOB='nkv-sdk-bin-*.tgz'
-S3BENCHURL='https://github.com/OpenMPDK/dss-ecosystem/raw/master/dss_s3benchmark/s3-benchmark'
-S3BENCHPATH='dss-ecosystem/dss_s3benchmark/s3-benchmark'
 
 # Check if DSSS3URI is defined
 if [[ "$DSSS3URI" == '' ]]
@@ -17,10 +14,10 @@ then
     exit 1
 fi
 
-# Check if GITHUB_REF_NAME or CI_COMMIT_BRANCH is defined
+# Check if GITHUB_REF_NAME or CI_PIPELINE_SOURCE is defined
 if [[ "$GITHUB_REF_NAME" == '' &&  "$CI_PIPELINE_SOURCE" == '' ]]
 then
-    echo "*** ERROR: GITHUB_REF_NAME or CI_COMMIT_BRANCH var not defined"
+    echo "*** ERROR: GITHUB_REF_NAME or CI_PIPELINE_SOURCE var not defined"
     exit 1
 fi
 
@@ -58,7 +55,13 @@ then
     exit 1
 fi
 
-# Download and extract RDD libs from dss-sdk artifact
-echo "Staging dss-sdk libs and includes from artifact: $DSSSDKARTIFACT from branch '$BRANCH_NAME'"
+echo "Staging RDD dependencies from artifact: $DSSSDKARTIFACT from branch '$BRANCH_NAME'"
 mkdir -p ../dss-sdk/host ../dss-sdk/host_out
-aws s3 ${MINIO_HOST_URL:+--endpoint-url $MINIO_HOST_URL} cp "$DSSS3URI/$BRANCH_NAME/$DSSSDKARTIFACT" - | tar xfz - --wildcards --directory=../dss-sdk/host_out/ nkv-sdk/include/rdd_cl.h --directory=../host_out/ nkv-sdk/lib/librdd_cl.so nkv-sdk/include/rdd_cl_api.h --strip=1
+aws s3 ${MINIO_HOST_URL:+--endpoint-url $MINIO_HOST_URL} cp "$DSSS3URI/$BRANCH_NAME/$DSSSDKARTIFACT" - | \
+    tar xfz - \
+    --directory=../dss-sdk/host_out/ \
+        nkv-sdk/include/rdd_cl.h \
+    --directory=../host_out/ \
+        nkv-sdk/lib/librdd_cl.so \
+        nkv-sdk/include/rdd_cl_api.h \
+    --strip=1
