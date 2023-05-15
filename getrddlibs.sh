@@ -58,12 +58,7 @@ then
     exit 1
 fi
 
-# Download and extract dss-sdk artifact
+# Download and extract RDD libs from dss-sdk artifact
 echo "Staging dss-sdk libs and includes from artifact: $DSSSDKARTIFACT from branch '$BRANCH_NAME'"
 mkdir -p ../dss-sdk/host ../dss-sdk/host_out
-aws s3 ${MINIO_HOST_URL:+--endpoint-url $MINIO_HOST_URL} cp "$DSSS3URI/$BRANCH_NAME/$DSSSDKARTIFACT" - | tar xfz - --wildcards --directory=../dss-sdk/host/ nkv-sdk/include/* --directory=../host_out/ nkv-sdk/lib/* --strip=1
-
-# Download s3-benchmark
-echo "Staging s3-benchmark from URL: $S3BENCHURL"
-curl --silent --show-error --create-dirs --output "../$S3BENCHPATH" --location --remote-name "$S3BENCHURL"
-chmod +x "../$S3BENCHPATH"
+aws s3 ${MINIO_HOST_URL:+--endpoint-url $MINIO_HOST_URL} cp "$DSSS3URI/$BRANCH_NAME/$DSSSDKARTIFACT" - | tar xfz - --wildcards --directory=../dss-sdk/host_out/ nkv-sdk/include/rdd_cl.h --directory=../host_out/ nkv-sdk/lib/librdd_cl.so --strip=1

@@ -28,7 +28,7 @@ build dss_client:
   stage: build
   script:
     - git config --global http.sslVerify false
-    - ./getminiodeps.sh
+    - ./getrddlibs.sh
     - find ../dss-sdk/
     - build-wrapper-linux-x86-64 --out-dir bw-output/ ./dss_client/scripts/build.sh
     - /stagemergeartifacts.sh
