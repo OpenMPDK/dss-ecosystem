@@ -22,7 +22,7 @@ cache:
 stages:
   - build
   - scan
-  - pep8
+  - lint
 
 build dss_client:
   stage: build
@@ -58,7 +58,7 @@ sonar-scanner:
   allow_failure: true
 
 pycodestyle:
-  stage: pep8
+  stage: lint
   script: "pycodestyle $PROJECT --show-source --show-pep8"
   parallel:
     matrix:
@@ -66,3 +66,7 @@ pycodestyle:
         - dss_ai_benchmark
         - dss_client
         - dss_datamover
+
+shellcheck:
+  stage: lint
+  script: git ls-files '*.sh' | xargs -n1 shellcheck
