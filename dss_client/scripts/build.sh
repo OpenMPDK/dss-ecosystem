@@ -33,7 +33,7 @@
 set -e
 
 # Set path variables
-SCRIPT_DIR=$(readlink -f "$(dirname "$0")")
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 DSS_CLIENT_DIR=$(realpath "$SCRIPT_DIR/..")
 DSS_ECOSYSTEM_DIR=$(realpath "$DSS_CLIENT_DIR/..")
 TOP_DIR="$DSS_ECOSYSTEM_DIR/.."
