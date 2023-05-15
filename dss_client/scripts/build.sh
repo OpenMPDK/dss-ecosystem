@@ -65,7 +65,8 @@ then
     die "Missing AWS libs. Build using devtoolset-11:  https://github.com/breuner/aws-sdk-cpp.git" 
 fi
 
-if [ ! -d ${LIB_DIR} -o ! -f ${INCLUDE_DIR}/rdd_cl.h -o ! -f ${LIB_DIR}/librdd_cl.so ]; then
+if [ ! -f "$INCLUDE_DIR/rdd_cl.h" ] || [ ! -f "$LIB_DIR/librdd_cl.so" ]
+then
     die "dss-sdk repo is missing or one of the libraries (librdd_cl.so/rdd_cl.h) is missing. Please download the repo (github.com/openMPDK/dss-sdk) and compile"
 fi
 
