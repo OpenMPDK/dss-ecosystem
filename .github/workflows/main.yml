@@ -21,7 +21,6 @@ jobs:
           - dss-client
           - datamover
           - pycodestyle
-          - shellcheck
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: ${{ matrix.component }}
