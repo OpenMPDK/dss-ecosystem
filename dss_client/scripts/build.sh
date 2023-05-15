@@ -68,6 +68,7 @@ fi
 # Check rdd_cl.h
 if [ ! -f "$INCLUDE_DIR/rdd_cl.h" ]
 then
+    echo "Searching for $INCLUDE_DIR/rdd_cl.h"
     die "rdd_cl.h is missing. Please clone and build dss-sdk: https://github.com/openMPDK/dss-sdk"
 fi
 
