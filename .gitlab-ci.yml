@@ -29,6 +29,7 @@ build dss_client:
   script:
     - git config --global http.sslVerify false
     - ./getminiodeps.sh
+    - find ../dss-sdk/
     - build-wrapper-linux-x86-64 --out-dir bw-output/ ./dss_client/scripts/build.sh
     - /stagemergeartifacts.sh
   variables:
