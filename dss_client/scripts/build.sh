@@ -62,12 +62,19 @@ die()
 # Check for libaws libs
 if [ ! -f /usr/local/lib64/libaws-c-common.so ]
 then
-    die "Missing AWS libs. Build using devtoolset-11:  https://github.com/breuner/aws-sdk-cpp.git" 
+    die "Missing AWS libs. Build using devtoolset-11: https://github.com/breuner/aws-sdk-cpp.git" 
 fi
 
-if [ ! -f "$INCLUDE_DIR/rdd_cl.h" ] || [ ! -f "$LIB_DIR/librdd_cl.so" ]
+# Check rdd_cl.h
+if [ ! -f "$INCLUDE_DIR/rdd_cl.h" ]
 then
-    die "dss-sdk repo is missing or one of the libraries (librdd_cl.so/rdd_cl.h) is missing. Please download the repo (github.com/openMPDK/dss-sdk) and compile"
+    die "rdd_cl.h is missing. Please clone and build dss-sdk: https://github.com/openMPDK/dss-sdk"
+fi
+
+# Check librdd_cl.so
+if [ ! -f "$LIB_DIR/librdd_cl.so" ]
+then
+    die "librdd_cl.so is missing. Please clone and build dss-sdk: https://github.com/openMPDK/dss-sdk"
 fi
 
 # Get dss-ecosystem release string
