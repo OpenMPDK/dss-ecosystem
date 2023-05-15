@@ -1,0 +1,69 @@
+variables:
+  BRANCH_NAME: $CI_COMMIT_BRANCH
+  SONAR_BRANCH: -Dsonar.branch.name=$CI_COMMIT_BRANCH
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        BRANCH_NAME: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+        SONAR_BRANCH: ''
+    - if: $CI_COMMIT_BRANCH == "master" && $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_COMMIT_BRANCH =~ /^(stable|feature)\/.*/ && $CI_PIPELINE_SOURCE == "push"
+
+image:
+  # Set hard-coded image until gen2 is merged
+  # name: dss-build_$BRANCH_NAME
+  name: dss-build_stable/v1.0
+
+cache:
+  paths:
+    - bw-output
+    - dss_client/build
+
+stages:
+  - build
+  - scan
+  - pep8
+
+build dss_client:
+  stage: build
+  script:
+    - git config --global http.sslVerify false
+    - build-wrapper-linux-x86-64 --out-dir bw-output/ ./dss_client/scripts/build.sh
+    - /stagemergeartifacts.sh
+  variables:
+    DSSGLOBLIST: "dss_client-*.tgz"
+  artifacts:
+    paths:
+      - dss_client/dss_client-*.tgz
+
+package datamover:
+  stage: build
+  script:
+    - git config --global http.sslVerify false
+    - git fetch --tags
+    - export RELEASESTRING=$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)
+    - git archive --format=tgz -19 --output="nkv-datamover-$RELEASESTRING.tgz" HEAD:dss_datamover
+    - /stagemergeartifacts.sh
+  variables:
+    DSSGLOBLIST: "nkv-datamover-*.tgz"
+  artifacts:
+    paths:
+      - nkv-datamover-*.tgz
+
+sonar-scanner:
+  stage: scan
+  script:
+    - sonar-scanner $SONAR_BRANCH
+  allow_failure: true
+
+pycodestyle:
+  stage: pep8
+  script: "pycodestyle $PROJECT --show-source --show-pep8"
+  parallel:
+    matrix:
+      - PROJECT:
+        - dss_ai_benchmark
+        - dss_client
+        - dss_datamover

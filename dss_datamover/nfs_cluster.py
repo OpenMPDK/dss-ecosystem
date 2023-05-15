@@ -42,6 +42,7 @@ class NFSCluster:
 
     def __init__(self, config={}, user_id="ansible", password="password", logger=None):
         self.config = config.get("nfs", {})
+        self.nfs_port = config.get("nfsport", 2049)
         self.local_mounts = {}
         self.mounted_nfs_shares = []
         self.nfs_cluster = []
@@ -138,7 +139,7 @@ class NFSCluster:
                     return dir_ret, console
             # Mount FS
             if not nfs_share_already_mounted:
-                command = "mount {}:{} {}".format(cluster_ip, nfs_share, nfs_share_mount)
+                command = "mount -o port={} {}:{} {}".format(self.nfs_port, cluster_ip, nfs_share, nfs_share_mount)
                 ret, console = exec_cmd(command, True, True, self.user_id)
 
                 if ret == 0:
