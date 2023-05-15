@@ -9,6 +9,9 @@ env:
     DSSGLOBLIST: "dss_client-*.tgz"
 
 phases:
+  pre_build:
+    commands:
+      - /getminiodeps.sh
   build:
     commands:
       - |
