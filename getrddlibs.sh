@@ -61,4 +61,4 @@ fi
 # Download and extract RDD libs from dss-sdk artifact
 echo "Staging dss-sdk libs and includes from artifact: $DSSSDKARTIFACT from branch '$BRANCH_NAME'"
 mkdir -p ../dss-sdk/host ../dss-sdk/host_out
-aws s3 ${MINIO_HOST_URL:+--endpoint-url $MINIO_HOST_URL} cp "$DSSS3URI/$BRANCH_NAME/$DSSSDKARTIFACT" - | tar xfz - --wildcards --directory=../dss-sdk/host_out/ nkv-sdk/include/rdd_cl.h --directory=../host_out/ nkv-sdk/lib/librdd_cl.so --strip=1
+aws s3 ${MINIO_HOST_URL:+--endpoint-url $MINIO_HOST_URL} cp "$DSSS3URI/$BRANCH_NAME/$DSSSDKARTIFACT" - | tar xfz - --wildcards --directory=../dss-sdk/host_out/ nkv-sdk/include/rdd_cl.h --directory=../host_out/ nkv-sdk/lib/librdd_cl.so nkv-sdk/include/rdd_cl_api.h --strip=1
