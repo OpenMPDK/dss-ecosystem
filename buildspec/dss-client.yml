@@ -11,7 +11,7 @@ env:
 phases:
   pre_build:
     commands:
-      - /getminiodeps.sh
+      - ./dss_client/scripts/getrdddeps.sh
   build:
     commands:
       - |

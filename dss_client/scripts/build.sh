@@ -33,13 +33,12 @@
 set -e
 
 # Set path variables
-SCRIPT_DIR=$(readlink -f "$(dirname "$0")")
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 DSS_CLIENT_DIR=$(realpath "$SCRIPT_DIR/..")
 DSS_ECOSYSTEM_DIR=$(realpath "$DSS_CLIENT_DIR/..")
 TOP_DIR="$DSS_ECOSYSTEM_DIR/.."
 BUILD_DIR="$DSS_CLIENT_DIR/build"
 STAGING_DIR="$BUILD_DIR/staging"
-# ARTIFACTS_DIR="$ANSIBLE_DIR/artifacts"
 LIB_DIR="$TOP_DIR/dss-sdk/host_out/lib"
 INCLUDE_DIR="$TOP_DIR/dss-sdk/host_out/include"
 
@@ -49,7 +48,6 @@ rm -rf "$BUILD_DIR"
 rm -f "$DSS_CLIENT_DIR"/*.tgz
 
 # Load GCC
-#. "$SCRIPT_DIR/load_gcc.sh"
 source /opt/rh/devtoolset-11/enable
 
 # Print a message to console and return non-zero
@@ -62,12 +60,21 @@ die()
 # Check for libaws libs
 if [ ! -f /usr/local/lib64/libaws-c-common.so ]
 then
-    die "Missing AWS libs. Build using devtoolset-11:  https://github.com/breuner/aws-sdk-cpp.git" 
+    die "Missing AWS libs. Build using devtoolset-11: https://github.com/breuner/aws-sdk-cpp.git" 
 fi
 
-if [ ! -d ${LIB_DIR} -o ! -f ${INCLUDE_DIR}/rdd_cl.h -o ! -f ${LIB_DIR}/librdd_cl.so ]; then
-    die "dss-sdk repo is missing or one of the libraries (librdd_cl.so/rdd_cl.h) is missing. Please download the repo (github.com/openMPDK/dss-sdk) and compile"
-fi
+rdddeps=()
+rdddeps+=("$INCLUDE_DIR/rdd_cl.h")
+rdddeps+=("$INCLUDE_DIR/rdd_cl_api.h")
+rdddeps+=("$LIB_DIR/librdd_cl.so")
+
+for dep in "${rdddeps[@]}"
+do
+    if [ ! -f "$dep" ]
+    then
+        die "$dep is missing. Please clone and build dss-sdk: https://github.com/openMPDK/dss-sdk"
+    fi
+done
 
 # Get dss-ecosystem release string
 pushd "$DSS_ECOSYSTEM_DIR"
