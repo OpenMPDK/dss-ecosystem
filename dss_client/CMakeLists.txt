@@ -8,7 +8,7 @@ project("dss")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
-set(CMAKE_VERBOSE_MAKEFILE ON)
+#set(CMAKE_VERBOSE_MAKEFILE ON)
 
 
 # Enable CTest for testing these code examples.
@@ -21,6 +21,14 @@ set(DSS_LIB_TEST "test_lib")
 if(NOT BUILD_SHARED_LIBS)
     set(BUILD_SHARED_LIBS ON)
 endif()
+
+if(NOT NKV_SDK_DIR)
+    set(NKV_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/")
+endif()
+
+set(NKV_INC_DIR "${NKV_SDK_DIR}/include")
+set(NKV_LIB_DIR "${NKV_SDK_DIR}/lib")
+message(STATUS "NKV_SDK_DIR: ${NKV_SDK_DIR}")
 
 # Find the AWS SDK for C++ package.
 find_package(AWSSDK REQUIRED COMPONENTS s3)
@@ -56,17 +64,17 @@ target_compile_definitions(test_dss PUBLIC "DSS_DEBUG")
 
 target_include_directories(test_dss PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/include>
+        $<BUILD_INTERFACE:${NKV_INC_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 target_include_directories(${DSS_LIB} PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/include>
+        $<BUILD_INTERFACE:${NKV_INC_DIR}>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
 target_link_libraries(test_dss ${AWSSDK_LINK_LIBRARIES})
 target_link_libraries(${DSS_LIB} ${AWSSDK_LINK_LIBRARIES})
-target_link_libraries(test_dss "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES}  -L${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
-target_link_libraries(${DSS_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
+target_link_libraries(test_dss "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES}  -L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl")
+target_link_libraries(${DSS_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl")
 
 
 target_compile_options(${DSS_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
@@ -81,10 +89,10 @@ add_compile_definitions(GIT_VERSION=${GIT_COMMIT})
 add_library(${DSS_PYTHON_LIB} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/dss_ext.cpp)
 target_include_directories(${DSS_PYTHON_LIB}  PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/include>
+        	$<BUILD_INTERFACE:${NKV_INC_DIR}>
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
-target_link_libraries(${DSS_PYTHON_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${CMAKE_CURRENT_SOURCE_DIR}/../../dss-sdk/host_out/lib -lrdmacm -libverbs -lcrypto -lcurl -lrdd_cl")
+target_link_libraries(${DSS_PYTHON_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl")
 
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE "-fvisibility=hidden")

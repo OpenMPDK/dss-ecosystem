@@ -39,8 +39,12 @@ DSS_ECOSYSTEM_DIR=$(realpath "$DSS_CLIENT_DIR/..")
 TOP_DIR="$DSS_ECOSYSTEM_DIR/.."
 BUILD_DIR="$DSS_CLIENT_DIR/build"
 STAGING_DIR="$BUILD_DIR/staging"
-LIB_DIR="$TOP_DIR/dss-sdk/host_out/lib"
-INCLUDE_DIR="$TOP_DIR/dss-sdk/host_out/include"
+
+# Set the NKV_SDK_DIR to the dss-sdk repository's compiled output dir "host_out" 
+# Or download the equivalent artifact(nkv-sdk-bin*.tgz) and set the path accordingly
+NKV_SDK_DIR="$TOP_DIR/dss-sdk/host_out"
+LIB_DIR="$NKV_SDK_DIR/lib"
+INCLUDE_DIR="$NKV_SDK_DIR/include"
 
 
 # Remove Client Library build dir and artifacts if they exist
@@ -87,7 +91,7 @@ popd
 # Build Client Library
 mkdir -p "$BUILD_DIR"
 pushd "$BUILD_DIR"
-    CXX=g++ cmake3 ../ -DBYO_CRYPTO=ON
+    CXX=g++ cmake3 ../ -DBYO_CRYPTO=ON -DNKV_SDK_DIR="$NKV_SDK_DIR"
     make -j
 popd
 
