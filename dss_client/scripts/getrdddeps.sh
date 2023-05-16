@@ -2,6 +2,7 @@
 # Stage RDD dependencies required to build dss-ecosystem (dss-client).
 # dss-client relies on RDD headers and libs, compiled from the dss-sdk repo.
 # This script downloads the latest compiled dss-sdk artifact and stages them for the MinIO build.
+# This script is to be used by CI/CD and not individuals.
 set -e
 
 # Path vars
