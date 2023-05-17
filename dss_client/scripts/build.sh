@@ -2,7 +2,7 @@
 # shellcheck disable=SC1090,SC1091
 # The Clear BSD License
 #
-# Copyright (c) 2022 Samsung Electronics Co., Ltd.
+# Copyright (c) 2023 Samsung Electronics Co., Ltd.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -33,38 +33,66 @@
 set -e
 
 # Set path variables
-SCRIPT_DIR=$(readlink -f "$(dirname "$0")")
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 DSS_CLIENT_DIR=$(realpath "$SCRIPT_DIR/..")
 DSS_ECOSYSTEM_DIR=$(realpath "$DSS_CLIENT_DIR/..")
+TOP_DIR="$DSS_ECOSYSTEM_DIR/.."
 BUILD_DIR="$DSS_CLIENT_DIR/build"
 STAGING_DIR="$BUILD_DIR/staging"
-# ARTIFACTS_DIR="$ANSIBLE_DIR/artifacts"
+
+# Set the NKV_SDK_DIR to the dss-sdk repository's compiled output dir "host_out" 
+# Or download the equivalent artifact(nkv-sdk-bin*.tgz) and set the path accordingly
+NKV_SDK_DIR="$TOP_DIR/dss-sdk/host_out"
+LIB_DIR="$NKV_SDK_DIR/lib"
+INCLUDE_DIR="$NKV_SDK_DIR/include"
+
 
 # Remove Client Library build dir and artifacts if they exist
 rm -rf "$BUILD_DIR"
 rm -f "$DSS_CLIENT_DIR"/*.tgz
 
 # Load GCC
-. "$SCRIPT_DIR/load_gcc.sh"
+source /opt/rh/devtoolset-11/enable
+
+# Print a message to console and return non-zero
+die()
+{
+    echo "$*"
+    exit 1
+}
 
 # Check for libaws libs
 if [ ! -f /usr/local/lib64/libaws-c-common.so ]
 then
-    die "Missing AWS libs. Build using GCC 5.1.0: https://codeload.github.com/aws/aws-sdk-cpp/tar.gz/refs/tags/1.8.99#/aws-sdk-cpp-1.8.99.tar.gz"
+    die "Missing AWS libs. Build using devtoolset-11: https://github.com/breuner/aws-sdk-cpp.git" 
 fi
 
-# Build Client Library
-mkdir -p "$BUILD_DIR"
-pushd "$BUILD_DIR"
-    CXX=g++ cmake3 ../
-    make -j
-popd
+rdddeps=()
+rdddeps+=("$INCLUDE_DIR/rdd_cl.h")
+rdddeps+=("$INCLUDE_DIR/rdd_cl_api.h")
+rdddeps+=("$LIB_DIR/librdd_cl.so")
+
+for dep in "${rdddeps[@]}"
+do
+    if [ ! -f "$dep" ]
+    then
+        die "$dep is missing. Please clone and build dss-sdk: https://github.com/openMPDK/dss-sdk"
+    fi
+done
 
 # Get dss-ecosystem release string
 pushd "$DSS_ECOSYSTEM_DIR"
     # Get release string
     git fetch --tags
     RELEASESTRING=$(git describe --tags --exact-match || git rev-parse --short HEAD)
+    sed -i "s/DSS_VER    \"20210217\"/DSS_VER    \"$RELEASESTRING\"/g"  "$DSS_CLIENT_DIR"/include/dss_client.hpp
+popd
+
+# Build Client Library
+mkdir -p "$BUILD_DIR"
+pushd "$BUILD_DIR"
+    CXX=g++ cmake3 ../ -DBYO_CRYPTO=ON -DNKV_SDK_DIR="$NKV_SDK_DIR"
+    make -j
 popd
 
 # Create dss_client staging dir

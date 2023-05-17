@@ -53,8 +53,8 @@ def check_put_buffer():
     mv = memoryview(ys)
     data_out = mv[:length]
     data_out_md5 = hashlib.md5(data_out).hexdigest()
-    assert (data_in_md5 == data_out_md5)
-    assert (size == length)
+    assert(data_in_md5 == data_out_md5)
+    assert(size == length)
 
 
 def integrity_check():

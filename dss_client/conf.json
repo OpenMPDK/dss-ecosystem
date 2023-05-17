@@ -1,18 +1,26 @@
 {
 	"version": 0.1,
 	"init_time": 5,
+    "transport_type": "minio/rdd",
 	"clusters": [
 		{
 			"id": 0,
     		"endpoints": [
         		{ "ipv4": "localhost", "port": 9001 }
+        	],
+    		"rdd_endpoints": [
+        		{ "ipv4": "localhost", "port": 1234 }
         	]
         },
         {
 			"id": 1,
     		"endpoints": [
         		{ "ipv4": "localhost", "port": 9002 }
+        	],
+    		"rdd_endpoints": [
+        		{ "ipv4": "localhost", "port": 1234 }
         	]
         }
+        
 	]
 }
