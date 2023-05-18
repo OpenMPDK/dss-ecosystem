@@ -89,7 +89,14 @@ CXXFLAGS += -DS3_SUPPORT -Wno-overloaded-virtual
 	LDFLAGS  += -L $(EXTERNAL_PATH)/aws-sdk-cpp_install/lib* -l:libaws-sdk-all.a \
 		$(LDFLAGS_S3_DYNAMIC) $(LDFLAGS_S3_STATIC)
   else
-	LDFLAGS += -L$(AWS_LIB_DIR) -laws-c-auth -laws-c-cal -laws-c-common -laws-c-compression -laws-c-event-stream -laws-checksums -laws-c-http -laws-c-io -laws-c-mqtt -laws-cpp-sdk-core -laws-cpp-sdk-s3 -laws-crt-cpp -laws-c-s3 -laws-c-sdkutils -laws-cpp-sdk-transfer -ldss
+	ifndef $(DSS_LIB_DIR)
+		DSS_LIB_DIR="../dss_client/build"
+	endif
+	ifndef $(NKV_LIB_DIR)
+		NKV_LIB_DIR="../../host_out/lib"
+		NKV_LIB_DIR="../nkv-sdk/lib"
+	endif
+	LDFLAGS += -L$(AWS_LIB_DIR) -L$(DSS_LIB_DIR) -L$(NKV_LIB_DIR) -laws-c-auth -laws-c-cal -laws-c-common -laws-c-compression -laws-c-event-stream -laws-checksums -laws-c-http -laws-c-io -laws-c-mqtt -laws-cpp-sdk-core -laws-cpp-sdk-s3 -laws-crt-cpp -laws-c-s3 -laws-c-sdkutils -laws-cpp-sdk-transfer -lrdd_cl -ldss
   endif
 
   # Apply user-provided AWS SDK include dir if given
