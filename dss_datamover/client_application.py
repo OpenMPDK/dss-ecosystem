@@ -52,7 +52,7 @@ from utils.signal_handler import SignalHandler
 
 BASE_DIR = os.path.dirname(__file__)
 MONITOR_INACTIVE_WAIT_TIME = 1800  # 30 Mins
-NFS_MOUNT_FAIL_WAIT_TIME = 600 # 10 Mins
+NFS_MOUNT_FAIL_WAIT_TIME = 600  # 10 Mins
 DEBUG_MESSAGE_INTERVAL = 600  # 10 Mins
 
 
@@ -393,10 +393,9 @@ class ClientApplication(object):
                         # Check for inactivity
                         if (datetime.now() - start_time_no_response).seconds > MONITOR_INACTIVE_WAIT_TIME:
                             start_time_no_response = datetime.now()
-                            self.logger.error("No message received from master in last {} mins.".format(MONITOR_INACTIVE_WAIT_TIME/60))
+                            self.logger.error("No message received from master in last {} mins.".format(MONITOR_INACTIVE_WAIT_TIME / 60))
                             self.index_data_receive_failed.value = 1
                             break
-                
                 # Debug message
                 if (datetime.now() - debug_message_timer).seconds > DEBUG_MESSAGE_INTERVAL:
                     self.logger.info(
@@ -407,10 +406,10 @@ class ClientApplication(object):
             except Exception as e:
                 self.logger.excep("Monitor-Index - {}".format(e))
 
-        while len(nfs_mount_retry_list) > 0:
+        while len(nfs_mount_retry_list) > 0:  # Retry failed NFS mounts for a period of time. 
             retry_message, start_time = nfs_mount_retry_list.pop(0)
             if (datetime.now() - start_time).seconds > NFS_MOUNT_FAIL_WAIT_TIME:
-                self.logger.error('Retry mounting {} failed in last {} mins, abort.'.format(retry_message["nfs_share"], NFS_MOUNT_FAIL_WAIT_TIME/60))
+                self.logger.error('Retry mounting {} failed in last {} mins, abort.'.format(retry_message["nfs_share"], NFS_MOUNT_FAIL_WAIT_TIME / 60))
                 self.mount_failed.value = 1
             else:
                 if self.nfs_mount(retry_message["nfs_cluster"], retry_message["nfs_share"]):
@@ -422,10 +421,8 @@ class ClientApplication(object):
                         self.index_buffer[retry_message["dir"]] = len(retry_message["files"])
                 else:
                     nfs_mount_retry_list.append((retry_message, start_time))
-        
         self.logger.info(
             "Total messages received from master-{}, Objects Count: {}".format(self.message_count.value, objects_count))
-
         # Close socket connection and destroy context
         try:
             socket.close()
@@ -513,7 +510,7 @@ class ClientApplication(object):
                         # Check for inactivity, shutdown forcefully
                         if (datetime.now() - start_time_not_receiving_status_message).seconds > MONITOR_INACTIVE_WAIT_TIME:
                             start_time_not_receiving_status_message = datetime.now()
-                            self.logger.error("No message received from workers in last {} mins.".format(MONITOR_INACTIVE_WAIT_TIME/60))
+                            self.logger.error("No message received from workers in last {} mins.".format(MONITOR_INACTIVE_WAIT_TIME / 60))
                             self.operation_status_send_failed.value = 1
                             break
 
@@ -689,7 +686,7 @@ if __name__ == "__main__":
 
     while not ca.event.is_set():
         if (ca.index_data_receive_completed.value and ca.operation_status_send_completed.value) or \
-            (ca.index_data_receive_failed.value or ca.operation_status_send_failed.value or ca.mount_failed.value):
+           (ca.index_data_receive_failed.value or ca.operation_status_send_failed.value or ca.mount_failed.value):
             # Un-mount local NFS shares
             while ca.nfs_share_list.qsize() > 0:
                 nfs_share = ca.nfs_share_list.get()
@@ -705,7 +702,7 @@ if __name__ == "__main__":
             # Stop workers
             ca.stop_workers()
             ca.logger.info("All workers terminated !")
-            break 
+            break
         else:
             # if not ca.monitor_workers():
             #    break
@@ -726,3 +723,4 @@ if __name__ == "__main__":
     # Send a message to master that closing client application.
     # Stop logger process
     # Check all outstanding logging message is written to a file./var/log/client_application.log
+

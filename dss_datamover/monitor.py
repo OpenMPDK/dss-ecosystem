@@ -222,7 +222,7 @@ class Monitor(object):
         object_count = 0
         debug_message_timer = datetime.now()
         client_count = len(self.clients)
-        resend_index_data = [] # For failed index data
+        resend_index_data = [] #  For failed index data
         while True:
             # Forcefully stop the process
             if self.stop_status_poller.value:
@@ -277,16 +277,15 @@ class Monitor(object):
                     message_count += 1
                     with self.received_index_msg_count.get_lock():
                         self.received_index_msg_count.value += 1
-
                     object_count += object_count_under_prefix
-            
+
             # resend failed data
             elif len(resend_index_data) > 0:
                 data, last_client_index, start_time = resend_index_data.pop(0)
                 if (datetime.now() - start_time).seconds > RESEND_WAIT_TIME:
                     self.logger.error("Monitor-Index-Distributor: resending {} failed after {} mins, abort.".format(data["dir"], RESEND_WAIT_TIME / 60))
                 else:
-                    next_client_index = (last_client_index + 1) % client_count # try another client this time
+                    next_client_index = (last_client_index + 1) % client_count #  try another client this time
                     next_client = self.clients[next_client_index]
                     if self.send_index_data(next_client, data):
                         if first_index_distribution == 0:
@@ -432,7 +431,7 @@ class Monitor(object):
         client_application_exit_count = 0
         received_status_msg_count = 0
         current_time = datetime.now()
-        last_response_time = {client.id : current_time for client in self.clients}
+        last_response_time = {client.id: current_time for client in self.clients}
         while True:
             # Condition to break the loop:
             # - Received all the operation status messages from all ClientApplications
@@ -742,3 +741,4 @@ class Monitor(object):
         finally:
             if fh:
                 fh.close()
+
