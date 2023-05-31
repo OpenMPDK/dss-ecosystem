@@ -80,8 +80,7 @@ def read_linux_file(path):
     try:
         with open(path) as f:
             buf = str((f.read().rstrip()))
-    finally:
-        return buf
+    return buf
 
 
 def time_delta(timestamp):
