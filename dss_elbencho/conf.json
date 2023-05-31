@@ -1,0 +1,13 @@
+{
+	"version": 0.1,
+	"init_time": 5,
+	"clusters": [
+		{
+			"id": 0,
+    		"endpoints": [
+        		{ "ipv4": "206.0.0.214", "port": 9000 }
+        	]
+        }
+        
+	]
+}

@@ -1,0 +1,8 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - pycodestyle dss_ai_benchmark --show-source --show-pep8
+      - pycodestyle dss_client --show-source --show-pep8
+      - pycodestyle dss_datamover --show-source --show-pep8
