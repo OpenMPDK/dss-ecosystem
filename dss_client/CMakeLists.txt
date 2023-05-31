@@ -36,6 +36,10 @@ find_package(Python ${PYTHON_VERSION} REQUIRED COMPONENTS Interpreter)
 
 execute_process(COMMAND python3-config --libs OUTPUT_VARIABLE PYTHON3_LINK_LIBRARIES_FLAG OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE)
 separate_arguments(PYTHON3_LINK_LIBRARIES_FLAGS UNIX_COMMAND "${PYTHON3_LINK_LIBRARIES_FLAG}")
+message(STATUS "PYTHON3_LINK_LIBRARIES_FLAG: ${PYTHON3_LINK_LIBRARIES_FLAG}")
+message(STATUS "PYTHON_LIBRARIES:${PYTHON_LIBRARIES}")
+message(STATUS "AWSSDK_LINK_LIBRARIES:${AWSSDK_LINK_LIBRARIES}")
+message(STATUS "EXT_INCLUDE_FLAGS:${EXT_INCLUDE_FLAGS}")
 
 execute_process(COMMAND git describe --abbrev=4 --always --tags OUTPUT_VARIABLE GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(COMMAND python3-config --extension-suffix OUTPUT_VARIABLE EXT_NAME_SUFFIX)
@@ -71,13 +75,12 @@ target_include_directories(${DSS_LIB} PUBLIC
         $<BUILD_INTERFACE:${NKV_INC_DIR}>
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
-target_link_libraries(test_dss ${AWSSDK_LINK_LIBRARIES})
 target_link_libraries(${DSS_LIB} ${AWSSDK_LINK_LIBRARIES})
-target_link_libraries(test_dss "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES}  -L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl")
-target_link_libraries(${DSS_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl")
-
-
+target_link_libraries(${DSS_LIB} "-L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl ${PYTHON3_LINK_LIBRARIES_FLAGS}")
 target_compile_options(${DSS_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
+
+target_link_libraries(test_dss ${AWSSDK_LINK_LIBRARIES})
+target_link_libraries(test_dss "-L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl ${PYTHON3_LINK_LIBRARIES_FLAG}")
 target_compile_options(test_dss PRIVATE ${EXT_INCLUDE_FLAGS})
 target_link_options(test_dss PUBLIC "-Wl,--disable-new-dtags" "-Wl,-rpath,/usr/lib/x86_64-linux-gnu/")
 
@@ -92,7 +95,8 @@ target_include_directories(${DSS_PYTHON_LIB}  PUBLIC
         	$<BUILD_INTERFACE:${NKV_INC_DIR}>
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 
-target_link_libraries(${DSS_PYTHON_LIB} "${PYTHON3_LINK_LIBRARIES_FLAGS} ${PYTHON_LIBRARIES} -L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl")
+target_link_libraries(${DSS_PYTHON_LIB} ${DSS_LIB})
+target_link_libraries(${DSS_PYTHON_LIB} "-L${NKV_LIB_DIR} -lcrypto -lcurl -lrdd_cl ${PYTHON3_LINK_LIBRARIES_FLAGS}")
 
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE ${EXT_INCLUDE_FLAGS})
 target_compile_options(${DSS_PYTHON_LIB} PRIVATE "-fvisibility=hidden")
