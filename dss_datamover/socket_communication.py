@@ -2,7 +2,7 @@
 """
 # The Clear BSD License
 #
-# Copyright (c) 2022 Samsung Electronics Co., Ltd.
+# Copyright (c) 2023 Samsung Electronics Co., Ltd.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without

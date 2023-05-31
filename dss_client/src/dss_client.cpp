@@ -1,7 +1,7 @@
 /**
   The Clear BSD License
 
-  Copyright (c) 2022 Samsung Electronics Co., Ltd.
+  Copyright (c) 2023 Samsung Electronics Co., Ltd.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,9 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <map>
+#include <vector>
 #include <fcntl.h>
 #include <mutex>
 #include <sys/stat.h>
@@ -58,10 +60,17 @@
 #include <aws/core/utils/stream/PreallocatedStreamBuf.h>
 
 
-#include "dss.h"
+#include "dss_client.hpp"
 #include "dss_internal.h"
 #include "json.hpp"
 #include "pr.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "dss.h"
+#ifdef __cplusplus
+}
+#endif
 
 namespace dss {
 
@@ -73,12 +82,42 @@ namespace dss {
 
 	DSSInit dss_init;
 
+	int get_rkey(void* buff, uint64_t buff_len, rdd_cl_conn_ctx_t *rdd_conn, uint32_t* rkey) {
+		pr_debug("get_rkey before");
+		struct ibv_mr *mr = rdd_cl_conn_get_mr(rdd_conn, buff, buff_len);
+		pr_debug("qhandle %x\n", rdd_conn->qhandle);
+		*rkey = mr->rkey;
+		pr_debug("get_rkey after - %u", *rkey);
+		return 0;
+	}
 
-	Endpoint::Endpoint(Aws::Auth::AWSCredentials& cred, const std::string& url, Config& cfg) 
+	Endpoint::Endpoint(Aws::Auth::AWSCredentials& cred, const std::string& url, Config& cfg, const std::string transport_type, const std::string uuid)
 	{
 		cfg.endpointOverride = url.c_str();
 		m_ses = Aws::S3::S3Client(cred, cfg, 
 				Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, false);
+		m_uuid = uuid;
+		m_transport_type = transport_type;
+	}
+
+	RDDEndpoint::RDDEndpoint(const std::string& rdd_ip, uint32_t rdd_port, const std::string uuid)
+	{
+		struct rdd_client_ctx_s *rdd_cl_ctx;
+		rdd_cl_conn_ctx_t *rdd_conn = nullptr;
+		rdd_cl_ctx_params_t param = {RDD_PD_GLOBAL};
+		rdd_cl_ctx = rdd_cl_init(param);
+		rdd_cl_conn_params_t rdd_params;
+		rdd_params.ip = rdd_ip.c_str();
+		rdd_params.port = std::to_string(rdd_port).c_str();
+		pr_debug("About to open rdd connection to ip = %s, port = %s \n", rdd_params.ip, rdd_params.port);
+		rdd_conn = rdd_cl_create_conn(rdd_cl_ctx, rdd_params);
+		pr_debug("QHandle %x -> %u\n", rdd_conn->qhandle, rdd_conn->qhandle);
+
+		/* Initialize the variables */
+		m_rdd_conn = *rdd_conn;
+		m_rdd_port = rdd_port;
+		m_rdd_ip = rdd_ip;
+		m_uuid = uuid;
 	}
 
 	Result
@@ -157,15 +196,49 @@ namespace dss {
 	Result
 		Endpoint::GetObject(const Aws::String& bn, Request* req, unsigned char* res_buff, long long buffer_size)
 		{
-			Aws::S3::Model::GetObjectRequest ep_req;
-			ep_req.WithBucket(bn).SetKey(Aws::String(req->key.c_str()));
-			Aws::Utils::Stream::PreallocatedStreamBuf streambuf(res_buff, buffer_size);
-			ep_req.SetResponseStreamFactory([&streambuf]() { return Aws::New<Aws::IOStream>("", &streambuf); });
-			Aws::S3::Model::GetObjectOutcome out = m_ses.GetObject(ep_req);
-			if (out.IsSuccess()) {
-				return Result(true, out.GetResultWithOwnership().GetContentLength());
+			std::string key;
+			std::string rddParam;
+			if (!m_transport_type.compare("rdd")) {
+				unsigned int rKey;
+				char rdd_param[512];
+				req->cluster->GetOneRDDConnection(res_buff, buffer_size, &rKey, req->key_hash);
+				std::sprintf(rdd_param,"%lx-rdd-%llu-rdd-%x-rdd-%s-rdd-", (unsigned long)res_buff, buffer_size, rKey, m_uuid.c_str());
+				rddParam = std::string(rdd_param);
+				pr_debug("GET RDDPARAM: %s\n", rddParam.c_str());
 			} else {
-				return Result(false, out.GetError());
+				rddParam = std::string("");
+			}
+			key = rddParam + req->key;
+			pr_debug("Key name for GET call: %s\n", key.c_str());
+
+			Aws::S3::Model::GetObjectRequest ep_req;
+			ep_req.WithBucket(bn).SetKey(Aws::String(key.c_str()));
+
+			//If not RDD, use res_buff in the aws request
+			if (m_transport_type.compare("rdd")) {
+				Aws::Utils::Stream::PreallocatedStreamBuf streambuf(res_buff, buffer_size);
+				ep_req.SetResponseStreamFactory([&streambuf]() { return Aws::New<Aws::IOStream>("", &streambuf); });
+			}
+
+			Aws::S3::Model::GetObjectOutcome out = m_ses.GetObject(ep_req);
+
+			if (m_transport_type.compare("rdd")) {
+				pr_debug("Result content length %lld\n", out.GetResultWithOwnership().GetContentLength());
+				if (out.IsSuccess()) {
+					pr_debug("Successful\n");
+					return Result(true, out.GetResultWithOwnership().GetContentLength());
+				} else {
+					return Result(false, out.GetError());
+				}
+			} else {
+				//TODO: Need to fill the proper content size. To be fixed on the MINIO layer
+				if (out.IsSuccess()) {
+					pr_debug("success on getbuffer %s\n", key.c_str());
+					return Result(true, buffer_size);
+				} else {
+					pr_debug("Failure on getbuffer %s - %d\n", key.c_str(), out.GetError());
+					return Result(false, out.GetError());
+				}
 			}
 		}
 
@@ -421,6 +494,7 @@ namespace dss {
 			//TODO: redo this function
 			Result r;
 			std::fstream file;
+			std::string transport_type;
 
 			if (!GetClusterConfFromLocal()) {
 				r = m_client->GetClusterConfig();
@@ -456,11 +530,18 @@ namespace dss {
 
 				try {
 					m_wait_time = conf.at("init_time").get<unsigned>();
+					if (conf.contains("transport_type"))
+						transport_type = std::string(conf["transport_type"]);
+					else
+						transport_type = "minio";
 				} catch (std::exception&) {}
+				pr_debug("Transport type: %s", transport_type.c_str());
 
 				for (auto &c : conf["clusters"]) {
-					std::vector<std::string> hash_vals = {};
-					std::map<std::string, int> hash_val_map;
+					std::vector<std::string> host_ip_hash_vals = {};
+					std::map<std::string, int> host_ip_hash_val_map;
+					std::vector<std::string> rdd_ip_hash_vals = {};
+					std::map<std::string, int> rdd_ip_hash_val_map;
 					std::string val;
 					unsigned i = 0;
 					unsigned ep_count = 0;
@@ -468,24 +549,48 @@ namespace dss {
 					Cluster* cluster = InsertCluster(c["id"], uuid);
 					pr_debug("Adding cluster %u\n", (uint32_t)c["id"]);
 					for (auto &ep : c["endpoints"]){
+						//Calculate the Hash for the host endpoint IP and save it to a map
 						pr_debug("Cluster ID: %u Endpoint %s:%u\n",
-								(uint32_t)c["id"], std::string(ep["ipv4"]), (uint32_t)ep["port"]);
+								(uint32_t)c["id"], std::string(ep["ipv4"]).c_str(), (uint32_t)ep["port"]);
 						val = GetCLWeight(uuid, std::string(ep["ipv4"]));
-						hash_vals.push_back(val);
-						push_heap(hash_vals.begin(), hash_vals.end());
-						hash_val_map[val] = ep_count;
+						host_ip_hash_vals.push_back(val);
+						push_heap(host_ip_hash_vals.begin(), host_ip_hash_vals.end());
+						host_ip_hash_val_map[val] = ep_count;
+
 						ep_count++;
 					}
+
 					for (i = 0; i < endpoint_per_cluster && i < ep_count; i++){
-						val = hash_vals.front();
-						auto ep = c["endpoints"].at(hash_val_map[val]);
+						val = host_ip_hash_vals.front();
+						auto ep = c["endpoints"].at(host_ip_hash_val_map[val]);
 						pr_debug("Inserting endpoint Cluster ID: %u EP %s:%u\n",
 								(uint32_t)c["id"], std::string(ep["ipv4"]), (uint32_t)ep["port"]);
-						cluster->InsertEndpoint(m_client, ep["ipv4"], ep["port"]);
-						pop_heap(hash_vals.begin(), hash_vals.end());
-						hash_vals.pop_back();
+						cluster->InsertEndpoint(m_client, ep["ipv4"], ep["port"], transport_type, uuid);
+						pop_heap(host_ip_hash_vals.begin(), host_ip_hash_vals.end());
+						host_ip_hash_vals.pop_back();
 					}
 
+					std::string rdd_init_key, rdd_init_val;
+					if (transport_type.compare(std::string("rdd")) == 0) {
+						for (auto &ep : c["rdd_endpoints"]){
+							cluster->CreateRDDConnection(ep["ipv4"], ep["port"], uuid);
+						}
+
+						cluster->GetRddKeyFormat(rdd_init_key, rdd_init_val);
+						pr_debug("RDD Key %s Val %s\n", rdd_init_key.c_str(), rdd_init_val.c_str());
+
+						for(auto ep: cluster->GetEndpoints()) {
+							Request *req = new Request(rdd_init_key.c_str());
+							pr_debug("PutObject called for RDD Key %s\n", rdd_init_key.c_str());
+							ep->PutObject(cluster->GetBucket(), req, (unsigned char*)rdd_init_val.c_str(), rdd_init_val.length());
+#if 0
+							std::unique_ptr<Request> req_guard(new Request(rdd_init_key.c_str()));
+							(req_guard.get())->key_hash = GetCLWeight(cluster->GetID(), rdd_init_key.c_str());
+							(req_guard.get())->cluster = cluster;
+							r = req_guard->Submit_with_buffer(&Cluster::PutObject, (unsigned char*)rdd_init_val.c_str(), rdd_init_val.length());
+#endif
+						}
+					}
 				}
 			} catch (std::exception& e) {
 				throw DiscoverError("Parse conf.json error: " + Aws::String(e.what()));
@@ -597,13 +702,22 @@ namespace dss {
 		}
 
 	int
-		Cluster::InsertEndpoint(Client* c, const std::string& ip, uint32_t port)
+		Cluster::InsertEndpoint(Client* c, const std::string& ip, uint32_t port, const std::string transport_type, const std::string uuid)
 		{
-			Endpoint* ep = new Endpoint(c->GetCredential(), ip + ":" + std::to_string(port), c->GetConfig()); 
+			Endpoint* ep = new Endpoint(c->GetCredential(), ip + ":" + std::to_string(port), c->GetConfig(), transport_type, uuid);
 			m_endpoints.push_back(ep);
-
 			pr_debug("Insert endpoint %s\n", (ip + ":" + std::to_string(port)).c_str());
 
+			return 0;
+		}
+
+	int
+		Cluster::CreateRDDConnection(const std::string& rdd_ip, uint32_t rdd_port, const std::string uuid)
+		{
+			RDDEndpoint* ep = new RDDEndpoint(rdd_ip, rdd_port, uuid);
+			m_rdd_endpoints.push_back(ep);
+			m_rdd_endpoint_size++;
+			pr_debug("Insert RDD endpoint %s, size %d\n", (rdd_ip + ":" + std::to_string(rdd_port)).c_str(), m_rdd_endpoint_size);
 			return 0;
 		}
 
@@ -643,7 +757,6 @@ namespace dss {
 			return GetEndpoint(r)->GetObject(m_bucket, r, resp_buff, buffer_size);
 		}
 
-
 	Result
 		Cluster::PutObject(const Aws::String& objectName, std::shared_ptr<Aws::IOStream>& input_stream)
 		{
@@ -665,7 +778,7 @@ namespace dss {
 	Result
 		Cluster::PutObject(Request* r, unsigned char* resp_buff, long long buffer_size)
 		{
-			return m_endpoints[0]->PutObject(m_bucket, r, resp_buff, buffer_size);
+			return GetEndpoint(r)->PutObject(m_bucket, r, resp_buff, buffer_size);
 		}
 
 
@@ -684,8 +797,8 @@ namespace dss {
 	Result
 		Cluster::ListObjects(Objects *objs)
 		{
-                        std::size_t p_hash = std::hash<std::string> {}(std::to_string(m_id) + m_instance_uuid + std::string(objs->GetPrefix()));
-                        return GetEndpoint(p_hash)->ListObjects(m_bucket, objs);
+			std::size_t p_hash = std::hash<std::string> {}(std::to_string(m_id) + m_instance_uuid + std::string(objs->GetPrefix()));
+			return GetEndpoint(p_hash)->ListObjects(m_bucket, objs);
 		}
 
 	Result
@@ -812,7 +925,7 @@ namespace dss {
 		}
 	}
 
-	int Client::GetObjectBuffer(const Aws::String& objectName, py::buffer buffer)
+	int Client::GetObjectBufferPython(const Aws::String& objectName, py::buffer buffer)
 	{
 		std::unique_ptr<Request> req_guard(new Request(objectName.c_str()));
 		py::buffer_info info = buffer.request();
@@ -831,6 +944,30 @@ namespace dss {
 				throw NoSuchResourceError();
 			else
 				throw GenericError(r.GetErrorMsg().c_str());
+
+			return -1;
+		}
+	}
+
+	int Client::GetObjectBuffer(const Aws::String& objectName, unsigned char* buffer, long int buffer_size)
+	{
+		std::unique_ptr<Request> req_guard(new Request(objectName.c_str()));
+		auto ptr = buffer;
+
+		m_cluster_map->GetCluster(req_guard.get());
+
+		Result r = req_guard->Submit_with_buffer(&Cluster::GetObject, ptr, buffer_size);
+
+		if (r.IsSuccess()) {
+			return r.GetContentLengthValue();
+		} else {
+			auto err = r.GetErrorType();
+			if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND){
+				throw NoSuchResourceError();
+			} else {
+    				pr_err("Exception %s for object %s\n", r.GetErrorMsg().c_str(), objectName.c_str());
+				throw GenericError(r.GetErrorMsg().c_str());
+			}
 
 			return -1;
 		}
@@ -929,7 +1066,7 @@ namespace dss {
 		}
 	}
 
-	int Client::PutObjectBuffer(const Aws::String& objectName, py::buffer buffer, int content_length)
+	int Client::PutObjectBufferPython(const Aws::String& objectName, py::buffer buffer, int content_length)
 	{
 		py::buffer_info info = buffer.request();
 		//long int buffer_size = info.size;
@@ -952,6 +1089,28 @@ namespace dss {
 			return -1;
 		}
 	}
+
+	int Client::PutObjectBuffer(const Aws::String& objectName, unsigned char* buffer, int content_length)
+	{
+		auto ptr = buffer;
+		Result r;
+		std::unique_ptr<Request> req_guard(new Request(objectName.c_str()));
+		m_cluster_map->GetCluster(req_guard.get());
+		r = req_guard->Submit_with_buffer(&Cluster::PutObject, ptr, content_length);
+
+		if (r.IsSuccess()) {
+			return 0;
+		} else {
+			auto err = r.GetErrorType();
+			if (err == Aws::S3::S3Errors::RESOURCE_NOT_FOUND)
+				throw NoSuchResourceError();
+			else
+				throw GenericError(r.GetErrorMsg().c_str());
+
+			return -1;
+		}
+	}
+
 
 
 	int Client::DeleteObject(const Aws::String& objectName)
@@ -1046,10 +1205,10 @@ namespace dss {
 		};
 
 	Client::Client(const std::string& url, const std::string& user, const std::string& pwd,
-			const SesOptions& opts) {
+			const SesOptions& opts, const std::string& uuid) {
 		m_cfg = ExtractOptions(opts);
 		m_cred = Aws::Auth::AWSCredentials(user.c_str(), pwd.c_str());
-		m_discover_ep = new Endpoint(m_cred, url, m_cfg);
+		m_discover_ep = new Endpoint(m_cred, url, m_cfg, "minio", uuid);
 		m_cluster_map = nullptr;
 	}
 
@@ -1058,7 +1217,7 @@ namespace dss {
 				const std::string& pwd, const SesOptions& options,
 				const std::string& uuid, const unsigned int endpoints_per_cluster)
 		{
-			std::unique_ptr<Client> client(new Client(ip, user, pwd, options));
+			std::unique_ptr<Client> client(new Client(ip, user, pwd, options, uuid));
 			if (client->InitClusterMap(uuid, endpoints_per_cluster) < 0) {
 				pr_err("Failed to init cluster map\n");
 				return nullptr;
@@ -1076,5 +1235,95 @@ namespace dss {
 			delete m_cluster_map;
 	}
 
+
+	extern "C" DSSClient DSSClientInit(char *ip, char* user, char* passwd, char* uuid, int endpoints_per_cluster){
+		SesOptions opts;
+		Client *c = nullptr;
+
+		try {
+			c = new Client(std::string(ip), std::string(user), std::string(passwd), opts, std::string(uuid));		
+			if (c->InitClusterMap(uuid, endpoints_per_cluster) < 0) {
+				printf("Failed to init cluster map\n");
+				delete c;
+				return NULL;
+			}
+		} catch (...) {
+			printf("Exception in Client initialization, ip_port = %s, user = %s, pwd = %s, uuid = %s, ep = %d\n", ip, user, passwd, uuid, endpoints_per_cluster);
+			delete c;
+			return NULL;
+		}
+		return (DSSClient) c;
+	}
+
+	extern "C" int GetObject(DSSClient c, void* key_name, int key_len, char* dst_file) 
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
+		std::string key_str ((char*) key_name, key_len);
+		int ret = -1;
+
+		try {
+			ret = client->GetObject(key_str.c_str(), dst_file);
+		} catch(...) {
+			printf("Exception caught in GetObject - %s\n", key_str.c_str());
+		}
+		return ret;
+	}
+
+	extern "C" int GetObjectBuffer(DSSClient c, void* key_name, int key_len, unsigned char* buffer, long int buffer_size)
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
+		std::string key_str ((char*) key_name, key_len);
+		int ret = -1;
+
+		try {
+			ret = client->GetObjectBuffer(key_str.c_str(), buffer, buffer_size);
+		} catch(...) {
+			printf("Exception caught in GetObjectBuffer for %s\n", key_str.c_str());
+		}
+
+
+		return ret;
+	}
+
+	extern "C" int PutObjectBuffer(DSSClient c, void* key_name, int key_len, unsigned char* buffer, long int content_length)
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
+		std::string key_str ((char*) key_name, key_len);
+		int ret = -1;
+
+		try {
+			ret = client->PutObjectBuffer(key_str.c_str(), buffer, content_length);
+		} catch(...) {
+			printf("Exception caught in PutObjectBuffer for %s\n", key_str.c_str());
+		}
+		return ret;
+	}
+
+	extern "C" int DeleteObject(DSSClient c, void* key_name, int key_len)
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
+		std::string key_str ((char*) key_name, key_len);
+		int ret = -1;
+
+		try {
+			ret = client->DeleteObject(key_str.c_str());
+		} catch(...) {
+			printf("Exception caught in DeleteObject for %s\n", key_str.c_str());
+		}
+		return ret;
+
+	}
 } // namespace dss
 

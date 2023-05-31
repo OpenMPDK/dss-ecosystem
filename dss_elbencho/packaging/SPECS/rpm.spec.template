@@ -1,0 +1,22 @@
+Name:           __NAME__
+Version:        __VERSION__
+Release:        1
+Summary:        Storage benchmark tool
+License:        GPLv3+
+
+%description
+Unified storage benchmark for file, directory and block device operations.
+Runs on single host or distributed across multiple hosts and supports GPUs.
+
+%clean
+rm -rf %{buildroot}
+
+%files
+%{_bindir}/__NAME__
+%{_bindir}/__NAME__-chart
+%{_bindir}/__NAME__-scan-path
+%{_sysconfdir}/bash_completion.d/__NAME__
+%{_sysconfdir}/bash_completion.d/__NAME__-chart
+# contrib tools
+%{_bindir}/mtelbencho.sh
+%{_bindir}/graph_sweep.sh
