@@ -59,8 +59,14 @@ class Config(object):
             for param in self.params:
                 if self.params[param] is not None:  # must explicitly check for None since we still want False values to be overriden onto the config dict
                     config[param] = self.params[param]
-        # process compaction options accordingly
+        # process yes/no options into booleans accordingly
         config['compaction'] = True if 'compaction' not in config else config['compaction'] == 'yes'
+        # CLI option is set top level in config options, if no CLI option then revert back to config file under config['fs_config']
+        config['fs_config']['server_as_prefix'] = (
+            config['server_as_prefix'] == 'yes'
+            if 'server_as_prefix' in config
+            else config['fs_config']['server_as_prefix'] == 'yes'
+        )
         return config
 
     def get_config_file(self, config_file):
@@ -155,6 +161,8 @@ def ClientApplicationArgumentParser():
                         help='Enable distributed LISTing')
     parser.add_argument("--stop", "-stop", required=False, action='store_true',
                         help='Stop Client application processes gracefully')
+    parser.add_argument("--server-as-prefix", "-sp", type=str, default=argparse.SUPPRESS,
+                        required=False, help='Option to start prefix w/ nfs server ip')
 
     options = vars(parser.parse_args())
     return options
@@ -216,6 +224,7 @@ class CommandLineArgument(object):
                                help='specify NFS server port')
         subparser.add_argument("--nfs-share", "-nsh", type=str, required='--nfs-server' in sys.argv,
                                help='specify NFS share/directory to use')
+        subparser.add_argument("--server-as-prefix", "-sp", type=str, default=argparse.SUPPRESS, required=False, help='Option to start prefix w/ nfs server ip')
 
     def get(self, subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -231,6 +240,7 @@ class CommandLineArgument(object):
                                help='Run DataMover in debug mode')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of GET operation (Not Implemented)')
+        subparser.add_argument("--server-as-prefix", "-sp", type=str, default=argparse.SUPPRESS, required=False, help='Option to start prefix w/ nfs server ip')
 
     def list(self, subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -249,6 +259,7 @@ class CommandLineArgument(object):
                                help='Perform LISTing in distributed mode')
         subparser.add_argument("--profile", "-pro", required=False, action='store_true',
                                help='Profiling of LIST operation (Not Implemented)')
+        subparser.add_argument("--server-as-prefix", "-sp", type=str, default=argparse.SUPPRESS, required=False, help='Option to start prefix w/ nfs server ip')
 
     def delete(self, subparser):
         subparser.add_argument("--thread", "-t", type=int, default=1, required=False,
@@ -270,6 +281,7 @@ class CommandLineArgument(object):
                                help='specify NFS server port')
         subparser.add_argument("--nfs-share", "-nsh", type=str, required='--nfs-server' in sys.argv,
                                help='specify NFS share/directory to use')
+        subparser.add_argument("--server-as-prefix", "-sp", type=str, default=argparse.SUPPRESS, required=False, help='Option to start prefix w/ nfs server ip')
 
     def test(self, subparser):
         subparser.add_argument("--data_integrity", "-di", required=True, action='store_true',
