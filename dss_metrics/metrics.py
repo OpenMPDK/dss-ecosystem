@@ -33,11 +33,10 @@ from collections import namedtuple
 from prometheus_client import start_http_server, Summary, REGISTRY, Metric
 import argparse
 import json
-import multiprocessing
-import time
-
-import nvmftarget_collector
 import minio_collector
+import multiprocessing
+import nvmftarget_collector
+import time
 import utils
 
 
@@ -64,20 +63,22 @@ class MetricsCollector(object):
 
         num_seconds = self.configs['polling_interval_secs']
         num_iterations = 1
-        target_obj = nvmftarget_collector.NVMFTargetCollector(
-            self.configs['ustat_binary_path'],
-            num_seconds,
-            num_iterations,
-            self.whitelist_patterns,
-            filter=self.filter
-        )
-        minio_obj = minio_collector.MinioCollector(
-            self.configs['ustat_binary_path'],
-            num_seconds,
-            num_iterations,
-            self.whitelist_patterns,
-            filter=self.filter
-        )
+
+        try:
+            target_obj = nvmftarget_collector.NVMFTargetCollector(
+                self.configs, num_seconds, num_iterations,
+                self.whitelist_patterns, filter=self.filter
+            )
+        except Exception as error:
+            print(f"Unable to instantiate target collector: {str(error)}")
+
+        try:
+            minio_obj = minio_collector.MinioCollector(
+                self.configs, num_seconds, num_iterations,
+                self.whitelist_patterns, filter=self.filter
+            )
+        except Exception as error:
+            print(f"Unable to instantiate minio collector: {str(error)}")
 
         target_proc = multiprocessing.Process(
             target=target_obj.poll_statistics,
@@ -136,11 +137,12 @@ if __name__ == '__main__':
 
     # expose metrics on promotheus endpoint
     print("\n\n starting http server.... \n\n")
-    start_http_server(8000)
-    REGISTRY.register(
-        MetricsCollector(configs)
-    )
-    while True:
-        time.sleep(1)
-
-    # TODO: add logic to insert into prometheus DB
+    try:
+        start_http_server(8000)
+        REGISTRY.register(
+            MetricsCollector(configs)
+        )
+        while True:
+            time.sleep(1)
+    except Exception as error:
+        print(f"Failed to start Metrics http server: {str(error)}")

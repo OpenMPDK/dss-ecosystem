@@ -30,25 +30,20 @@ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import re
-import subprocess
-import socket
-import time
-
 import metrics
+import re
+import socket
+import subprocess
+import time
 import utils
 
 
-class NVMFTargetCollector():
-    def __init__(
-        self,
-        ustat_binary_path,
-        seconds,
-        num_iterations,
-        whitelist_patterns,
-        filter=False
-    ):
-        self.ustat_path = ustat_binary_path
+class NVMFTargetCollector(object):
+    def __init__(self, configs, seconds, num_iterations,
+                 whitelist_patterns, filter=False):
+        self.configs = configs
+        self.ustat_path = self.configs['ustat_binary_path']
+        self.cluster_id = self.configs['cluster_id']
         self.nvmf_pid, status = utils.check_spdk_running()
         self.seconds = seconds
         self.num_iterations = num_iterations
@@ -105,7 +100,7 @@ class NVMFTargetCollector():
                         valid_value_flag = False
 
                     tags = {}
-                    tags['cluster_id'] = 'c01'
+                    tags['cluster_id'] = self.cluster_id
                     tags['target_id'] = socket.gethostname()
                     tags['type'] = self.TYPE
                     if 'subsystem' in subsystem_num:
@@ -121,15 +116,10 @@ class NVMFTargetCollector():
                     check if filter, then whitelist match should be True
                     if not filter, than whitelist match should be False
                     """
-                    if valid_value_flag and (self.filter == whitelist_match):
+                    if valid_value_flag and self.filter == whitelist_match:
                         metrics_data_buffer.append(
-                            metrics.MetricInfo(
-                                full_key,
-                                metric_name,
-                                value,
-                                tags,
-                                time.time()
-                            )
+                            metrics.MetricInfo(full_key, metric_name, value,
+                                               tags, time.time())
                         )
                 except Exception as error:
                     print(f'Failed to handle line {line}, Error: {str(error)}')

@@ -80,6 +80,8 @@ def read_linux_file(path):
     try:
         with open(path) as f:
             buf = str((f.read().rstrip()))
+    except Exception as error:
+        print(f"failed to read linux file: {str(error)}")
     return buf
 
 
@@ -261,13 +263,6 @@ def get_device_subsystem_map():
                 with open(subsys_path + '/serial') as f:
                     serial = f.readline().strip()
                 device_subsystem_map[d + 'n1'] = {'nqn': nqn, 'serial': serial}
-
-                """
-                with open(subsys_path + '/address') as f:
-                    out = f.readline().strip()
-                with open(subsys_path + '/transport') as f:
-                    transport = f.readline().strip()
-                """
     return device_subsystem_map
 
 

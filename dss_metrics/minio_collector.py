@@ -31,37 +31,32 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import json
+import metrics
 import os
-import uuid
 import re
 import socket
 import subprocess
 import time
-
-import metrics
 import utils
+import uuid
 
 
-class MinioCollector():
-    def __init__(
-        self,
-        ustat_binary_path,
-        seconds,
-        num_iterations,
-        whitelist_patterns,
-        filter=False
-    ):
+class MinioCollector(object):
+    def __init__(self, configs, seconds, num_iterations,
+                 whitelist_patterns, filter=False):
+        self.configs = configs
+        self.ustat_path = self.configs['ustat_binary_path']
+        self.cluster_id = self.configs['cluster_id']
         self.seconds = seconds
         self.num_iterations = num_iterations
         self.whitelist_patterns = whitelist_patterns
-        self.ustat_path = ustat_binary_path
         self.filter = filter
         self.TYPE = 'minio'
 
     def poll_statistics(self, metrics_data_buffer):
         minio_uuid = None
         stats_output = {}
-        minio_proc_map = {}  # uuid: proc
+        minio_proc_map = {}  # { uuid: proc }
 
         # spawn a collector and get uuid for each minio instance
         pid_list = self.get_minio_instances()
@@ -108,7 +103,7 @@ class MinioCollector():
 
                         fields = full_key.split('.')
                         tags = {}
-                        tags['cluster_id'] = 'c01'
+                        tags['cluster_id'] = self.cluster_id
                         tags['target_id'] = socket.gethostname()
                         tags['minio_id'] = str(minio_uuid)
                         tags['type'] = self.TYPE
@@ -129,26 +124,14 @@ class MinioCollector():
                         check if filter, then whitelist match should be True
                         if not filter, than whitelist match should be False
                         """
-                        if (
-                            valid_value_flag
-                            and (self.filter == whitelist_match)
-                        ):
+                        if valid_value_flag and self.filter == whitelist_match:
                             metrics_data_buffer.append(
-                                metrics.MetricInfo(
-                                    full_key,
-                                    metric_name,
-                                    value, tags,
-                                    time.time()
-                                )
+                                metrics.MetricInfo(full_key, metric_name,
+                                                   value, tags, time.time())
                             )
-
                     except Exception as error:
-                        print(
-                            'Failed to handle line %s, Error: %s',
-                            line,
-                            str(error)
-                        )
-
+                        print('Failed to handle line %s, Error: %s', line,
+                              str(error))
             try:
                 proc.terminate()
             except Exception:
