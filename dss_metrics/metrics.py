@@ -64,10 +64,17 @@ class MetricsCollector(object):
         num_seconds = self.configs['polling_interval_secs']
         num_iterations = 1
 
+        target_proc = None
+        minio_proc = None
+
         try:
             target_obj = nvmftarget_collector.NVMFTargetCollector(
                 self.configs, num_seconds, num_iterations,
                 self.whitelist_patterns, filter=self.filter
+            )
+            target_proc = multiprocessing.Process(
+                target=target_obj.poll_statistics,
+                args=[metrics_data_buffer]
             )
         except Exception as error:
             print(f"Unable to instantiate target collector: {str(error)}")
@@ -77,23 +84,26 @@ class MetricsCollector(object):
                 self.configs, num_seconds, num_iterations,
                 self.whitelist_patterns, filter=self.filter
             )
+            minio_proc = multiprocessing.Process(
+                target=minio_obj.poll_statistics,
+                args=[metrics_data_buffer]
+            )
         except Exception as error:
-            print(f"Unable to instantiate minio collector: {str(error)}")
+            print(f"Unable to instantiate minio collector: {str(error)}")    
 
-        target_proc = multiprocessing.Process(
-            target=target_obj.poll_statistics,
-            args=[metrics_data_buffer]
-        )
-        minio_proc = multiprocessing.Process(
-            target=minio_obj.poll_statistics,
-            args=[metrics_data_buffer]
-        )
+        try:
+            print("\n launching collector processes.. \n")
+            if target_proc:
+                target_proc.start()
+            if minio_proc:
+                minio_proc.start()
 
-        target_proc.start()
-        minio_proc.start()
-
-        target_proc.join()
-        minio_proc.join()
+            if target_proc:
+                target_proc.join()
+            if minio_proc:
+                minio_proc.join()
+        except Exception as error:
+            print(f"Failure in collector processes: {str(error)}")
 
         # populate Prometheus metric objects
         for m in metrics_data_buffer:
