@@ -296,6 +296,60 @@ Supported operations are PUT/DEL/GET
   sh -c ' source  /usr/local/bin/setenv-for-gcc510.sh && python3 master_application.py TEST --data_integrity --dest_path <destiniation path> --skip_upload'
   ```
 
+## Operations without NFS server ip address in prefixes
+
+The --server-as-prefix option will enable DataMover to perform PUT, GET, LIST, DEL operations on nfs shares that start with or without an ip address
+such as 
+```bash
+<ip-address>/mnt/nfs_share/5gb/0_0/1_0/2_0/3_0/4_0/5_0/
+```
+or
+```bash
+mnt/nfs_share/5gb/0_0/1_0/2_0/3_0/4_0/5_0/
+```
+
+To ensure that the prefixes do have a prepended ip address, you can specify the following arg. 
+```bash
+--server-as-prefix yes
+```
+
+To ensure prefixes do not have a prepended ip address, specify the following arg. This is useful to closely mirror your file hierarchy in the object storage
+```bash
+--server-as-prefix no
+```
+
+
+*It is a requirement to list the server as prefix option in the config file such as. *Note: if no --server-as-prefix options is specified in the CLI,
+the default will revert back to the config file setting
+```
+"fs_config":{
+  "mounted": false,
+  "nfs": {
+      "<ip-addr>": ["/dir1", "/dir2"]
+  },
+  "nfsport": 2049,
+  "server_as_prefix": "yes"
+},
+```
+
+
+Examples of commands with --server-as-prefix options
+```bash
+sh -c "source  /usr/local/bin/setenv-for-gcc510.sh  && python3 /usr/dss/nkv-datamover/master_application.py DEL 
+--config /etc/dss/datamover/config.json --compaction yes --prefix <ip-addr>/mnt/nfs_share/5gb/0_0/1_0/2_0/3_0/4_0/5_0/6_1/"
+```
+
+```bash
+sh -c "source  /usr/local/bin/setenv-for-gcc510.sh  && python3 /usr/dss/nkv-datamover/master_application.py DEL 
+--config /etc/dss/datamover/config.json --compaction yes --prefix mnt/nfs_share/5gb/0_0/1_0/2_0/3_0/4_0/5_1/6_1/ --server-as-prefix no"
+```
+
+In this instance, PUT operation will upload all NFS shares specified in the config file without the prepended server ip address
+```bash
+sh -c "source  /usr/local/bin/setenv-for-gcc510.sh  && python3 /usr/dss/nkv-datamover/master_application.py  PUT 
+--config /etc/dss/datamover/config.json --compaction yes --server-as-prefix no"
+```
+
 ## NFS Cluster Setup
 
 ## Server Setup

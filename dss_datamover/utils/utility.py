@@ -181,7 +181,7 @@ def remoteExecution(host, username, password="", cmd="", blocking=False):
         return client, stdin, stdout, stderr
 
 
-def get_s3_prefix(logger, nfs_cluster, prefix=None):
+def get_s3_prefix(logger, nfs_cluster, prefix=None, server_as_prefix=True):
     """
     Validate prefix for minio S3 and return the same.
     :param logger:
@@ -190,23 +190,14 @@ def get_s3_prefix(logger, nfs_cluster, prefix=None):
     :return: s3 compatible prefix
     """
     if prefix:
-        if validate_s3_prefix(logger, prefix):
-            prefix_fields = prefix.split("/")
-            nfs_server_ip = prefix_fields[0]
-            if nfs_server_ip not in nfs_cluster:
-                nfs_first_dir = prefix_fields[0]
-                for nfs_server_ip, nfs_shares in nfs_cluster.items():
-                    for nfs_share in nfs_shares:
-                        if nfs_first_dir is nfs_share.split("/")[0]:
-                            yield nfs_server_ip + "/" + nfs_first_dir + "/"
-            else:
-                yield prefix
+        if validate_s3_prefix(logger, prefix, server_as_prefix=server_as_prefix):
+            yield prefix
     else:
         for nfs_server_ip in nfs_cluster:
             yield nfs_server_ip + "/"
 
 
-def validate_s3_prefix(logger, prefix, config_nfs=None):
+def validate_s3_prefix(logger, prefix, config_nfs=None, server_as_prefix=True):
     """
     Validate a given prefix. A S3 prefix should start without "/" and end with "/".
     <prefix string>/
@@ -217,23 +208,29 @@ def validate_s3_prefix(logger, prefix, config_nfs=None):
     """
     inv_prefix = False
     if prefix.startswith("/") or not prefix.endswith("/"):
-        logger.fatal("WRONG specification of prefix. Should be in the format of <nfs_server_ip>/<prefix>/ ")
+        logger.fatal(f"WRONG specification of prefix {prefix}. Should be in the format of <nfs_server_ip>/<prefix>/ or <prefix>/ ")
         return False
+
     if config_nfs:
-        cluster_ip = prefix.split('/')[0]
-        if cluster_ip in config_nfs:
-            for nfs_share in config_nfs[cluster_ip]:
-                nfs_share_prefix = cluster_ip + nfs_share
-                if prefix.startswith(nfs_share_prefix):
+        if server_as_prefix:
+            cluster_ip = prefix.split('/')[0]
+            if cluster_ip not in config_nfs:
+                logger.fatal(
+                    "Specified Prefix IP: {} does not match any entry in the Config file nfs_share IP list: {}."
+                    .format(cluster_ip, config_nfs)
+                )
+                return False
+
+        for cluster_ip, shares in config_nfs.items():
+            for nfs_share in shares:
+                nfs_share_prefix = cluster_ip + nfs_share if server_as_prefix else nfs_share
+                if (prefix if server_as_prefix else '/' + prefix).startswith(nfs_share_prefix):
                     inv_prefix = True
                     break
-            if not inv_prefix:
-                logger.fatal("Specified Prefix: {} does not match any entry in the Config file nfs_share list: "
-                             "{}.".format(prefix, config_nfs[cluster_ip]))
-                return False
-        else:
-            logger.fatal("Specified Prefix IP: {} does not match any entry in the Config file nfs_share IP list: {}."
-                         .format(cluster_ip, config_nfs))
+        if not inv_prefix:
+            logger.fatal(
+                "Specified Prefix: {} does not match any entry in the Config file nfs_share list: {}".format(prefix, config_nfs[cluster_ip])
+            )
             return False
     return True
 
@@ -321,11 +318,11 @@ def is_prefix_valid_for_nfs_share(logger, **kwargs):
     nfs_share = kwargs["share"]
     prefix = kwargs["prefix"]
     ip_address = kwargs["ip_address"]
-    nfs_mount_prefix = ip_address + nfs_share
+    server_as_prefix = kwargs['server_as_prefix']
+    nfs_mount_prefix = ip_address + nfs_share if server_as_prefix else nfs_share
 
     if prefix.startswith(nfs_mount_prefix) or nfs_mount_prefix.startswith(prefix):
         return True
-    # logger.warn("Prefix:{}, is not part of nfs_share: {}".format(prefix, nfs_share))  # Delete
     return False
 
 
