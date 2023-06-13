@@ -3,7 +3,7 @@
 """
 # The Clear BSD License
 #
-# Copyright (c) 2023 Samsung Electronics Co., Ltd.
+# Copyright (c) 2022 Samsung Electronics Co., Ltd.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -222,7 +222,7 @@ class Monitor(object):
         object_count = 0
         debug_message_timer = datetime.now()
         client_count = len(self.clients)
-        resend_index_data = [] #  For failed index data
+        resend_index_data = []  # For failed index data
         while True:
             # Forcefully stop the process
             if self.stop_status_poller.value:
@@ -283,9 +283,9 @@ class Monitor(object):
             elif len(resend_index_data) > 0:
                 data, last_client_index, start_time = resend_index_data.pop(0)
                 if (datetime.now() - start_time).seconds > RESEND_WAIT_TIME:
-                    self.logger.error("Monitor-Index-Distributor: resending {} failed after {} mins, abort.".format(data["dir"], RESEND_WAIT_TIME / 60))
+                    self.logger.error("Monitor-Index-Distributor: resending {} failed, no more retries, {} minutes limit reached.".format(data["dir"], RESEND_WAIT_TIME / 60))
                 else:
-                    next_client_index = (last_client_index + 1) % client_count #  try another client this time
+                    next_client_index = (last_client_index + 1) % client_count  # try another client this time
                     next_client = self.clients[next_client_index]
                     if self.send_index_data(next_client, data):
                         if first_index_distribution == 0:
@@ -741,4 +741,3 @@ class Monitor(object):
         finally:
             if fh:
                 fh.close()
-

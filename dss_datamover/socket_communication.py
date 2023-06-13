@@ -2,7 +2,7 @@
 """
 # The Clear BSD License
 #
-# Copyright (c) 2023 Samsung Electronics Co., Ltd.
+# Copyright (c) 2022 Samsung Electronics Co., Ltd.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@ DEFAULT_CONNECTION_RETRY_DELAY = 2  # wait time before retrying connection of so
 DEFAULT_MAX_CONNECTION_TIME_THRESHOLD = 300  # 5 Minutes, maximum wait time for socket connection.
 DEFAULT_RESPONSE_HEADER_LENGTH = 10  # Message length 10 bytes
 DEFAULT_RECV_TIMEOUT = 60  # Wait to receive data from socket for 60 seconds.
-LOG_INTERVAL = 1 # prevent high frequecy log to cause deadlock
+LOG_INTERVAL = 1  # prevent high frequecy log to cause deadlock
 
 
 class ClientSocket(object):
@@ -401,4 +401,3 @@ class ServerSocket(object):
             self.socket.close()
         except Exception as e:
             self.logger.error("Closing Socket - {}".format(e))
-

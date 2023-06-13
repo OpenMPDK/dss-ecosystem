@@ -3,7 +3,7 @@
 """
 # The Clear BSD License
 #
-# Copyright (c) 2023 Samsung Electronics Co., Ltd.
+# Copyright (c) 2022 Samsung Electronics Co., Ltd.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -406,8 +406,8 @@ class ClientApplication(object):
             except Exception as e:
                 self.logger.excep("Monitor-Index - {}".format(e))
 
-        while len(nfs_mount_retry_list) > 0:  # Retry failed NFS mounts for a period of time. 
-            retry_message, start_time = nfs_mount_retry_list.pop(0)
+        while len(nfs_mount_retry_list) > 0:  # Retry failed NFS mounts for a period of time.
+            retry_message, start_time = nfs_mount_retry_list.pop()
             if (datetime.now() - start_time).seconds > NFS_MOUNT_FAIL_WAIT_TIME:
                 self.logger.error('Retry mounting {} failed in last {} mins, abort.'.format(retry_message["nfs_share"], NFS_MOUNT_FAIL_WAIT_TIME / 60))
                 self.mount_failed.value = 1
@@ -723,4 +723,3 @@ if __name__ == "__main__":
     # Send a message to master that closing client application.
     # Stop logger process
     # Check all outstanding logging message is written to a file./var/log/client_application.log
-
