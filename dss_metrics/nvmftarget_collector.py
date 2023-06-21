@@ -66,6 +66,7 @@ class NVMFTargetCollector(object):
 
         subsystem_num_to_nqn_map = {}
         drive_num_to_drive_serial_map = {}
+        raw_data_queue = []
 
         while True:
             line = proc.stdout.readline().decode('utf-8')
@@ -103,28 +104,39 @@ class NVMFTargetCollector(object):
                     tags['cluster_id'] = self.cluster_id
                     tags['target_id'] = socket.gethostname()
                     tags['type'] = self.TYPE
-                    if 'subsystem' in subsystem_num:
-                        tags['subsystem_id'] = (
-                            subsystem_num_to_nqn_map[subsystem_num]
-                        )
-                    else:
-                        continue  # skip if subsystem not mentioned
 
-                    # TODO: return tuple with metric info instead of populating
-                    """
-                    XOR operation
-                    check if filter, then whitelist match should be True
-                    if not filter, than whitelist match should be False
-                    """
-                    if valid_value_flag and self.filter == whitelist_match:
-                        metrics_data_buffer.append(
-                            metrics.MetricInfo(full_key, metric_name, value,
-                                               tags, time.time())
-                        )
+                    # we are unsure what metrics have been processed so far, we need to store
+                    # the raw data first and then populate metrics objects when we are sure 
+                    # we have processed the entire ustat output
+
+                    data = {
+                      "whitelist_match": whitelist_match,
+                      "valid_value_flag": valid_value_flag, 
+                      "subsystem_num": subsystem_num,
+                      "full_key": full_key,
+                      "metric_name": metric_name,
+                      "value": value,
+                      "tags": tags,
+                      "time": time.time()
+                    }
+                    raw_data_queue.append(data)
+
                 except Exception as error:
                     print(f'Failed to handle line {line}, Error: {str(error)}')
         try:
             proc.terminate()
+            for data in raw_data_queue:
+                if data['valid_value_flag'] and self.filter == data['whitelist_match']:
+                    if 'subsystem' in data['subsystem_num'] and data['subsystem_num'] in subsystem_num_to_nqn_map:
+                        data['tags']['subsystem_id'] = (
+                            subsystem_num_to_nqn_map[data['subsystem_num']]
+                        )
+                        subsys_num = data['subsystem_num']
+                    metrics_data_buffer.append(
+                       metrics.MetricInfo(data['full_key'], data['metric_name'], data['value'],
+                                            data['tags'], data['time'])
+                    )
+                    
         except Exception:
             print('ustat process termination exception ', exc_info=True)
             proc.kill()
