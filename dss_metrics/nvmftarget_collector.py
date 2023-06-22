@@ -131,7 +131,6 @@ class NVMFTargetCollector(object):
                         data['tags']['subsystem_id'] = (
                             subsystem_num_to_nqn_map[data['subsystem_num']]
                         )
-                        subsys_num = data['subsystem_num']
                     metrics_data_buffer.append(
                        metrics.MetricInfo(data['full_key'], data['metric_name'], data['value'],
                                             data['tags'], data['time'])
