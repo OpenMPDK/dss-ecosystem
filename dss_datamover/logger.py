@@ -124,7 +124,7 @@ class MultiprocessingLogger(object):
             else:
                 print("Queue is not present which is required for logger process")
         else:
-            self.warn("Logger already started!")
+            print("Logger already started!")
 
     def stop(self):
         self.info("LOGGER Stopping logging!")
