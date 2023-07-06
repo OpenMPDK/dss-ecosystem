@@ -283,7 +283,11 @@ class Monitor(object):
             elif len(resend_index_data) > 0:
                 data, last_client_index, start_time = resend_index_data.pop(0)
                 if (datetime.now() - start_time).seconds > RESEND_WAIT_TIME:
-                    self.logger.error("Monitor-Index-Distributor: resending {} failed, no more retries, {} minutes limit reached.".format(data["dir"], RESEND_WAIT_TIME / 60))
+                    self.logger.error(
+                        "Monitor-Index-Distributor: resending {} failed,"
+                        " no more retries, {} minutes limit reached."
+                        .format(data["dir"], RESEND_WAIT_TIME / 60)
+                    )
                 else:
                     next_client_index = (last_client_index + 1) % client_count  # try another client this time
                     next_client = self.clients[next_client_index]
@@ -412,7 +416,6 @@ class Monitor(object):
         prctl.set_proctitle(name)
 
         successful_socket_connection = 0
-
         for client in self.clients:
             try:
                 client.socket_status = ClientSocket(self.config, self.logger)
@@ -582,8 +585,7 @@ class Monitor(object):
                         self.resume_prefix_dir_keys_file_handle.writelines([prefix, '\n'])
                         self.resume_prefix_dir_keys_file_handle.flush()
                 elif self.operation.upper() in ["DEL"] and not self.dryrun:
-                    # ensure all files were deleted from dir
-                    if processed_prefix[prefix]["failure"] == 0:
+                    if self.prefix_index_data_persist[prefix]["files"] == processed_prefix[prefix]["success"]:
                         prefix_dir_deleted.append(prefix)
 
                 file_index_count = operation_success_count + operation_failure_count
