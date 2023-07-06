@@ -100,9 +100,14 @@ mkdir -p "$STAGING_DIR"
 
 # Stage release and create release tarball
 cp "$BUILD_DIR"/*.so "$STAGING_DIR"
+cp "$BUILD_DIR"/test_dss "$STAGING_DIR"
 
 # Copy Client benchmark directory to staging directory
 cp -r "$DSS_CLIENT_DIR/benchmark" "$STAGING_DIR"
+
+# Copy Client data integrity test to staging directory
+mkdir "$STAGING_DIR/test"
+cp  "$DSS_CLIENT_DIR/test/test_data_integrity.py" "$STAGING_DIR/test"
 
 # Create Client Library release tarball
 pushd "$STAGING_DIR"
