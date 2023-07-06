@@ -2,7 +2,7 @@
 """
 # The Clear BSD License
 #
-# Copyright (c) 2023 Samsung Electronics Co., Ltd.
+# Copyright (c) 2022 Samsung Electronics Co., Ltd.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -47,6 +47,7 @@ DEFAULT_CONNECTION_RETRY_DELAY = 2  # wait time before retrying connection of so
 DEFAULT_MAX_CONNECTION_TIME_THRESHOLD = 300  # 5 Minutes, maximum wait time for socket connection.
 DEFAULT_RESPONSE_HEADER_LENGTH = 10  # Message length 10 bytes
 DEFAULT_RECV_TIMEOUT = 60  # Wait to receive data from socket for 60 seconds.
+LOG_INTERVAL = 1  # prevent high frequecy log to cause deadlock
 
 
 class ClientSocket(object):
@@ -54,6 +55,7 @@ class ClientSocket(object):
         self.logger = logger
         self.config = config
         self.socket = None
+        self.last_exception_log_time = datetime.now()
 
     def connect(self, host=None, port=None):
         """
@@ -203,7 +205,9 @@ class ClientSocket(object):
         except socket.timeout as e:
             self.logger.error("ClientSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
         except Exception as e:
-            self.logger.error(f"ClientSocket: Exception {e}")
+            if (datetime.now() - self.last_exception_log_time).seconds > LOG_INTERVAL:
+                self.logger.error(f"ClientSocket: Exception {e}")
+                self.last_exception_log_time = datetime.now()
 
         # return status depending on received message size, if incomplete a Runtime Error should have been raised
         if len(msg_len_in_bytes) == response_header_length and received_data_size == msg_len:
@@ -228,6 +232,7 @@ class ServerSocket(object):
         self.logger = logger
         self.config = config
         self.client_socket = None
+        self.last_exception_log_time = datetime.now()
 
     def bind(self, host=None, port=None):
         """
@@ -375,7 +380,9 @@ class ServerSocket(object):
         except socket.timeout as e:
             self.logger.error("ServerSocket: Timeout ({} seconds) from recv function".format((datetime.now() - time_started).seconds))
         except Exception as e:
-            self.logger.error(f"ServerSocket: Exception {e}")
+            if (datetime.now() - self.last_exception_log_time).seconds > LOG_INTERVAL:
+                self.logger.error(f"ServerSocket: Exception {e}")
+                self.last_exception_log_time = datetime.now()
 
         # return status depending on received message size, if incomplete a Runtime Error should have been raised
         if len(msg_len_in_bytes) == response_header_length and received_data_size == msg_len:
