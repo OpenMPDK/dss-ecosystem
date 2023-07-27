@@ -18,7 +18,7 @@ phases:
       # Temporary just to debug
       - echo "$CODEBUILD_SRC_DIR"
       # replace the old CODEBUILD_SRC_DIR with the current one in bw-output
-      - sed -i -r "s|/codebuild/output/src[^/]+|$CODEBUILD_SRC_DIR|g" build-wrapper-dump.json
+      - sed -i -r "s|/codebuild/output/src[^/]+|$CODEBUILD_SRC_DIR|g" bw-output/build-wrapper-dump.json
   build:
     commands:
       # Run sonar-scanner and ingest coverage report(s)
