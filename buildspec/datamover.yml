@@ -10,16 +10,18 @@ env:
 phases:
   build:
     commands:
+      # Create release tarball for datamover
       - |
         git fetch --tags; \
         RELEASESTRING=$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD); \
         git archive --format=tgz -19 --output="nkv-datamover-$RELEASESTRING.tgz" HEAD:dss_datamover
   post_build:
     commands:
+      # Copy artifacts to branch dir if this is a merge
       - /stagemergeartifacts.sh
 
 artifacts:
   files:
     - nkv-datamover-*.tgz
   discard-paths: yes
-  name: builds/dss-ecosystem/dss_datamover/$CODEBUILD_BUILD_NUMBER
+  name: builds/dss-ecosystem/$GITHUB_RUN_NUMBER
