@@ -6,3 +6,6 @@ dss_client/*.tgz
 bw-output/
 **/build-wrapper*
 .scannerwork/
+
+# Misc.
+.vscode/
