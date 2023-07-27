@@ -17,7 +17,7 @@ jobs:
   unit:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
-      component: unit-test
+      component: pytest
       project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
   lint:
