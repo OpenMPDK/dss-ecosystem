@@ -1,0 +1,38 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    SONAR_TOKEN: Codebuild-DSS:SONAR_TOKEN
+    DSSS3URI: Codebuild-DSS:DSSS3URI
+  variables:
+    SONAR_HOST_URL: https://sonarcloud.io
+    DSSGLOBLIST: "dss_client-*.tgz"
+
+phases:
+  pre_build:
+    commands:
+      # Download build wrapper output from dss-client build job
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/sonar" .
+      # Download unit test coverage report(s)
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest" .
+  build:
+    commands:
+      # Run sonar-scanner and ingest coverage report(s)
+      - |
+        sonar-scanner \
+          -Dsonar.branch.name="$([[ "$GITHUB_REF_NAME" != *"/merge" ]] && echo "$GITHUB_REF_NAME")" \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.pullrequest.github.summary_comment=true \
+          -Dsonar.pullrequest.github.repository=OpenMPDK/dss-ecosystem \
+          -Dsonar.pullrequest.key=$(echo $GITHUB_REF | grep -oP "^refs/pull/\K[^/]+") \
+          -Dsonar.pullrequest.base=$GITHUB_BASE_REF \
+          -Dsonar.pullrequest.branch=$GITHUB_HEAD_REF
+  post_build:
+    commands:
+      - /stagemergeartifacts.sh
+
+artifacts:
+  files:
+    - dss_client/dss_client-*.tgz
+  discard-paths: yes
+  name: builds/dss-ecosystem/dss_client/$CODEBUILD_BUILD_NUMBER
