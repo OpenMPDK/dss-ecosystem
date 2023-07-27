@@ -21,13 +21,13 @@ jobs:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: unit-test
-      project-name: ${{ env.PROJECT_NAME }}
+      project-name: ${{ PROJECT_NAME }}
     secrets: inherit
   lint:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: pycodestyle
-      project-name: ${{ env.PROJECT_NAME }}
+      project-name: ${{ PROJECT_NAME }}
     secrets: inherit
   build:
     strategy:
@@ -38,12 +38,12 @@ jobs:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: ${{ matrix.component }}
-      project-name: ${{ env.PROJECT_NAME }}
+      project-name: ${{ PROJECT_NAME }}
     secrets: inherit
   scan:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: sonar-scanner
-      project-name: ${{ env.PROJECT_NAME }}
+      project-name: ${{ PROJECT_NAME }}
     secrets: inherit
     needs: [unit, build]
