@@ -15,17 +15,16 @@ on:
 
 env:
   PROJECT_NAME: OpenMPDK_dss-ecosystem
-  WORKFLOW: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
 
 jobs:
   unit:
-    uses: ${{ env.WORKFLOW }}
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: unit-test
       project-name: ${{ env.PROJECT_NAME }}
     secrets: inherit
   lint:
-    uses: ${{ env.WORKFLOW }}
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: pycodestyle
       project-name: ${{ env.PROJECT_NAME }}
@@ -36,13 +35,13 @@ jobs:
         component:
           - dss-client
           - datamover
-    uses: ${{ env.WORKFLOW }}
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: ${{ matrix.component }}
       project-name: ${{ env.PROJECT_NAME }}
     secrets: inherit
   scan:
-    uses: ${{ env.WORKFLOW }}
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: sonar-scanner
       project-name: ${{ env.PROJECT_NAME }}
