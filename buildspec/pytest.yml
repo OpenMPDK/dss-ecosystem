@@ -1,5 +1,9 @@
 version: 0.2
 
+env:
+  secrets-manager:
+    DSSS3URI: Codebuild-DSS:DSSS3URI
+
 phases:
   pre_build:
     commands:
