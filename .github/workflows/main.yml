@@ -13,21 +13,18 @@ on:
       - reopened
       - synchronize
 
-env:
-  PROJECT_NAME: OpenMPDK_dss-ecosystem
-
 jobs:
   unit:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: unit-test
-      project-name: ${{ PROJECT_NAME }}
+      project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
   lint:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: pycodestyle
-      project-name: ${{ PROJECT_NAME }}
+      project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
   build:
     strategy:
@@ -38,12 +35,12 @@ jobs:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: ${{ matrix.component }}
-      project-name: ${{ PROJECT_NAME }}
+      project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
   scan:
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: sonar-scanner
-      project-name: ${{ PROJECT_NAME }}
+      project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
     needs: [unit, build]
