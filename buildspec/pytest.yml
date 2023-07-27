@@ -19,4 +19,4 @@ phases:
   post_build:
     commands:
       # Upload unit test coverage report(s) for sonar-scanner stage
-      - aws s3 cp --recursive .coverage-reports/ "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest"
+      - aws s3 cp --recursive .coverage-reports/ "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest/.coverage-reports"
