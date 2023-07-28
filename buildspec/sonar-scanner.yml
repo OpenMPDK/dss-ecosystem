@@ -11,11 +11,11 @@ phases:
   pre_build:
     commands:
       # Download build wrapper output from dss-client build job
-      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/sonar" .
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/sonar" . --only-show-errors
       # Download unit test coverage report(s)
-      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest" .
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest" . --only-show-errors
       # Download dss_client/build
-      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/dss_client" dss_client/
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/dss_client" dss_client/ --only-show-errors
       # Temporary just to debug
       - echo "$CODEBUILD_SRC_DIR"
       # replace the old CODEBUILD_SRC_DIR with the current one in bw-output

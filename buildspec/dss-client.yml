@@ -22,8 +22,8 @@ phases:
       # Copy artifacts to branch dir if this is a merge
       - /stagemergeartifacts.sh
       # Copy build-wrapper output and build dir for later sonar-scanner stage
-      - aws s3 cp --recursive bw-output "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/sonar/bw-output"
-      - aws s3 cp --recursive dss_client/build "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/dss_client/build"
+      - aws s3 cp --recursive bw-output "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/sonar/bw-output" --only-show-errors
+      - aws s3 cp --recursive dss_client/build "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/dss_client/build" --only-show-errors
 
 artifacts:
   files:
