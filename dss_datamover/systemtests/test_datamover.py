@@ -21,8 +21,7 @@ from utils.config import Config
 )
 class TestDataMover:
     """
-    This class may be used for system level / functional tests. However, it is not confirmed if this is the direction we want to go in,
-    hence, these operations are commented out for now
+    This class may be used for system level / functional tests.
     """
 
     def test_put_operation(self, clear_datamover_cache, get_master, shutdown_master):

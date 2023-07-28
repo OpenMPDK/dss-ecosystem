@@ -50,16 +50,12 @@ def get_pytest_configs():
     return pytest_configs
 
 
-@pytest.fixture(scope="session")
-def get_config_object():
-    test_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
-    config_obj = config.Config({}, config_filepath=test_config_filepath)
-    return config_obj
-
-
-@pytest.fixture(scope="session")
-def get_config_dict(get_config_object):
-    return get_config_object.get_config()
+@pytest.fixture
+def clear_datamover_cache(get_pytest_configs):
+    cache_files = get_pytest_configs["cache"]
+    for f in cache_files:
+        if os.path.exists(f):
+            os.remove(f)
 
 
 @pytest.fixture(scope="session")
@@ -89,45 +85,6 @@ def get_multiprocessing_logger(tmpdir):
 
     # teardown logger
     logger.stop()
-
-
-@pytest.fixture
-def clear_datamover_cache(get_pytest_configs):
-    cache_files = get_pytest_configs["cache"]
-    for f in cache_files:
-        if os.path.exists(f):
-            os.remove(f)
-
-
-class MockSocket():
-    """
-    Dummy Object for an actual socket, should simulate all basic functions of a socket object
-    """
-    # TODO: finish building out MockSocket class
-    def __init__(self):
-        self.host = "xxx.xxxx.xxxx.xxxx"
-        self.port = "xxxx"
-
-    def connect(self):
-        return True
-
-    def recv(self):
-        pass
-
-    def sendall(self):
-        pass
-
-
-@pytest.fixture
-def get_mock_clientsocket(mocker):
-    mock_clientsocket = mocker.patch('socket_communication.ClientSocket', spec=True)
-    return mock_clientsocket
-
-
-@pytest.fixture
-def get_mock_serversocket(mocker):
-    mock_serversocket = mocker.patch('socket_communication.ClientSocket', spec=True)
-    return mock_serversocket
 
 
 @pytest.fixture

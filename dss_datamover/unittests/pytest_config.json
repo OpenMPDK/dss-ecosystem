@@ -1,0 +1,6 @@
+{
+    "config": "/etc/dss/datamover/config.json",
+    "dest_path": "/tmp/xyz",
+    "cache": ["/var/log/dss/prefix_index_data.json", "/var/log/dss/dm_resume_prefix_dir_keys.txt"],
+    "fs_config": {"server_as_prefix": "yes"}
+}
