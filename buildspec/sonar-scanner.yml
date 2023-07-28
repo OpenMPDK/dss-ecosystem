@@ -15,6 +15,8 @@ phases:
       - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/sonar" .
       # Download unit test coverage report(s)
       - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest" .
+      # Download dss_client/build
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/dss_client" dss_client/
       # Temporary just to debug
       - echo "$CODEBUILD_SRC_DIR"
       # replace the old CODEBUILD_SRC_DIR with the current one in bw-output
