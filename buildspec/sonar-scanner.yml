@@ -36,9 +36,3 @@ phases:
   post_build:
     commands:
       - /stagemergeartifacts.sh
-
-artifacts:
-  files:
-    - dss_client/dss_client-*.tgz
-  discard-paths: yes
-  name: builds/dss-ecosystem/dss_client/$CODEBUILD_BUILD_NUMBER
