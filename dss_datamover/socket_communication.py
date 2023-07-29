@@ -55,7 +55,7 @@ class ClientSocket(object):
         self.logger = logger
         self.config = config
         self.socket = None
-        self.last_exception_log_time = datetime.now()
+        self.last_exception_log_time = datetime.min
 
     def connect(self, host=None, port=None):
         """
@@ -232,7 +232,7 @@ class ServerSocket(object):
         self.logger = logger
         self.config = config
         self.client_socket = None
-        self.last_exception_log_time = datetime.now()
+        self.last_exception_log_time = datetime.min
 
     def bind(self, host=None, port=None):
         """
@@ -401,3 +401,4 @@ class ServerSocket(object):
             self.socket.close()
         except Exception as e:
             self.logger.error("Closing Socket - {}".format(e))
+
