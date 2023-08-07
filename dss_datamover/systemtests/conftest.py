@@ -86,6 +86,7 @@ def get_multiprocessing_logger(tmpdir):
     # teardown logger
     logger.stop()
 
+
 @pytest.fixture(scope="session")
 def get_master(get_system_config_dict, get_pytest_configs):
     print("Setting up Master Object..")
