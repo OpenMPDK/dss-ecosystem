@@ -335,4 +335,3 @@ class MockMinio():
             self.data.pop(key)
             return True
         return False
-

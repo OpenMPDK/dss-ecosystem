@@ -54,20 +54,20 @@ def prepare_send_data(msg, header_len, wrong_size=False):
 @pytest.mark.usefixtures("get_pytest_configs", "get_config_dict", "get_mock_logger", "get_header_length")
 class TestSocketCommunication():
     """ Unit tests for both ClientSocket and ServerSocket objects"""
-    def test_client_socket_connect(self, mocker, get_config_dict, get_mock_logger):
+    def test_client_socket_connect(self, mocker, get_config_dict, get_mock_logger, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         client_socket = ClientSocket(get_config_dict, get_mock_logger)
         # positive case
-        ret = client_socket.connect('1.2.3.4', 1234)
+        ret = client_socket.connect(get_pytest_configs["default_ip"], 1234)
         assert ret is None
         # Invalid IP
         with pytest.raises(ConnectionError, match=r"Invalid IP Address given - .*"):
             client_socket.connect('*.@.^.!', 1234)
 
-    def test_client_socket_send_json(self, mocker, get_config_dict, get_mock_logger):
+    def test_client_socket_send_json(self, mocker, get_config_dict, get_mock_logger, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
+        client_socket.connect(get_pytest_configs["default_ip"], 1234)
         # positive case
         ret = client_socket.send_json(r'{}')
         assert ret
@@ -87,12 +87,12 @@ class TestSocketCommunication():
         assert ret
         assert re.match(r'ClientSocket: BAD MSG - .*', get_mock_logger.get_last('error'))
 
-    def test_client_socket_recv_json(self, mocker, get_config_dict, get_mock_logger, get_header_length):
+    def test_client_socket_recv_json(self, mocker, get_config_dict, get_mock_logger, get_header_length, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         client_socket = ClientSocket(get_config_dict, get_mock_logger)
         json_str = json.dumps(get_config_dict)
         short_str = 'short msg'
-        client_socket.connect('1.2.3.4', 1234)
+        client_socket.connect(get_pytest_configs["default_ip"], 1234)
         # positive
         client_socket.socket.sendall(prepare_send_data(json_str, get_header_length))
         ret = client_socket.recv_json("JSON")
@@ -143,10 +143,10 @@ class TestSocketCommunication():
         assert ret == {}
         assert re.match(r'ClientSocket: Bad JSON data - .*', get_mock_logger.get_last('error'))
 
-    def test_client_socket_close(self, mocker, get_config_dict, get_mock_logger):
+    def test_client_socket_close(self, mocker, get_config_dict, get_mock_logger, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
+        client_socket.connect(get_pytest_configs["default_ip"], 1234)
         # positive
         client_socket.close()
         assert client_socket.socket.status == Status.CLOSED
@@ -155,11 +155,11 @@ class TestSocketCommunication():
         client_socket.close()
         assert re.match(r'Close socket.*', get_mock_logger.get_last('excep'))
 
-    def test_server_socket_bind(self, mocker, get_config_dict, get_mock_logger):
+    def test_server_socket_bind(self, mocker, get_config_dict, get_mock_logger, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
         # positive
-        ret = server_socket.bind('1.2.3.4', 1234)
+        ret = server_socket.bind(get_pytest_configs["default_ip"], 1234)
         assert ret is None
         assert server_socket.socket.status == Status.LISTENING
         assert server_socket.client_socket is None
@@ -169,23 +169,23 @@ class TestSocketCommunication():
             server_socket.bind('1.2.3.256', 1234)
         assert re.match(r'Wrong ip_address - .*', get_mock_logger.get_last('error'))
 
-    def test_server_socket_accept(self, mocker, get_config_dict, get_mock_logger):
+    def test_server_socket_accept(self, mocker, get_config_dict, get_mock_logger, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
+        server_socket.bind(get_pytest_configs["default_ip"], 1234)
         # positive
         server_socket.accept()
         assert server_socket.client_socket is not None
         assert re.match(r'Connected to .*', get_mock_logger.get_last('info'))
 
-    def test_server_socket_send_json(self, mocker, get_config_dict, get_mock_logger):
+    def test_server_socket_send_json(self, mocker, get_config_dict, get_mock_logger, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
         # send before bind
         ret = server_socket.send_json({})
         assert not ret
         # positive
-        server_socket.bind('1.2.3.4', 1234)
+        server_socket.bind(get_pytest_configs["default_ip"], 1234)
         server_socket.accept()
         ret = server_socket.send_json(r'{}')
         assert ret
@@ -205,13 +205,13 @@ class TestSocketCommunication():
         assert ret
         assert re.match(r'ServerSocket: BAD MSG - .*', get_mock_logger.get_last('error'))
 
-    def test_server_socket_recv_json(self, mocker, get_config_dict, get_mock_logger, get_header_length):
+    def test_server_socket_recv_json(self, mocker, get_config_dict, get_mock_logger, get_header_length, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
         # positive
         json_str = json.dumps(get_config_dict)
         short_str = 'short msg'
-        server_socket.bind('1.2.3.4', 1234)
+        server_socket.bind(get_pytest_configs["default_ip"], 1234)
         server_socket.accept()
         server_socket.client_socket.sendall(prepare_send_data(json_str, get_header_length))
         ret = server_socket.recv_json("JSON")
@@ -260,10 +260,10 @@ class TestSocketCommunication():
         assert ret == {}
         assert re.match(r'ServerSocket: Bad JSON data - .*', get_mock_logger.get_last('error'))
 
-    def test_server_socket_close(self, mocker, get_config_dict, get_mock_logger):
+    def test_server_socket_close(self, mocker, get_config_dict, get_mock_logger, get_pytest_configs):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
+        server_socket.bind(get_pytest_configs["default_ip"], 1234)
         server_socket.accept()
         # positive
         server_socket.close()
@@ -273,4 +273,3 @@ class TestSocketCommunication():
         server_socket.socket.status = Status.EXCEPTION
         server_socket.close()
         assert re.match(r'Closing Socket.*', get_mock_logger.get_last('error'))
-
