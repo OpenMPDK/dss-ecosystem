@@ -42,6 +42,20 @@ import json
 import os
 import socket
 import pytest
+from enum import Enum
+
+
+class Status(Enum):
+    NORMAL = 0
+    CONNECTIONERROR = 1
+    CONNECTIONREFUSEERROR = 2
+    SOCKETTIMEOUT = 3
+    SOCKETERROR = 4
+    EXCEPTION = 5
+    MISALIGNEDBUFSIZE = 6
+    WRONGBUFSIZE = 7
+    LISTENING = 8
+    CLOSED = 9
 
 
 @pytest.fixture(scope="session")
@@ -107,46 +121,34 @@ class MockSocket():
     """
     Dummy Object for an actual socket, should simulate all basic functions of a socket object
     """
-    STATUS_NORMAL = 0
-    STATUS_CONNECTIONERROR = 1
-    STATUS_CONNECTIONREFUSEERROR=2
-    STATUS_SOCKETTIMEOUT = 3
-    STATUS_SOCKETERROR = 4
-    STATUS_EXCEPTION = 5
-    STATUS_MISALIGNEDBUFSIZE = 6
-    STATUS_WRONGBUFSIZE = 7
-    STATUS_LISTENING = 8
-    STATUS_CLOSED = 9
-
-    # TODO: finish building out MockSocket class
     def __init__(self, family=0, type=0, proto=0, fileno=0):
         self.timeout = 0
-        self.status = MockSocket.STATUS_NORMAL
+        self.status = Status.NORMAL
         self.data = ''
-        self.data_index = 0 # indicates the starting pos of the sending data when calling recv
-        self.max_bufsize = 10 # maximum length of return data when calling recv
+        self.data_index = 0  # indicates the starting pos of the sending data when calling recv
+        self.max_bufsize = 10  # maximum length of return data when calling recv
 
     def connect(self, address):
-        if self.status == MockSocket.STATUS_CONNECTIONERROR:
+        if self.status == Status.CONNECTIONERROR:
             raise ConnectionError
-        elif self.status == MockSocket.STATUS_CONNECTIONREFUSEERROR:
+        elif self.status == Status.CONNECTIONREFUSEERROR:
             raise ConnectionRefusedError
-        elif self.status == MockSocket.STATUS_SOCKETERROR:
+        elif self.status == Status.SOCKETERROR:
             raise socket.error
-        elif self.status == MockSocket.STATUS_SOCKETTIMEOUT:
+        elif self.status == Status.SOCKETTIMEOUT:
             raise socket.timeout
         else:
             return
 
     def recv(self, bufsize):
-        if self.status == MockSocket.STATUS_CONNECTIONERROR:
+        if self.status == Status.CONNECTIONERROR:
             raise ConnectionError
-        elif self.status == MockSocket.STATUS_SOCKETTIMEOUT:
+        elif self.status == Status.SOCKETTIMEOUT:
             raise socket.timeout
-        elif self.status == MockSocket.STATUS_EXCEPTION:
+        elif self.status == Status.EXCEPTION:
             raise Exception
-        elif self.status == MockSocket.STATUS_MISALIGNEDBUFSIZE:
-            ret = self.data[self.data_index : self.data_index + bufsize + 1]
+        elif self.status == Status.MISALIGNEDBUFSIZE:
+            ret = self.data[self.data_index: self.data_index + bufsize + 1]
             return ret
         else:
             ret = ''
@@ -157,10 +159,10 @@ class MockSocket():
             if bufsize > self.max_bufsize:
                 bufsize = self.max_bufsize
             if bufsize >= len(self.data) - self.data_index:
-                ret = self.data[self.data_index : ]
+                ret = self.data[self.data_index:]
                 self.data_index = len(self.data)
             else:
-                ret = self.data[self.data_index : self.data_index + bufsize]
+                ret = self.data[self.data_index: self.data_index + bufsize]
                 self.data_index += bufsize
             return ret.encode("utf8", "ignore")
 
@@ -170,13 +172,13 @@ class MockSocket():
     def sendall(self, data, flags=None):
         self.data = ''
         self.data_index = 0
-        if self.status == MockSocket.STATUS_CONNECTIONERROR:
+        if self.status == Status.CONNECTIONERROR:
             raise ConnectionError
-        elif self.status == MockSocket.STATUS_CONNECTIONREFUSEERROR:
+        elif self.status == Status.CONNECTIONREFUSEERROR:
             raise ConnectionRefusedError
-        elif self.status == MockSocket.STATUS_SOCKETERROR:
+        elif self.status == Status.SOCKETERROR:
             raise socket.error
-        elif self.status == MockSocket.STATUS_SOCKETTIMEOUT:
+        elif self.status == Status.SOCKETTIMEOUT:
             raise socket.timeout
         else:
             self.data = data
@@ -189,20 +191,20 @@ class MockSocket():
         pass
 
     def close(self):
-        if self.status == MockSocket.STATUS_LISTENING or self.status == MockSocket.STATUS_NORMAL:
-            self.status = MockSocket.STATUS_CLOSED
+        if self.status == Status.LISTENING or self.status == Status.NORMAL:
+            self.status = Status.CLOSED
         else:
             raise Exception
-    
+
     def listen(self, backlog):
-        self.status = MockSocket.STATUS_LISTENING
+        self.status = Status.LISTENING
 
     def bind(self, address):
-        if self.status == MockSocket.STATUS_NORMAL:
+        if self.status == Status.NORMAL:
             return
         else:
             raise Exception
-        
+
     def accept(self):
         return self, ('1.2.3.4', 1234)
 
@@ -215,17 +217,17 @@ def get_header_length(mocker, get_config_dict):
 class MockLogger():
 
     def __init__(self):
-        self.logs = {'error':[], 'info': [], 'warn': [], 'excep': []}
+        self.logs = {'error': [], 'info': [], 'warn': [], 'excep': []}
 
     def error(self, msg):
         self.logs['error'].append(msg)
-    
+
     def info(self, msg):
         self.logs['info'].append(msg)
-    
+
     def warn(self, msg):
         self.logs['warn'].append(msg)
-    
+
     def excep(self, msg):
         self.logs['excep'].append(msg)
 
@@ -243,6 +245,7 @@ class MockLogger():
 @pytest.fixture
 def get_mock_logger():
     return MockLogger()
+
 
 @pytest.fixture
 def get_mock_clientsocket(mocker):
@@ -306,25 +309,21 @@ def shutdown_master():
         print("stopping monitoring")
     return _method
 
+
 class MockMinio():
     def __init__(self):
         self.data = {}
-    
+
     def list(self, key=''):
         if not key:
             return list(self.data.items())
-        else:
-            ret = []
-            for k in self.data.keys():
-                if -1 != k.find(key):
-                    ret.append((k, self.data[k]))
-            return ret
-    
+        return self.data[key].items() if isinstance(self.data[key], dict) else [(key, self.data[key])]
+
     def get(self, key):
         if key in self.data:
             return self.data[key]
         return None
-    
+
     def put(self, key, value):
         if key in self.data:
             self.data[key] = value
@@ -336,3 +335,4 @@ class MockMinio():
             self.data.pop(key)
             return True
         return False
+

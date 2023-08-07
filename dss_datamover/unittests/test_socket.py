@@ -38,254 +38,179 @@ import os
 import json
 import re
 from socket_communication import ServerSocket, ClientSocket
-from conftest import MockSocket
+from conftest import MockSocket, Status
 import time
+
 
 def prepare_send_data(msg, header_len, wrong_size=False):
     if wrong_size:
-        msg_len = (str(len(msg)+3)).zfill(header_len)
+        msg_len = (str(len(msg) + 3)).zfill(header_len)
     else:
         msg_len = (str(len(msg))).zfill(header_len)
     ret = msg_len + msg
     return ret
 
+
 @pytest.mark.usefixtures("get_pytest_configs", "get_config_dict", "get_mock_logger", "get_header_length")
 class TestSocketCommunication():
     """ Unit tests for both ClientSocket and ServerSocket objects"""
-    def test_client_socket_connect_normal(self, mocker, get_config_dict, get_mock_logger):
+    def test_client_socket_connect(self, mocker, get_config_dict, get_mock_logger):
         mocker.patch('socket.socket', MockSocket)
         client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        
+        # positive case
         ret = client_socket.connect('1.2.3.4', 1234)
         assert ret is None
-
-    def test_client_socket_connect_invalid_ip(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        
+        # Invalid IP
         with pytest.raises(ConnectionError, match=r"Invalid IP Address given - .*"):
             client_socket.connect('*.@.^.!', 1234)
 
-    def test_client_socket_send_json_normal(self, mocker, get_config_dict, get_mock_logger):
+    def test_client_socket_send_json(self, mocker, get_config_dict, get_mock_logger):
         mocker.patch('socket.socket', MockSocket)
         client_socket = ClientSocket(get_config_dict, get_mock_logger)
         client_socket.connect('1.2.3.4', 1234)
-
+        # positive case
         ret = client_socket.send_json(r'{}')
-        assert ret == True
-
+        assert ret
         ret = client_socket.send_json(get_config_dict)
-        assert ret == True
-
-    def test_client_socket_send_json_empty_msg(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
-        
+        assert ret
+        # empty message
         ret = client_socket.send_json(r'')
-        assert ret == False
-    
-    def test_client_socket_send_json_timeout(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
-
-        client_socket.socket.status = MockSocket.STATUS_SOCKETTIMEOUT
+        assert not ret
+        # socket timeout
+        client_socket.socket.status = Status.SOCKETTIMEOUT
         with pytest.raises(socket.timeout):
-            ret = client_socket.send_json({'k1':'v1'})
-            assert ret == False
-    
-    def test_client_socket_send_json_bad_json(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
-
+            ret = client_socket.send_json({'k1': 'v1'})
+            assert not ret
+        # Bad Message
+        client_socket.socket.status = Status.NORMAL
         ret = client_socket.send_json('Not Json')
-        assert ret == True
+        assert ret
         assert re.match(r'ClientSocket: BAD MSG - .*', get_mock_logger.get_last('error'))
 
-    def test_client_socket_recv_json_normal(self, mocker, get_config_dict, get_mock_logger, get_header_length):
+    def test_client_socket_recv_json(self, mocker, get_config_dict, get_mock_logger, get_header_length):
         mocker.patch('socket.socket', MockSocket)
         client_socket = ClientSocket(get_config_dict, get_mock_logger)
         json_str = json.dumps(get_config_dict)
         short_str = 'short msg'
-
         client_socket.connect('1.2.3.4', 1234)
+        # positive
         client_socket.socket.sendall(prepare_send_data(json_str, get_header_length))
         ret = client_socket.recv_json("JSON")
         assert ret == get_config_dict
-        
         client_socket.socket.sendall(prepare_send_data(short_str, get_header_length))
         ret = client_socket.recv_json("STRING")
         assert ret == short_str
-    
-    def test_client_socket_recv_json_empty_msg(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
+        # empty message
         msg = ''
-
-        client_socket.socket.sendall(msg)
-        ret = client_socket.recv_json("JSON")
-        assert ret == {}
-        assert re.match(r'ClientSocket: Exception .*', get_mock_logger.get_last('error'))
-
-    def test_client_socket_recv_json_wrong_header_size(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
-        json_str = json.dumps(get_config_dict)
-
-        msg = prepare_send_data(json_str, get_header_length+1)
         client_socket.socket.sendall(msg)
         ret = client_socket.recv_json("JSON")
         assert ret == {}
         assert re.match(r'ClientSocket: .*', get_mock_logger.get_last('error'))
-
-    def test_client_socket_recv_json_wrong_body_size(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
+        # wrong header size
         json_str = json.dumps(get_config_dict)
-
+        msg = prepare_send_data(json_str, get_header_length + 1)
+        client_socket.socket.sendall(msg)
+        ret = client_socket.recv_json("JSON")
+        assert ret == {}
+        assert re.match(r'ClientSocket: .*', get_mock_logger.get_last('error'))
+        # wrong body size
         msg = prepare_send_data(json_str, get_header_length, True)
         client_socket.socket.sendall(msg)
         ret = client_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ClientSocket: Exception .*', get_mock_logger.get_last('error'))
-
-    def test_client_socket_recv_json_wrong_recv_size(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
-        json_str = json.dumps(get_config_dict)
-
+        assert re.match(r'ClientSocket: .*', get_mock_logger.get_last('error'))
+        # wrong recv size
         msg = prepare_send_data(json_str, get_header_length)
-        client_socket.socket.status = MockSocket.STATUS_MISALIGNEDBUFSIZE
+        client_socket.socket.status = Status.MISALIGNEDBUFSIZE
         client_socket.socket.sendall(msg)
         ret = client_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ClientSocket: Exception.*', get_mock_logger.get_last('error'))
-
-    def test_client_socket_recv_json_socket_timeout(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
-        json_str = json.dumps(get_config_dict)
-
+        assert re.match(r'ClientSocket: .*', get_mock_logger.get_last('error'))
+        # socket timeout
+        client_socket.socket.status = Status.NORMAL
         msg = prepare_send_data(json_str, get_header_length)
         client_socket.socket.sendall(msg)
-        client_socket.socket.status = MockSocket.STATUS_SOCKETTIMEOUT
+        client_socket.socket.status = Status.SOCKETTIMEOUT
         ret = client_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ClientSocket: Timeout .*', get_mock_logger.get_last('error'))
-
-    def test_client_socket_recv_json_bad_json_data(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
+        assert re.match(r'ClientSocket: .*', get_mock_logger.get_last('error'))
+        # Bad JSON data
+        client_socket.socket.status = Status.NORMAL
         bad_json_str = 'abcdefghijk!@#$0987654321'
-
         msg = prepare_send_data(bad_json_str, get_header_length)
         client_socket.socket.sendall(msg)
         ret = client_socket.recv_json("JSON")
         assert ret == {}
         assert re.match(r'ClientSocket: Bad JSON data - .*', get_mock_logger.get_last('error'))
 
-    def test_client_socket_close_normal(self, mocker, get_config_dict, get_mock_logger):
+    def test_client_socket_close(self, mocker, get_config_dict, get_mock_logger):
         mocker.patch('socket.socket', MockSocket)
         client_socket = ClientSocket(get_config_dict, get_mock_logger)
         client_socket.connect('1.2.3.4', 1234)
-
+        # positive
         client_socket.close()
-        assert client_socket.socket.status == MockSocket.STATUS_CLOSED
-
-    def test_client_socket_close_error(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        client_socket = ClientSocket(get_config_dict, get_mock_logger)
-        client_socket.connect('1.2.3.4', 1234)
-        client_socket.socket.status = MockSocket.STATUS_EXCEPTION
-
+        assert client_socket.socket.status == Status.CLOSED
+        # negative
+        client_socket.socket.status = Status.EXCEPTION
         client_socket.close()
         assert re.match(r'Close socket.*', get_mock_logger.get_last('excep'))
 
-    def test_server_socket_bind_normal(self, mocker, get_config_dict, get_mock_logger):
+    def test_server_socket_bind(self, mocker, get_config_dict, get_mock_logger):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
-
+        # positive
         ret = server_socket.bind('1.2.3.4', 1234)
         assert ret is None
-        assert server_socket.socket.status == MockSocket.STATUS_LISTENING
+        assert server_socket.socket.status == Status.LISTENING
         assert server_socket.client_socket is None
         assert re.match(r'Client is listening for message on .*', get_mock_logger.get_last('info'))
-
-    def test_server_socket_bind_invalid_ip(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        
+        # invalid IP
         with pytest.raises(ConnectionError, match=r'Invalid IP Address - .*'):
             server_socket.bind('1.2.3.256', 1234)
         assert re.match(r'Wrong ip_address - .*', get_mock_logger.get_last('error'))
-    
-    def test_server_socket_accept_normal(self, mocker, get_config_dict, get_mock_logger):
+
+    def test_server_socket_accept(self, mocker, get_config_dict, get_mock_logger):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
         server_socket.bind('1.2.3.4', 1234)
+        # positive
         server_socket.accept()
-        
         assert server_socket.client_socket is not None
         assert re.match(r'Connected to .*', get_mock_logger.get_last('info'))
-    
-    def test_server_socket_send_json_normal(self, mocker, get_config_dict, get_mock_logger):
+
+    def test_server_socket_send_json(self, mocker, get_config_dict, get_mock_logger):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
-
+        # send before bind
         ret = server_socket.send_json({})
-        assert ret == False
-
+        assert not ret
+        # positive
         server_socket.bind('1.2.3.4', 1234)
         server_socket.accept()
         ret = server_socket.send_json(r'{}')
-        assert ret == True
+        assert ret
         ret = server_socket.send_json(get_config_dict)
-        assert ret == True
-
-    def test_server_socket_send_json_empty_msg(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
-        
+        assert ret
+        # empty message
         ret = server_socket.send_json(r'')
-        assert ret == False
-    
-    def test_server_socket_send_json_connection_error(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
-
-        server_socket.socket.status = MockSocket.STATUS_CONNECTIONERROR
-        ret = server_socket.send_json({'k1':'v1'})
-        assert ret == False
+        assert not ret
+        # connection error
+        server_socket.socket.status = Status.CONNECTIONERROR
+        ret = server_socket.send_json({'k1': 'v1'})
+        assert not ret
         assert re.match(r'ConnectionError-.*', get_mock_logger.get_last('error'))
-    
-    def test_server_socket_send_json_bad_json(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
-
+        # bad json
+        server_socket.socket.status = Status.NORMAL
         ret = server_socket.send_json('This is Not Json', format="JSON")
-        assert ret == True
+        assert ret
         assert re.match(r'ServerSocket: BAD MSG - .*', get_mock_logger.get_last('error'))
 
-    def test_server_socket_recv_json_normal(self, mocker, get_config_dict, get_mock_logger, get_header_length):
+    def test_server_socket_recv_json(self, mocker, get_config_dict, get_mock_logger, get_header_length):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
+        # positive
         json_str = json.dumps(get_config_dict)
         short_str = 'short msg'
-
         server_socket.bind('1.2.3.4', 1234)
         server_socket.accept()
         server_socket.client_socket.sendall(prepare_send_data(json_str, get_header_length))
@@ -294,101 +219,58 @@ class TestSocketCommunication():
         server_socket.client_socket.sendall(prepare_send_data(short_str, get_header_length))
         ret = server_socket.recv_json("STRING")
         assert ret == short_str
-    
-    def test_server_socket_recv_json_empty_msg(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
+        # empty message
         msg = ''
-
         server_socket.client_socket.sendall(msg)
         ret = server_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ServerSocket: Exception .*', get_mock_logger.get_last('error'))
-
-    def test_server_socket_recv_json_wrong_header_size(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
-        json_str = json.dumps(get_config_dict)
-
-        msg = prepare_send_data(json_str, get_header_length+1)
+        assert re.match(r'ServerSocket: .*', get_mock_logger.get_last('error'))
+        # wrong header size
+        msg = prepare_send_data(json_str, get_header_length + 1)
         server_socket.client_socket.sendall(msg)
         ret = server_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ServerSocket:.*', get_mock_logger.get_last('error'))
-
-    def test_server_socket_recv_json_wrong_body_size(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
-        json_str = json.dumps(get_config_dict)
-
+        assert re.match(r'ServerSocket: .*', get_mock_logger.get_last('error'))
+        # wrong body size
         msg = prepare_send_data(json_str, get_header_length, wrong_size=True)
         server_socket.client_socket.sendall(msg)
         ret = server_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ServerSocket: Exception .*', get_mock_logger.get_last('error'))
-
-    def test_server_socket_recv_json_wrong_recv_size(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
-        json_str = json.dumps(get_config_dict)
-
+        assert re.match(r'ServerSocket: .*', get_mock_logger.get_last('error'))
+        # wrong recv size
         msg = prepare_send_data(json_str, get_header_length)
-        server_socket.client_socket.status = MockSocket.STATUS_MISALIGNEDBUFSIZE
+        server_socket.client_socket.status = Status.MISALIGNEDBUFSIZE
         server_socket.client_socket.sendall(msg)
         ret = server_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ServerSocket: Exception.*', get_mock_logger.get_last('error'))
-
-    def test_server_socket_recv_json_socket_timeout(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
-        json_str = json.dumps(get_config_dict)
-
+        assert re.match(r'ServerSocket: .*', get_mock_logger.get_last('error'))
+        # socket timeout
         msg = prepare_send_data(json_str, get_header_length)
         server_socket.client_socket.sendall(msg)
-        server_socket.client_socket.status = MockSocket.STATUS_SOCKETTIMEOUT
+        server_socket.client_socket.status = Status.SOCKETTIMEOUT
         ret = server_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ServerSocket: Timeout .*', get_mock_logger.get_last('error'))
-
-    def test_server_socket_recv_json_bad_json_data(self, mocker, get_config_dict, get_mock_logger, get_header_length):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
+        assert re.match(r'ServerSocket: .*', get_mock_logger.get_last('error'))
+        # Bad JSON
+        server_socket.client_socket.status = Status.NORMAL
         bad_json_str = 'abcdefghijk!@#$0987654321'
-
         msg = prepare_send_data(bad_json_str, get_header_length)
         server_socket.client_socket.sendall(msg)
         ret = server_socket.recv_json("JSON")
         assert ret == {}
         assert re.match(r'ServerSocket: Bad JSON data - .*', get_mock_logger.get_last('error'))
 
-    def test_server_socket_close_normal(self, mocker, get_config_dict, get_mock_logger):
+    def test_server_socket_close(self, mocker, get_config_dict, get_mock_logger):
         mocker.patch('socket.socket', MockSocket)
         server_socket = ServerSocket(get_config_dict, get_mock_logger)
         server_socket.bind('1.2.3.4', 1234)
         server_socket.accept()
-
+        # positive
         server_socket.close()
-        assert server_socket.socket.status == MockSocket.STATUS_CLOSED
-        assert server_socket.client_socket.status == MockSocket.STATUS_CLOSED
-
-    def test_server_socket_close_error(self, mocker, get_config_dict, get_mock_logger):
-        mocker.patch('socket.socket', MockSocket)
-        server_socket = ServerSocket(get_config_dict, get_mock_logger)
-        server_socket.bind('1.2.3.4', 1234)
-        server_socket.accept()
-
+        assert server_socket.socket.status == Status.CLOSED
+        assert server_socket.client_socket.status == Status.CLOSED
+        # close error
+        server_socket.socket.status = Status.EXCEPTION
         server_socket.close()
         assert re.match(r'Closing Socket.*', get_mock_logger.get_last('error'))
+
