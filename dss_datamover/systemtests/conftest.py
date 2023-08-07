@@ -86,53 +86,24 @@ def get_multiprocessing_logger(tmpdir):
     # teardown logger
     logger.stop()
 
-
-@pytest.fixture
-def get_master_dryrun(get_system_config_dict, get_pytest_configs):
-    def instantiate_master_object(operation):
-        get_system_config_dict["config"] = get_pytest_configs["config"]
-        get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
-        get_system_config_dict["dryrun"] = True
-        master = Master(operation, get_system_config_dict)
-        print("instantiated master obj")
-        master.start()
-        print("successfully started master obj")
-        return master
-    return instantiate_master_object
-
-
-@pytest.fixture
+@pytest.fixture(scope="session")
 def get_master(get_system_config_dict, get_pytest_configs):
-    def instantiate_master_object(operation):
+    print("Setting up Master Object..")
+
+    def instantiate_master_object():
         get_system_config_dict["config"] = get_pytest_configs["config"]
         get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
-        master = Master(operation, get_system_config_dict)
+        master = Master("PUT", get_system_config_dict)
         print("instantiated master obj")
         master.start()
         print("successfully started master obj")
         return master
-    return instantiate_master_object
-
-
-@pytest.fixture
-def shutdown_master_without_nfscluster():
-    def _method(master):
-        print("shutting down master")
-        master.stop_logging()
-        print("stopping logging")
-        master.stop_monitor()
-        print("stopping monitoring")
-    return _method
-
-
-@pytest.fixture
-def shutdown_master():
-    def _method(master):
-        print("shutting down master")
-        master.nfs_cluster_obj.umount_all()
-        print("unmounting nfs cluster")
-        master.stop_logging()
-        print("stopping logging")
-        master.stop_monitor()
-        print("stopping monitoring")
-    return _method
+    master = instantiate_master_object()
+    yield master
+    print("shutting down master")
+    master.nfs_cluster_obj.umount_all()
+    print("unmounting nfs cluster")
+    master.stop_logging()
+    print("stopping logging")
+    master.stop_monitor()
+    print("stopping monitoring")
