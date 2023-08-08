@@ -401,4 +401,3 @@ class ServerSocket(object):
             self.socket.close()
         except Exception as e:
             self.logger.error("Closing Socket - {}".format(e))
-
