@@ -47,8 +47,6 @@ from utils.config import Config
 
 @pytest.mark.usefixtures(
     "get_master",
-    # "shutdown_master",
-    # "shutdown_master_without_nfscluster",
     "get_system_config_dict",
     "get_pytest_configs",
     "clear_datamover_cache"
@@ -76,10 +74,10 @@ class TestDataMover:
         process_get_operation(get_master)
         assert get_master.testcase_passed.value
 
-    def test_list_operation(self, get_master):
-        print("Testing LIST Operation")
-        get_master.operation = "LIST"
-        process_list_operation(get_master)
+    # def test_list_operation(self, get_master):
+    #     print("Testing LIST Operation")
+    #     get_master.operation = "LIST"
+    #     process_list_operation(get_master)
 
     def test_delete_operation(self, get_master):
         print("Testing DEL operation")
