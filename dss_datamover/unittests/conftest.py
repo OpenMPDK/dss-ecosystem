@@ -205,8 +205,16 @@ class MockSocket():
         else:
             raise Exception
 
+    def get_default_ip(self):
+        default_ip = ""
+        pytest_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
+        with open(pytest_config_filepath) as f:
+            pytest_configs = json.load(f)
+            default_ip = pytest_configs['default_ip']
+        return default_ip
+
     def accept(self):
-        return self, ('1.2.3.4', 1234)
+        return self, (self.get_default_ip(), 1234)
 
 
 @pytest.fixture
