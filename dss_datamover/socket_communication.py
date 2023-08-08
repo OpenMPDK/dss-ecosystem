@@ -55,7 +55,7 @@ class ClientSocket(object):
         self.logger = logger
         self.config = config
         self.socket = None
-        self.last_exception_log_time = datetime.min
+        self.last_exception_log_time = datetime.now()
 
     def connect(self, host=None, port=None):
         """
@@ -232,7 +232,7 @@ class ServerSocket(object):
         self.logger = logger
         self.config = config
         self.client_socket = None
-        self.last_exception_log_time = datetime.min
+        self.last_exception_log_time = datetime.now()
 
     def bind(self, host=None, port=None):
         """
