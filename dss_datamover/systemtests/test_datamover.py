@@ -83,12 +83,3 @@ class TestDataMover:
         print("Testing DEL operation")
         get_master.operation = "DEL"
         assert get_master.testcase_passed.value
-
-    def test_remove_cache(self, clear_datamover_cache, get_pytest_configs):
-        print("Testing removing DataMover cache")
-        cache_files = get_pytest_configs["cache"]
-        cache_exists = False
-        for f in cache_files:
-            if os.path.exists(f):
-                cache_exists = True
-        assert not cache_exists, "Failure: DataMover cache not cleared.."

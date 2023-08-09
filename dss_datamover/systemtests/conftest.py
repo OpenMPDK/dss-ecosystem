@@ -50,7 +50,7 @@ def get_pytest_configs():
     return pytest_configs
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def clear_datamover_cache(get_pytest_configs):
     cache_files = get_pytest_configs["cache"]
     for f in cache_files:
