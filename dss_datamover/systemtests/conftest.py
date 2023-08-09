@@ -88,7 +88,7 @@ def get_multiprocessing_logger(tmpdir):
 
 
 @pytest.fixture(scope="session")
-def get_master(get_system_config_dict, get_pytest_configs):
+def get_master(clear_datamover_cache, get_system_config_dict, get_pytest_configs):
     print("Setting up Master Object..")
 
     def instantiate_master_object():
