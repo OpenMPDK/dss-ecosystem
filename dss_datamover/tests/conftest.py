@@ -40,22 +40,7 @@ from socket_communication import ClientSocket, ServerSocket
 
 import json
 import os
-import socket
 import pytest
-from enum import Enum
-
-
-class Status(Enum):
-    NORMAL = 0
-    CONNECTIONERROR = 1
-    CONNECTIONREFUSEERROR = 2
-    SOCKETTIMEOUT = 3
-    SOCKETERROR = 4
-    EXCEPTION = 5
-    MISALIGNEDBUFSIZE = 6
-    WRONGBUFSIZE = 7
-    LISTENING = 8
-    CLOSED = 9
 
 
 @pytest.fixture(scope="session")
@@ -68,8 +53,7 @@ def get_pytest_configs():
 
 @pytest.fixture(scope="session")
 def get_config_object():
-    # test_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
-    test_config_filepath = "/etc/dss/datamover/standard_config.json"
+    test_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
     config_obj = config.Config({}, config_filepath=test_config_filepath)
     return config_obj
 
@@ -115,111 +99,6 @@ def clear_datamover_cache(get_pytest_configs):
     for f in cache_files:
         if os.path.exists(f):
             os.remove(f)
-
-
-class MockSocket():
-    """
-    Dummy Object for an actual socket, should simulate all basic functions of a socket object
-    """
-    def __init__(self, family=0, type=0, proto=0, fileno=0):
-        self.timeout = 0
-        self.status = Status.NORMAL
-        self.data = ''
-        self.data_index = 0  # indicates the starting pos of the sending data when calling recv
-        self.max_bufsize = 10  # maximum length of return data when calling recv
-
-    def connect(self, address):
-        if self.status == Status.CONNECTIONERROR:
-            raise ConnectionError
-        elif self.status == Status.CONNECTIONREFUSEERROR:
-            raise ConnectionRefusedError
-        elif self.status == Status.SOCKETERROR:
-            raise socket.error
-        elif self.status == Status.SOCKETTIMEOUT:
-            raise socket.timeout
-        else:
-            return
-
-    def recv(self, bufsize):
-        if self.status == Status.CONNECTIONERROR:
-            raise ConnectionError
-        elif self.status == Status.SOCKETTIMEOUT:
-            raise socket.timeout
-        elif self.status == Status.EXCEPTION:
-            raise Exception
-        elif self.status == Status.MISALIGNEDBUFSIZE:
-            ret = self.data[self.data_index: self.data_index + bufsize + 1]
-            return ret
-        else:
-            ret = ''
-            if not self.data:
-                return ret
-            if self.data_index >= len(self.data):
-                raise Exception
-            if bufsize > self.max_bufsize:
-                bufsize = self.max_bufsize
-            if bufsize >= len(self.data) - self.data_index:
-                ret = self.data[self.data_index:]
-                self.data_index = len(self.data)
-            else:
-                ret = self.data[self.data_index: self.data_index + bufsize]
-                self.data_index += bufsize
-            return ret.encode("utf8", "ignore")
-
-    def send(self, data, flags=None):
-        return self.sendall(data, flags)
-
-    def sendall(self, data, flags=None):
-        self.data = ''
-        self.data_index = 0
-        if self.status == Status.CONNECTIONERROR:
-            raise ConnectionError
-        elif self.status == Status.CONNECTIONREFUSEERROR:
-            raise ConnectionRefusedError
-        elif self.status == Status.SOCKETERROR:
-            raise socket.error
-        elif self.status == Status.SOCKETTIMEOUT:
-            raise socket.timeout
-        else:
-            self.data = data
-        return
-
-    def setsockopt(self, param1, param2, param3):
-        pass
-
-    def settimeout(self, new_timeout):
-        pass
-
-    def close(self):
-        if self.status == Status.LISTENING or self.status == Status.NORMAL:
-            self.status = Status.CLOSED
-        else:
-            raise Exception
-
-    def listen(self, backlog):
-        self.status = Status.LISTENING
-
-    def bind(self, address):
-        if self.status == Status.NORMAL:
-            return
-        else:
-            raise Exception
-
-    def get_default_ip(self):
-        default_ip = ""
-        pytest_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
-        with open(pytest_config_filepath) as f:
-            pytest_configs = json.load(f)
-            default_ip = pytest_configs['default_ip']
-        return default_ip
-
-    def accept(self):
-        return self, (self.get_default_ip(), 1234)
-
-
-@pytest.fixture
-def get_header_length(mocker, get_config_dict):
-    return get_config_dict.get("socket_options", {}).get("response_header_length", 10)
 
 
 class MockLogger():
@@ -269,7 +148,7 @@ def get_mock_clientsocket(mocker):
 
 @pytest.fixture
 def get_mock_serversocket(mocker):
-    mock_serversocket = mocker.patch('socket_communication.ServerSocket', spec=True)
+    mock_serversocket = mocker.patch('socket_communication.ClientSocket', spec=True)
     return mock_serversocket
 
 
@@ -332,33 +211,6 @@ def shutdown_master():
     return _method
 
 
-class MockMinio():
-    def __init__(self):
-        self.data = {}
-
-    def list(self, key=''):
-        if not key:
-            return list(self.data.items())
-        return self.data[key].items() if isinstance(self.data[key], dict) else [(key, self.data[key])]
-
-    def get(self, key):
-        if key in self.data:
-            return self.data[key]
-        return None
-
-    def put(self, key, value):
-        if key in self.data:
-            self.data[key] = value
-            return True
-        return False
-
-    def delete(self, key):
-        if key in self.data:
-            self.data.pop(key)
-            return True
-        return False
-
-
 class MockNFSCluster():
     def __init__(self, config={}, user_id="ansible", password="password", logger=None):
         self.local_mounts = {}
@@ -414,7 +266,7 @@ def get_indexing_kwargs():
             "prefix_index_data": {}, "standalone": False, "params": {"s3config": "dss_client", "dryrun": False, "resume_flag": False}}
 
 
-class MockEntry():
+class MockDirEntry():
 
     class EntryStat():
         def __init__(self, size):
@@ -432,33 +284,29 @@ class MockEntry():
         return False
 
 
-def mock_os_scan_dir(dir):
-    return [
-        MockEntry("file0", 0), MockEntry("file1", 100), MockEntry("file2", 100),
-        MockEntry("file3", 100), MockEntry("file4", 100)
-    ]
+class MockOSDirOperations():
 
+    def mock_os_scan_dir(dir):
+        return [
+            MockDirEntry("file0", 0), MockDirEntry("file1", 100), MockDirEntry("file2", 100),
+            MockDirEntry("file3", 100), MockDirEntry("file4", 100)
+        ]
 
-def mock_os_access(dir, flag):
-    return True
+    def mock_os_access(dir, flag):
+        return True
 
+    def mock_os_access_failure(dir, flag):
+        return False
 
-def mock_os_access_failure(dir, flag):
-    return False
+    def mock_iterate_dir(**kwargs):
+        file_set = ['file1', 'file2']
+        yield {"dir": "/data", "files": file_set, "size": 200}
 
+    def mock_iterate_dir_no_dir(**kwargs):
+        yield {"files": ['file1'], "size": 200}
 
-def mock_iterate_dir(**kwargs):
-    file_set = ['file1', 'file2']
-    yield {"dir": "/data", "files": file_set, "size": 200}
+    def mock_iterate_dir_no_files(**kwargs):
+        yield {"dir": "/data", "size": 200}
 
-
-def mock_iterate_dir_no_dir(**kwargs):
-    yield {"files": ['file1'], "size": 200}
-
-
-def mock_iterate_dir_no_files(**kwargs):
-    yield {"dir": "/data", "size": 200}
-
-
-def mock_oterate_dir_no_size(**kwargs):
-    yield {"dir": "/data", "size": 0}
+    def mock_oterate_dir_no_size(**kwargs):
+        yield {"dir": "/data", "size": 0}

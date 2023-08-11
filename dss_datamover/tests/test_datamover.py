@@ -12,8 +12,7 @@ from master_application import (
     process_del_operation
 )
 from utils.config import Config
-from conftest import MockNFSCluster, mock_os_scan_dir, mock_os_access, mock_iterate_dir,\
-    mock_iterate_dir_no_dir, mock_iterate_dir_no_files, mock_oterate_dir_no_size, mock_os_access_failure
+from conftest import MockNFSCluster, MockOSDirOperations
 from task import iterate_dir, indexing
 
 
@@ -117,8 +116,8 @@ class TestDataMover:
             assert result["size"] == 200
 
     def test_indexing(self, mocker, get_indexing_kwargs):
-        mocker.patch('os.access', mock_os_access)
-        mocker.patch('task.iterate_dir', mock_iterate_dir)
+        mocker.patch('os.access', MockOSDirOperations.mock_os_access)
+        mocker.patch('task.iterate_dir', MockOSDirOperations.mock_iterate_dir)
         # positive case
         indexing(**get_indexing_kwargs)
         assert get_indexing_kwargs["index_msg_count"].value == 1
@@ -131,29 +130,29 @@ class TestDataMover:
         assert get_indexing_kwargs["task_queue"].qsize() == 1
         assert get_indexing_kwargs["index_data_count"].value == 4
         # negative case access fail
-        mocker.patch('os.access', mock_os_access_failure)
+        mocker.patch('os.access', MockOSDirOperations.mock_os_access_failure)
         indexing(**get_indexing_kwargs)
         assert get_indexing_kwargs["index_msg_count"].value == 1
         assert get_indexing_kwargs["task_queue"].qsize() == 1
         assert get_indexing_kwargs["index_data_count"].value == 4
         assert re.match(r'Read permission.*', get_indexing_kwargs["logger"].get_last("error"))
         # negative case no 'dir'
-        mocker.patch('os.access', mock_os_access)
-        mocker.patch('task.iterate_dir', mock_iterate_dir_no_dir)
+        mocker.patch('os.access', MockOSDirOperations.mock_os_access)
+        mocker.patch('task.iterate_dir', MockOSDirOperations.mock_iterate_dir_no_dir)
         indexing(**get_indexing_kwargs)
         assert get_indexing_kwargs["index_msg_count"].value == 1
         assert get_indexing_kwargs["task_queue"].qsize() == 1
         assert get_indexing_kwargs["index_data_count"].value == 4
         assert re.match(r'.*iterate_dir.*', get_indexing_kwargs["logger"].get_last("error"))
         # positive case no 'files'
-        mocker.patch('task.iterate_dir', mock_iterate_dir_no_files)
+        mocker.patch('task.iterate_dir', MockOSDirOperations.mock_iterate_dir_no_files)
         indexing(**get_indexing_kwargs)
         assert get_indexing_kwargs["index_msg_count"].value == 1
         assert get_indexing_kwargs["task_queue"].qsize() == 2
         assert get_indexing_kwargs["index_data_count"].value == 4
         assert get_indexing_kwargs["progress_of_indexing"]["/data"] == 'Pending'
         # negative case no 'size'
-        mocker.patch('task.iterate_dir', mock_oterate_dir_no_size)
+        mocker.patch('task.iterate_dir', MockOSDirOperations.mock_oterate_dir_no_size)
         indexing(**get_indexing_kwargs)
         assert get_indexing_kwargs["index_msg_count"].value == 1
         assert get_indexing_kwargs["task_queue"].qsize() == 2
