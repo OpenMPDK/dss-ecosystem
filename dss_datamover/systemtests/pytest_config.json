@@ -1,6 +1,7 @@
 {
     "config": "/etc/dss/datamover/config.json",
     "dest_path": "/tmp/xyz",
+    "prefix": "/mnt/nfs_share/5gb/0_0/1_0/2_0/",
     "cache": ["/var/log/dss/prefix_index_data.json", "/var/log/dss/dm_resume_prefix_dir_keys.txt"],
     "fs_config": {"server_as_prefix": "yes"}
 }

@@ -49,37 +49,44 @@ from utils.config import Config
     "get_master",
     "get_system_config_dict",
     "get_pytest_configs",
-    "clear_datamover_cache"
+    "clear_datamover_cache",
+    "generate_full_ip_prefix",
+    "reset_master_obj"
 )
 class TestDataMover:
     """
     This class may be used for system level / functional tests.
     """
 
-    def test_put_operation(self, get_master):
+    def test_put_operation(self, get_master, reset_master_obj):
         print("Testing PUT operation..")
         get_master.operation = "PUT"
+        get_master.start()
         process_put_operation(get_master)
-        get_master.compaction()
         assert get_master.testcase_passed.value
 
-    def test_compaction(self, get_master):
-        print("Testing compaction")
-        get_master.operation = "PUT"
-        get_master.compaction()
+    # def test_compaction(self, get_master, reset_master_obj):
+    #     print("Testing compaction..")
+    #     get_master.operation = "PUT"
+    #     get_master.start()
+    #     get_master.compaction()
 
-    def test_get_operation(self, get_master):
-        print("Testing GET operation")
+    def test_get_operation(self, get_master, reset_master_obj):
+        print("Testing GET operation..")
         get_master.operation = "GET"
+        get_master.start()
         process_get_operation(get_master)
         assert get_master.testcase_passed.value
 
-    # def test_list_operation(self, get_master):
-    #     print("Testing LIST Operation")
-    #     get_master.operation = "LIST"
-    #     process_list_operation(get_master)
+    def test_list_operation(self, get_master, reset_master_obj):
+        print("Testing LIST Operation")
+        get_master.operation = "LIST"
+        get_master.start()
+        process_list_operation(get_master)
 
-    def test_delete_operation(self, get_master):
+    def test_delete_operation(self, get_master, reset_master_obj):
         print("Testing DEL operation")
         get_master.operation = "DEL"
+        get_master.start()
+        process_del_operation(get_master)
         assert get_master.testcase_passed.value

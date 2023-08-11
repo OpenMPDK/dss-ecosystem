@@ -40,6 +40,8 @@ from multiprocessing import Queue, Value, Lock
 import json
 import os
 import pytest
+from multiprocessing import Queue, Value, Lock, Manager, Event
+import shutil
 
 
 @pytest.fixture(scope="session")
@@ -52,10 +54,19 @@ def get_pytest_configs():
 
 @pytest.fixture(scope="session")
 def clear_datamover_cache(get_pytest_configs):
+    print("Clearing DataMover cache..")
     cache_files = get_pytest_configs["cache"]
     for f in cache_files:
         if os.path.exists(f):
             os.remove(f)
+
+
+@pytest.fixture
+def clear_downloaded_data(get_pytest_configs):
+    yield  # continue with test case
+    # remove downloaded data
+    data_dir = get_pytest_configs["dest_path"]
+    shutil.rmtree(data_dir)
 
 
 @pytest.fixture(scope="session")
@@ -67,6 +78,17 @@ def get_system_config_object():
 @pytest.fixture(scope="session")
 def get_system_config_dict(get_system_config_object):
     return get_system_config_object.get_config()
+
+
+@pytest.fixture(scope="session")
+def generate_full_ip_prefix(get_system_config_dict, get_pytest_configs):
+    # current system test design only supports 1 NFS ip and 1 prefix
+    for ip, _ in get_system_config_dict["fs_config"]["nfs"].items():
+        nfs_ip = ip
+        break
+
+    full_prefix = nfs_ip + get_pytest_configs["prefix"]
+    return full_prefix
 
 
 @pytest.fixture
@@ -88,23 +110,98 @@ def get_multiprocessing_logger(tmpdir):
 
 
 @pytest.fixture(scope="session")
-def get_master(clear_datamover_cache, get_system_config_dict, get_pytest_configs):
+def get_master(clear_datamover_cache, get_system_config_dict, get_pytest_configs, generate_full_ip_prefix):
     print("Setting up Master Object..")
 
     def instantiate_master_object():
         get_system_config_dict["config"] = get_pytest_configs["config"]
         get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
+        get_system_config_dict["prefix"] = generate_full_ip_prefix
         master = Master("PUT", get_system_config_dict)
         print("instantiated master obj")
-        master.start()
-        print("successfully started master obj")
         return master
     master = instantiate_master_object()
     yield master
     print("shutting down master")
-    master.nfs_cluster_obj.umount_all()
-    print("unmounting nfs cluster")
-    master.stop_logging()
-    print("stopping logging")
-    master.stop_monitor()
-    print("stopping monitoring")
+
+    if hasattr(master, 'nfs_cluster_obj'):
+        print("unmounting nfs cluster")
+        master.nfs_cluster_obj.umount_all()
+
+    if master.logger_status.value == 1:
+        print("stopping logging")
+        master.stop_logging()
+
+    if hasattr(master, 'monitor'):
+        print("stopping monitoring")
+        master.stop_monitor()
+
+
+@pytest.fixture
+def reset_master_obj(get_master):
+    yield  # handoff back to testcase
+    print("resetting master object..")
+    get_master.stop_workers()
+    get_master.stop_clients(force_flag=False)
+    if hasattr(get_master, 'monitor'):
+        print("stopping monitoring")
+        get_master.stop_monitor()
+
+    # teardown/ reset master object status to be used for next testcase
+    obj = get_master
+    manager = Manager()
+
+    obj.workers = []
+    obj.clients = []
+    obj.task_queue = Queue()
+    obj.task_lock = Lock()
+    obj.process_monitor_event = Event()
+    obj.lock = Lock()
+
+    # Operation PUT/GET/DEL/LIST
+    obj.index_data_queue = Queue()  # Index data stored by workers
+    obj.index_data_lock = Lock()
+    obj.index_data_generation_complete = Value('i', 0)  # TODO - Set value when all indexing is done.
+    obj.indexing_started_flag = Value('i', 0)  # [0,1,2,-1] => ["READY", "STARTED", "COMPLETED", "FAILED"]
+
+    # Operation LIST
+    obj.prefix = obj.config.get("prefix", None)
+    obj.prefixes = []  # TODO need to take multiple prefix from command line and store into list.
+    obj.listing_progress = Value('i', 0)
+    obj.listing_status = Value('i', 0)  # [0,1,2] => ['NOT STARTED', 'STARTED', 'COMPLETED']
+    obj.listing_only = Value('b', False)
+    obj.listing_aggregation_status = Value('i', 0)
+    obj.listing_objectkey_queue = Queue()
+
+    # Status Progress
+    obj.index_data_count = Value('i', 0)  # File Index count shared between worker process.
+    obj.index_msg_count = Value('i', 0)  # How many messages have been produced by the producers.
+    obj.received_index_msg_count = Value('i', 0)  # How many messages have been consumed by the consumers.
+    obj.operation_start_time = None
+    obj.operation_end_time = None
+
+    # Keep track of progress of hierarchical indexing.
+    obj.progress_of_indexing = manager.dict()
+    obj.progress_of_indexing_lock = manager.Lock()
+
+    # Hierarchical indexing of leaf directory, to be used for listing.
+    obj.indexing_key = manager.dict()
+    obj.indexing_key = manager.Lock()
+
+    # NFS shares
+    obj.nfs_shares = []
+
+    # Unit TestCase
+    obj.testcase_passed = Value('b', False)
+
+    # Status queue
+    if obj.standalone:
+        obj.operation_status_queue = Queue()
+    else:
+        obj.operation_status_queue = None
+
+    obj.prefix_index_data = manager.dict()
+
+    # Get the directory prefix keys that are yet to be resumed for PUT operation
+    obj.dir_prefixes_to_resume = list()
+    obj.resume_flag = False
