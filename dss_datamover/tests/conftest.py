@@ -101,6 +101,25 @@ def clear_datamover_cache(get_pytest_configs):
             os.remove(f)
 
 
+class MockSocket():
+    """
+    Dummy Object for an actual socket, should simulate all basic functions of a socket object
+    """
+    # TODO: finish building out MockSocket class
+    def __init__(self):
+        self.host = "xxx.xxxx.xxxx.xxxx"
+        self.port = "xxxx"
+
+    def connect(self):
+        return True
+
+    def recv(self):
+        pass
+
+    def sendall(self):
+        pass
+
+
 class MockLogger():
 
     def __init__(self):
