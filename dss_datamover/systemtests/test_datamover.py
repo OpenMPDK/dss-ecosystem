@@ -50,6 +50,7 @@ from utils.config import Config
     "get_system_config_dict",
     "get_pytest_configs",
     "clear_datamover_cache",
+    "clear_downloaded_data",
     "generate_full_ip_prefix",
     "reset_master_obj"
 )
@@ -71,7 +72,7 @@ class TestDataMover:
     #     get_master.start()
     #     get_master.compaction()
 
-    def test_get_operation(self, get_master, reset_master_obj):
+    def test_get_operation(self, get_master, reset_master_obj, clear_downloaded_data):
         print("Testing GET operation..")
         get_master.operation = "GET"
         get_master.start()
