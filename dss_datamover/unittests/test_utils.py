@@ -37,7 +37,7 @@ import pytest
 from utils import utility
 
 
-@pytest.mark.usefixtures("get_pytest_configs", "get_config_dict", "get_multiprocessing_logger")
+@pytest.mark.usefixtures("get_pytest_configs", "get_config_dict")
 class TestUtils():
 
     def test_validate_s3_prefix(self, mocker):
@@ -53,13 +53,6 @@ class TestUtils():
         print(f"config dict: {get_config_dict}")
         assert isinstance(get_config_dict, dict)
         assert bool(get_config_dict), "config dict is empty.."
-
-    def test_remote_execution(self, get_config_dict):
-        remote_device_configs = get_config_dict["test_remote_device"]
-        host, user, passwd = remote_device_configs["host"], remote_device_configs["user"], remote_device_configs["password"]
-        remote_command = "ps"
-        _, stderr_lines, status = utility.remoteExecution(host, user, passwd, remote_command, blocking=True)
-        assert status == 0, f"remote execution failed with status code: {status}, stder: {stderr_lines}"
 
     def test_first_delimiter_index(self):
         test_string = "usr/lib64/python3/site-packages"

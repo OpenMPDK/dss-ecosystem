@@ -1,3 +1,4 @@
+python-dateutil
 pytest >= 7.0.1
 pytest-mock >= 3.6.1
 pytest-cov >= 4.0.0

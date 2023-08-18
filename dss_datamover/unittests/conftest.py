@@ -33,9 +33,6 @@
 """
 
 from utils import config
-from logger import MultiprocessingLogger
-from master_application import Master
-from multiprocessing import Queue, Value, Lock
 
 import json
 import os
@@ -60,35 +57,6 @@ def get_config_object():
 @pytest.fixture(scope="session")
 def get_config_dict(get_config_object):
     return get_config_object.get_config()
-
-
-@pytest.fixture(scope="session")
-def get_system_config_object():
-    config_obj = config.Config({}, config_filepath="/etc/dss/datamover/config.json")
-    return config_obj
-
-
-@pytest.fixture(scope="session")
-def get_system_config_dict(get_system_config_object):
-    return get_system_config_object.get_config()
-
-
-@pytest.fixture
-def get_multiprocessing_logger(tmpdir):
-    logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
-    logger_queue = Queue()
-    logger_lock = Lock()
-    logging_path = tmpdir
-    logging_level = "INFO"
-
-    logger = MultiprocessingLogger(logger_queue, logger_lock, logger_status)
-    logger.config(logging_path, __file__, logging_level)
-    logger.start()
-
-    yield logger
-
-    # teardown logger
-    logger.stop()
 
 
 @pytest.fixture
@@ -128,54 +96,3 @@ def get_mock_clientsocket(mocker):
 def get_mock_serversocket(mocker):
     mock_serversocket = mocker.patch('socket_communication.ClientSocket', spec=True)
     return mock_serversocket
-
-
-@pytest.fixture
-def get_master_dryrun(get_system_config_dict, get_pytest_configs):
-    def instantiate_master_object(operation):
-        get_system_config_dict["config"] = get_pytest_configs["config"]
-        get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
-        get_system_config_dict["dryrun"] = True
-        master = Master(operation, get_system_config_dict)
-        print("instantiated master obj")
-        master.start()
-        print("successfully started master obj")
-        return master
-    return instantiate_master_object
-
-
-@pytest.fixture
-def get_master(get_system_config_dict, get_pytest_configs):
-    def instantiate_master_object(operation):
-        get_system_config_dict["config"] = get_pytest_configs["config"]
-        get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
-        master = Master(operation, get_system_config_dict)
-        print("instantiated master obj")
-        master.start()
-        print("successfully started master obj")
-        return master
-    return instantiate_master_object
-
-
-@pytest.fixture
-def shutdown_master_without_nfscluster():
-    def _method(master):
-        print("shutting down master")
-        master.stop_logging()
-        print("stopping logging")
-        master.stop_monitor()
-        print("stopping monitoring")
-    return _method
-
-
-@pytest.fixture
-def shutdown_master():
-    def _method(master):
-        print("shutting down master")
-        master.nfs_cluster_obj.umount_all()
-        print("unmounting nfs cluster")
-        master.stop_logging()
-        print("stopping logging")
-        master.stop_monitor()
-        print("stopping monitoring")
-    return _method
