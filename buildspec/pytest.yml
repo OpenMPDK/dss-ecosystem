@@ -13,7 +13,7 @@ phases:
   build:
     commands:
       # Execute Datamover pytest with XML coverage report
-      - cd dss_datamover && python3 -m pytest unittests -v -rA --cov=. --cov-report=xml:.coverage-reports/coverage-datamover.xml --color=yes --disable-warnings
+      - cd dss_datamover && mkdir -p .coverage-reports && python3 -m pytest unittests -v -rA --cov=. --cov-report=xml:.coverage-reports/coverage-datamover.xml --color=yes --disable-warnings
   post_build:
     commands:
       # Upload unit test coverage report(s) for sonar-scanner stage
