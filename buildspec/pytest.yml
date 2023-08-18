@@ -10,6 +10,7 @@ phases:
       # Install dependencies to execute Datamover unit tests
       - yum install libcap-devel -y
       - python3 -m pip install -r dss_datamover/requirements.txt
+      - python3 -m pip install -r dss_datamover/unittests/requirements.txt
   build:
     commands:
       # Execute Datamover pytest with XML coverage report
