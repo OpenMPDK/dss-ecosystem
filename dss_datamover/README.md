@@ -387,3 +387,52 @@ o Mount the remote shared paths as below.
     mount <nfs node ip address>:/<nfs Shared Directoyr>  /nfs-shaed1”
 o Show the remote mounts “df –kh”
 ```
+
+# DataMover Pytest Framework unittests & systemtests
+
+Tests for DataMover are grouped into 2 categories. 
+
+unittests - Used to test code directly with zero reliance on the
+            underlying system. Code the depends on the system is
+            mocked / simulated with the pytest fixtures.
+            Unittests are run during build pipelines to generate
+            and display code coverage for each commit.
+
+systemtests - System tests are to be used for testing the actual
+              functionality of the code on the given system. Tests
+              are intrusive and consume, execute, and potentially
+              modify resources on the actualy system. 
+
+## Requirements
+
+This module requires the following modules:
+
+pytest
+pytest-mock
+pytest-cov
+pytest-gitcov
+
+Also refer to requirements.txt file if you would like to install these packages with pip
+
+In order to run system level test, such as those found in test_datamover.py you must make sure the correct environment is sourced with access to the compiler. For example;
+`source /usr/local/bin/setenv-for-gcc510.sh`
+
+## Run Pytest
+You must be in the dss_datamover directory
+
+Structure:
+`python3 -m pytest <path to test folder or file> -v -rA --cov=<path to root folder of data mover> --cov-report term --color=yes --disable-warnings`
+
+Here are some examples run from the dss-ecosystem directory
+
+Run all tests by specifying the test folder
+`python3 -m pytest unittests -v -rA --cov=. --cov-report term --color=yes --disable-warnings`
+
+Run on a specific test file
+`python3 -m pytest unittests/test_utils.py -v -rA --cov=. --cov-report term --color=yes --disable-warnings`
+
+Run on a specific test class
+`python3 -m pytest unittests/test_utils.py::TestUtils -v -rA --cov=. --cov-report term --color=yes --disable-warnings`
+
+Run on a specific unittest
+`python3 -m pytest unittests/test_utils.py::TestUtils::test_validate_s3_prefix -v -rA --cov=. --cov-report term --color=yes --disable-warnings`
