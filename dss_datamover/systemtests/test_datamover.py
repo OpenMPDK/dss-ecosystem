@@ -50,7 +50,7 @@ from utils.config import Config
     "get_system_config_dict",
     "get_pytest_configs",
     "clear_datamover_cache",
-    "clear_downloaded_data",
+    "setup_data_dir",
     "generate_full_ip_prefix",
     "reset_master_obj"
 )
@@ -59,7 +59,7 @@ class TestDataMover:
     This class may be used for system level / functional tests.
     """
 
-    def test_put_operation(self, get_master, reset_master_obj):
+    def test_put_operation(self, get_master, reset_master_obj, setup_data_dir):
         print("Testing PUT operation..")
         get_master.operation = "PUT"
         get_master.start()
@@ -72,20 +72,20 @@ class TestDataMover:
     #     get_master.start()
     #     get_master.compaction()
 
-    def test_get_operation(self, get_master, reset_master_obj, clear_downloaded_data):
+    def test_get_operation(self, get_master, reset_master_obj, setup_data_dir):
         print("Testing GET operation..")
         get_master.operation = "GET"
         get_master.start()
         process_get_operation(get_master)
         assert get_master.testcase_passed.value
 
-    def test_list_operation(self, get_master, reset_master_obj):
+    def test_list_operation(self, get_master, reset_master_obj, setup_data_dir):
         print("Testing LIST Operation")
         get_master.operation = "LIST"
         get_master.start()
         process_list_operation(get_master)
 
-    def test_delete_operation(self, get_master, reset_master_obj):
+    def test_delete_operation(self, get_master, reset_master_obj, setup_data_dir):
         print("Testing DEL operation")
         get_master.operation = "DEL"
         get_master.start()

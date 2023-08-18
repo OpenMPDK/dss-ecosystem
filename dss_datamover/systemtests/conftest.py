@@ -62,10 +62,13 @@ def clear_datamover_cache(get_pytest_configs):
 
 
 @pytest.fixture
-def clear_downloaded_data(get_pytest_configs):
-    yield  # continue with test case
-    # remove downloaded data
+def setup_data_dir(get_pytest_configs):
+    # setup data directory
     data_dir = get_pytest_configs["dest_path"]
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+    yield  # execute test case
+    # cleanup data directory
     shutil.rmtree(data_dir)
 
 
