@@ -10,12 +10,10 @@ phases:
       # Install dependencies to execute Datamover unit tests
       - yum install libcap-devel -y
       - python3 -m pip install -r dss_datamover/requirements.txt
-      - python3 -m pip install -r dss_datamover/tests/requirements.txt
   build:
     commands:
       # Execute Datamover pytest with XML coverage report
-      # Note: using work-around to always return true for testing because unit tests are currently failing
-      - cd dss_datamover && python3 -m pytest tests -v -rA --cov=. --cov-report=xml:.coverage-reports/coverage-datamover.xml --color=yes --disable-warnings || true
+      - cd dss_datamover && python3 -m pytest unittests -v -rA --cov=. --cov-report=xml:.coverage-reports/coverage-datamover.xml --color=yes --disable-warnings
   post_build:
     commands:
       # Upload unit test coverage report(s) for sonar-scanner stage
