@@ -1,0 +1,21 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    DSSS3URI: Codebuild-DSS:DSSS3URI
+
+phases:
+  pre_build:
+    commands:
+      # Install dependencies to execute Datamover unit tests
+      - yum install libcap-devel -y
+      - python3 -m pip install -r dss_datamover/requirements.txt
+      - python3 -m pip install -r dss_datamover/unittests/requirements.txt
+  build:
+    commands:
+      # Execute Datamover pytest with XML coverage report
+      - cd dss_datamover && mkdir -p .coverage-reports && python3 -m pytest unittests -v -rA --cov=. --cov-report=xml:.coverage-reports/coverage-datamover.xml --color=yes --disable-warnings
+  post_build:
+    commands:
+      # Upload unit test coverage report(s) for sonar-scanner stage
+      - aws s3 cp --recursive .coverage-reports/ "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest/.coverage-reports" --only-show-errors

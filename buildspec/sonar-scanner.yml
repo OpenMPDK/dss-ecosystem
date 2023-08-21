@@ -1,0 +1,36 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    SONAR_TOKEN: Codebuild-DSS:SONAR_TOKEN
+    DSSS3URI: Codebuild-DSS:DSSS3URI
+  variables:
+    SONAR_HOST_URL: https://sonarcloud.io
+
+phases:
+  pre_build:
+    commands:
+      # Download build wrapper output from dss-client build job
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/sonar" . --only-show-errors
+      # Download unit test coverage report(s)
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest" . --only-show-errors
+      # Download dss_client/build
+      - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/dss_client" dss_client/ --only-show-errors
+      # Temporary just to debug
+      - echo "$CODEBUILD_SRC_DIR"
+      # replace the old CODEBUILD_SRC_DIR with the current one in bw-output and pytest cov
+      - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" bw-output/build-wrapper-dump.json
+      - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" .coverage-reports/*.xml
+  build:
+    commands:
+      # Run sonar-scanner and ingest coverage report(s)
+      - |
+        sonar-scanner \
+          -Dsonar.branch.name="$([[ "$GITHUB_REF_NAME" != *"/merge" ]] && echo "$GITHUB_REF_NAME")" \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.pullrequest.github.summary_comment=true \
+          -Dsonar.pullrequest.github.repository=OpenMPDK/dss-ecosystem \
+          -Dsonar.pullrequest.key=$(echo $GITHUB_REF | grep -oP "^refs/pull/\K[^/]+") \
+          -Dsonar.pullrequest.base=$GITHUB_BASE_REF \
+          -Dsonar.pullrequest.branch=$GITHUB_HEAD_REF \
+          -Dsonar.python.coverage.reportPaths=.coverage-reports/coverage-datamover.xml

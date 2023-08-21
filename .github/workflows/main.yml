@@ -14,15 +14,33 @@ on:
       - synchronize
 
 jobs:
-  dss-ecosystem:
+  unit:
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
+    with:
+      component: pytest
+      project-name: OpenMPDK_dss-ecosystem
+    secrets: inherit
+  lint:
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
+    with:
+      component: pycodestyle
+      project-name: OpenMPDK_dss-ecosystem
+    secrets: inherit
+  build:
     strategy:
       matrix:
         component:
           - dss-client
           - datamover
-          - pycodestyle
     uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: ${{ matrix.component }}
       project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
+  scan:
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
+    with:
+      component: sonar-scanner
+      project-name: OpenMPDK_dss-ecosystem
+    secrets: inherit
+    needs: [unit, build]
