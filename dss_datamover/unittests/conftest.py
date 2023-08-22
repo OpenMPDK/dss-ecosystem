@@ -68,8 +68,7 @@ def get_pytest_configs():
 
 @pytest.fixture(scope="session")
 def get_config_object():
-    # test_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
-    test_config_filepath = "/etc/dss/datamover/standard_config.json"
+    test_config_filepath = os.path.dirname(__file__) + "/pytest_config.json"
     config_obj = config.Config({}, config_filepath=test_config_filepath)
     return config_obj
 
