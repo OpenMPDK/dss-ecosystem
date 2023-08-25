@@ -1,6 +1,66 @@
 {
-    "config": "/etc/dss/datamover/config.json",
+    "config": "/etc/dss/datamover/standard_config.json",
     "dest_path": "/tmp/xyz",
     "cache": ["/var/log/dss/prefix_index_data.json", "/var/log/dss/dm_resume_prefix_dir_keys.txt"],
-    "fs_config": {"server_as_prefix": "yes"}
+    "default_ip": "1.2.3.4",
+    "clients_hosts_or_ip_addresses": ["1.2.3.4", "5.6.7.8"],
+    "master": {
+        "host_or_ip_address": "1.2.3.4",
+        "workers": 1,
+        "max_index_size": 1000,
+        "size": "1GB"
+    },
+    "client": {
+        "workers": 25,
+        "max_index_size": 1000,
+        "user_id": "ansible",
+        "password": "ansible"
+    },
+    "message": {
+        "port_index": 6000,
+        "port_status": 6001
+    },
+    "socket_options": {
+        "connection_retry_delay": 2,
+        "max_connection_time_threshold": 300,
+        "response_header_length": 10,
+        "recv_timeout": 60
+    },
+    "fs_config": {
+        "mounted": false,
+        "nfs": {
+            "202.0.0.103": ["/dir1", "/dir2"]
+        },
+        "nfsport": 2049,
+        "server_as_prefix": "yes"
+    },
+    "s3_storage": {
+        "minio": {"url": "1.2.3.4:9000", "access_key": "minio", "secret_key": "minio123"},
+        "bucket": "bucket",
+        "client_lib": "dss_client"
+    },
+    "operations": ["PUT", "GET", "DEL", "LIST"],
+    "logging": {
+        "path": "/var/log/dss",
+        "level": "INFO",
+        "max_log_file_size": 1048576,
+        "log_file_backup_count": 5
+    },
+    "dss_targets": {
+        "subsystem_nqn": {
+            "1": ["vm1"],
+            "2": ["vm2"],
+            "3": ["vm3"],
+            "4": ["vm4"]
+        },
+        "installation_path": "/usr/dss/nkv-target"
+    },
+    "environment": {
+        "gcc": {
+            "version": "5.1",
+            "source": "/usr/local/bin/setenv-for-gcc510.sh",
+            "required": true
+        }
+    },
+    "compaction": "yes"
 }
