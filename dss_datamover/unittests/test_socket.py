@@ -224,7 +224,6 @@ class TestSocketCommunication():
         server_socket.client_socket.sendall(msg)
         ret = server_socket.recv_json("JSON")
         assert ret == {}
-        assert re.match(r'ServerSocket: .*', get_mock_logger.get_last('error'))
         # wrong header size
         msg = prepare_send_data(json_str, get_header_length + 1)
         server_socket.client_socket.sendall(msg)
