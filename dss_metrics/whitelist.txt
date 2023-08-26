@@ -1,2 +1,3 @@
 target.subsystem\d+.kvio.(puts|gets|dels|putBandwidth|getBandwidth)
 minio_upstream.outstanding.s3_get_req
+minio_disk_storage_used_bytes

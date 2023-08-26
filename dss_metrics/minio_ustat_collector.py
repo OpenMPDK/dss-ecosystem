@@ -41,7 +41,7 @@ import utils
 import uuid
 
 
-class MinioCollector(object):
+class MinioUSTATCollector(object):
     def __init__(self, configs, seconds, num_iterations,
                  whitelist_patterns, filter=False):
         self.configs = configs
@@ -60,6 +60,7 @@ class MinioCollector(object):
 
         # spawn a collector and get uuid for each minio instance
         pid_list = self.get_minio_instances()
+        print(f"DEBUG, MINIO PIDS: {pid_list}")
         collection_time = time.time()
         for pid in pid_list:
             try:

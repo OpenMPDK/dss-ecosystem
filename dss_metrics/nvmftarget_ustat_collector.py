@@ -38,7 +38,7 @@ import time
 import utils
 
 
-class NVMFTargetCollector(object):
+class NVMFTargetUSTATCollector(object):
     def __init__(self, configs, seconds, num_iterations,
                  whitelist_patterns, filter=False):
         self.configs = configs
@@ -135,7 +135,7 @@ class NVMFTargetCollector(object):
                        metrics.MetricInfo(data['full_key'], data['metric_name'], data['value'],
                                             data['tags'], data['time'])
                     )
-                    
+
         except Exception:
             print('ustat process termination exception ', exc_info=True)
             proc.kill()

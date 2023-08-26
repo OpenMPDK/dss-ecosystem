@@ -2,6 +2,8 @@
     "minio_process_name": "minio",
     "nvmf_target_process_name": "target",
     "ustat_binary_path": "/usr/dss/nkv-sdk/bin/ustat",
+    "mc_binary_path": "/usr/dss/nkv-minio/mc",
+    "conf_json_bucket_suffix": "/dss/conf.json",
     "prometheus_port_num": 8000,
     "polling_interval_secs": 1,
     "cluster_id": "c01",
