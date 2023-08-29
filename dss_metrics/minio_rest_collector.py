@@ -67,9 +67,8 @@ class MinioRESTCollector(object):
             tags['type'] = self.TYPE
 
             for metric in minio_metrics:
-                if self.filter:
-                    if not self.check_whitelist_key(metric[0]):
-                        continue
+                if self.filter and not self.check_whitelist_key(metric[0]):
+                    continue
                 metrics_data_buffer.append(
                     metrics.MetricInfo(
                         metric[0], metric[0], metric[1], tags, time.time())
@@ -98,27 +97,25 @@ class MinioRESTCollector(object):
         if local_minio_host:
             conf_json_path = local_minio_host + self.conf_json_bucket_suffix
             get_conf_json_cmd = self.mc + " cat " + conf_json_path
-            proc = subprocess.Popen(get_conf_json_cmd.split(' '), stdout=subprocess.PIPE)
+            proc = subprocess.Popen(get_conf_json_cmd.split(' '),
+                                    stdout=subprocess.PIPE)
             dss_conf_dict = json.loads(proc.communicate()[0].decode('utf-8'))
 
-            if dss_conf_dict:
-                try:
-                    for cluster in dss_conf_dict["clusters"]:
-                        minio_cluster_id = cluster["id"]
-                        minio_endpoints = set()
-                        for endpoint_info in cluster["endpoints"]:
-                            minio_endpoints.add(
-                                endpoint_info["ipv4"] + ":"
-                                + str(endpoint_info["port"])
-                            )
-                        miniocluster_endpoint_map[minio_cluster_id] = (
-                            minio_endpoints)
-                except KeyError as error:
-                    print(
-                        f"conf.json missing cluster information: {str(error)}"
-                    )
-            else:
-                raise ValueError("Unable to read conf.json")
+            try:
+                for cluster in dss_conf_dict["clusters"]:
+                    minio_cluster_id = cluster["id"]
+                    minio_endpoints = set()
+                    for endpoint_info in cluster["endpoints"]:
+                        minio_endpoints.add(
+                            endpoint_info["ipv4"] + ":"
+                            + str(endpoint_info["port"])
+                        )
+                    miniocluster_endpoint_map[minio_cluster_id] = (
+                        minio_endpoints)
+            except KeyError as error:
+                print(
+                    f"conf.json missing cluster information: {str(error)}"
+                )
         else:
             raise ValueError("Unable to find local minio host/endpoint")
 
