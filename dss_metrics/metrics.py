@@ -116,7 +116,6 @@ class MetricsCollector(object):
         # populate Prometheus metric objects
         for m in metrics_data_buffer:
             metric = Metric(m.name, m.key, 'gauge')
-            print(f"METRIC: {metric}")
             metric.add_sample(
                 m.name,
                 value=m.value,
@@ -124,7 +123,6 @@ class MetricsCollector(object):
                 timestamp=m.timestamp
             )
             metrics.append(metric)
-        print(f"DEBUG: COLLECTED METRICS: {metrics}")
         return metrics
 
 
