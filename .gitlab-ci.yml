@@ -1,6 +1,7 @@
 variables:
   BRANCH_NAME: $CI_COMMIT_BRANCH
   SONAR_BRANCH: -Dsonar.branch.name=$CI_COMMIT_BRANCH
+  PYTEST_COV_REPORT: .coverage-reports/coverage-datamover.xml
 
 workflow:
   rules:
@@ -14,15 +15,12 @@ workflow:
 image:
   name: dss-build_$BRANCH_NAME
 
-cache:
-  paths:
-    - bw-output
-    - dss_client/build
-
 stages:
   - build
-  - scan
+  - test
   - lint
+  - scan
+  - archive
 
 build dss_client:
   stage: build
@@ -30,12 +28,12 @@ build dss_client:
     - git config --global http.sslVerify false
     - ./dss_client/scripts/getrdddeps.sh
     - build-wrapper-linux-x86-64 --out-dir bw-output/ ./dss_client/scripts/build.sh
-    - /stagemergeartifacts.sh
-  variables:
-    DSSGLOBLIST: "dss_client-*.tgz"
   artifacts:
+    name: dss client build
+    expire_in: 300 seconds
     paths:
-      - dss_client/dss_client-*.tgz
+      - dss_client
+      - bw-output
 
 package datamover:
   stage: build
@@ -44,25 +42,61 @@ package datamover:
     - git fetch --tags
     - export RELEASESTRING=$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD)
     - git archive --format=tgz -19 --output="nkv-datamover-$RELEASESTRING.tgz" HEAD:dss_datamover
-    - /stagemergeartifacts.sh
-  variables:
-    DSSGLOBLIST: "nkv-datamover-*.tgz"
   artifacts:
+    name: datamover package
+    expire_in: 300 seconds
     paths:
       - nkv-datamover-*.tgz
 
+datamover unit test:
+  stage: test
+  script:
+    # Install dependencies to execute Datamover unit tests
+    - yum install libcap-devel -y
+    - python3 -m pip install -r dss_datamover/requirements.txt
+    - python3 -m pip install -r dss_datamover/unittests/requirements.txt
+    # Execute Datamover pytest with XML coverage report
+    - cd dss_datamover && mkdir -p .coverage-reports && python3 -m pytest unittests -v -rA --cov=. --cov-report=xml:../$PYTEST_COV_REPORT --color=yes --disable-warnings
+  artifacts:
+    name: datamover unit test coverage report
+    expire_in: 300 seconds
+    paths:
+      - $PYTEST_COV_REPORT
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: $PYTEST_COV_REPORT
+  needs: []
+
+
 sonar-scanner:
   stage: scan
-  script:
-    - sonar-scanner $SONAR_BRANCH
+  script: sonar-scanner $SONAR_BRANCH -Dsonar.python.coverage.reportPaths=$PYTEST_COV_REPORT
   allow_failure: true
+  dependencies:
+    - datamover unit test
+    - build dss_client
 
 pycodestyle:
   stage: lint
-  script: "pycodestyle $PROJECT --show-source --show-pep8"
+  script: pycodestyle $PROJECT --show-source --show-pep8
   parallel:
     matrix:
       - PROJECT:
         - dss_ai_benchmark
         - dss_client
         - dss_datamover
+  needs: []
+
+archive dss-ecosystem:
+  stage: archive
+  script: /stagemergeartifacts.sh
+  variables:
+    DSSGLOBLIST: "dss_client-*.tgz nkv-datamover-*.tgz"
+  needs:
+    - build dss_client
+    - package datamover
+  artifacts:
+    paths:
+      - dss_client/dss_client-*.tgz
+      - nkv-datamover-*.tgz
