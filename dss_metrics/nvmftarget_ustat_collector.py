@@ -51,7 +51,7 @@ class NVMFTargetUSTATCollector(object):
         self.filter = filter
         self.TYPE = 'target'
 
-    def poll_statistics(self, metrics_data_buffer):
+    def poll_statistics(self, metrics_data_buffer, exit_flag):
         try:
             cmd = (
                 self.ustat_path + ' -p '
@@ -69,73 +69,97 @@ class NVMFTargetUSTATCollector(object):
         raw_data_queue = []
 
         while True:
-            line = proc.stdout.readline().decode('utf-8')
-            if not line:
+            if exit_flag.is_set():
+                # shutdown USTAT collector
+                self.shutdown_ustat_collector(proc)
+                # store captured metrics
+                self.store_metrics(raw_data_queue,
+                                   subsystem_num_to_nqn_map,
+                                   metrics_data_buffer)
                 break
-            line = line.strip()
-            if line:
-                try:
-                    full_key, value = line.split('=')
-                    whitelist_match = False
 
-                    # filter using whitelist patterns if required
-                    if self.filter:
-                        for regex in self.whitelist_patterns:
-                            if re.match(regex, full_key):
-                                whitelist_match = True
-                                break
+            line = proc.stdout.readline().decode('utf-8')
 
-                    # check if value is a valid promotheus metric value
-                    valid_value_flag = value.replace('.', '').isdigit()
+            if not line or len(line) <= 2 or ('=' not in line):
+                continue
 
-                    fields = full_key.split('.')
-                    subsystem_num = fields[1]
-                    component = fields[2]
-                    metric_name = fields[-1]
+            # process nvmf target USTAT line
+            try:
+                line = line.strip("\n").replace(" ", "")
+                full_key, value = line.split('=')
+                whitelist_match = False
 
-                    if component == 'id' and 'nqn' in metric_name:
-                        subsystem_num_to_nqn_map[subsystem_num] = value
-                    elif 'drive' in component and 'serial' in metric_name:
-                        drive_num_to_drive_serial_map[component] = value
-                    elif 'ip' in metric_name:
-                        valid_value_flag = False
+                # filter using whitelist patterns if required
+                if self.filter:
+                    for regex in self.whitelist_patterns:
+                        if re.match(regex, full_key):
+                            whitelist_match = True
+                            break
 
-                    tags = {}
-                    tags['cluster_id'] = self.cluster_id
-                    tags['target_id'] = socket.gethostname()
-                    tags['type'] = self.TYPE
+                # check if value is a valid promotheus metric value
+                valid_value_flag = value.replace('.', '').isdigit()
 
-                    # we are unsure what metrics have been processed so far, we need to store
-                    # the raw data first and then populate metrics objects when we are sure 
-                    # we have processed the entire ustat output
+                fields = full_key.split('.')
+                subsystem_num = fields[1]
+                component = fields[2]
+                metric_name = fields[-1]
 
-                    data = {
-                      "whitelist_match": whitelist_match,
-                      "valid_value_flag": valid_value_flag, 
-                      "subsystem_num": subsystem_num,
-                      "full_key": full_key,
-                      "metric_name": metric_name,
-                      "value": value,
-                      "tags": tags,
-                      "time": time.time()
-                    }
-                    raw_data_queue.append(data)
+                if component == 'id' and 'nqn' in metric_name:
+                    subsystem_num_to_nqn_map[subsystem_num] = value
+                elif 'drive' in component and 'serial' in metric_name:
+                    drive_num_to_drive_serial_map[component] = value
+                elif 'ip' in metric_name:
+                    valid_value_flag = False
 
-                except Exception as error:
-                    print(f'Failed to handle line {line}, Error: {str(error)}')
+                tags = {}
+                tags['cluster_id'] = self.cluster_id
+                tags['target_id'] = socket.gethostname()
+                tags['type'] = self.TYPE
+
+                """
+                raw data needs to be stored first and then
+                populate metrics objects when we are sure
+                we have processed the entire ustat output
+                """
+
+                data = {
+                    "whitelist_match": whitelist_match,
+                    "valid_value_flag": valid_value_flag,
+                    "subsystem_num": subsystem_num,
+                    "full_key": full_key,
+                    "metric_name": metric_name,
+                    "value": value,
+                    "tags": tags,
+                    "time": time.time()
+                }
+                raw_data_queue.append(data)
+
+            except Exception as error:
+                print(f'Failed to handle line {line}, Error: {str(error)}')
+
+    def shutdown_ustat_collector(self, proc):
         try:
             proc.terminate()
-            for data in raw_data_queue:
-                if data['valid_value_flag'] and self.filter == data['whitelist_match']:
-                    if 'subsystem' in data['subsystem_num'] and data['subsystem_num'] in subsystem_num_to_nqn_map:
-                        data['tags']['subsystem_id'] = (
-                            subsystem_num_to_nqn_map[data['subsystem_num']]
-                        )
-                    metrics_data_buffer.append(
-                       metrics.MetricInfo(data['full_key'], data['metric_name'], data['value'],
-                                            data['tags'], data['time'])
-                    )
-
         except Exception:
             print('ustat process termination exception ', exc_info=True)
             proc.kill()
+
+    def store_metrics(self, raw_data_queue, subsystem_num_to_nqn_map,
+                      metrics_data_buffer):
+        for data in raw_data_queue:
+            if (
+                data['valid_value_flag'] and
+                self.filter == data['whitelist_match']
+            ):
+                if (
+                    'subsystem' in data['subsystem_num'] and
+                    data['subsystem_num'] in subsystem_num_to_nqn_map
+                ):
+                    data['tags']['subsystem_id'] = (
+                        subsystem_num_to_nqn_map[data['subsystem_num']]
+                    )
+                metrics_data_buffer.append(
+                    metrics.MetricInfo(data['full_key'], data['metric_name'],
+                                       data['value'], data['tags'],
+                                       data['time'])
+                )

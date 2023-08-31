@@ -50,18 +50,19 @@ class MetricsCollector(object):
         self.configs = configs
         self.filter = self.configs['filter']
         self.whitelist_patterns = utils.get_whitelist_keys()
+        self.exit_flag = multiprocessing.Event()
 
     def collect(self):
         metrics = self.get_metrics()
         for metric in metrics:
             yield metric
 
-    def create_collector_proc(self, name, obj, metrics_data_buffer):
+    def create_collector_proc(self, name, obj, metrics_data_buffer, exit_flag):
         try:
             proc = multiprocessing.Process(
                 name=name,
                 target=obj.poll_statistics,
-                args=[metrics_data_buffer]
+                args=[metrics_data_buffer, exit_flag]
             )
             return proc
         except Exception as error:
@@ -94,11 +95,14 @@ class MetricsCollector(object):
 
         # initialize collector processes
         collector_procs.append(self.create_collector_proc(
-            "target_ustat", target_ustat_obj, metrics_data_buffer))
+            "target_ustat", target_ustat_obj, metrics_data_buffer,
+            self.exit_flag))
         collector_procs.append(self.create_collector_proc(
-            "minio_ustat", minio_ustat_obj, metrics_data_buffer))
+            "minio_ustat", minio_ustat_obj, metrics_data_buffer,
+            self.exit_flag))
         collector_procs.append(self.create_collector_proc(
-            "minio_rest", minio_rest_obj, metrics_data_buffer))
+            "minio_rest", minio_rest_obj, metrics_data_buffer,
+            self.exit_flag))
 
         # start collectors
         for proc in collector_procs:
@@ -107,7 +111,13 @@ class MetricsCollector(object):
             except Exception as error:
                 print(f"Failed to start proccess {proc.name}: {str(error)}")
 
-        # wait for collectors to finish
+        # run collectors for specified duration
+        time.sleep(self.configs["metrics_agent_runtime_per_interval"])
+
+        # send exit flag to stop collectors
+        self.exit_flag.set()
+
+        # wait for collectors to finish and kill any remaining collectors
         for proc in collector_procs:
             try:
                 proc.join(COLLECTOR_TIMEOUT)

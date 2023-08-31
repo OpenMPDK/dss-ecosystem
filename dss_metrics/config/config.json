@@ -1,4 +1,5 @@
 {
+    "metrics_agent_runtime_per_interval": 10,
     "minio_process_name": "minio",
     "nvmf_target_process_name": "target",
     "ustat_binary_path": "/usr/dss/nkv-sdk/bin/ustat",

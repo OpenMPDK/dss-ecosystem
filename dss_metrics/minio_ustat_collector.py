@@ -53,7 +53,7 @@ class MinioUSTATCollector(object):
         self.filter = filter
         self.TYPE = 'minio'
 
-    def poll_statistics(self, metrics_data_buffer):
+    def poll_statistics(self, metrics_data_buffer, exit_flag):
         minio_uuid = None
         stats_output = {}
         minio_proc_map = {}  # { uuid: proc }
@@ -82,12 +82,18 @@ class MinioUSTATCollector(object):
         device_subsystem_map = utils.get_device_subsystem_map()
         for minio_uuid, proc in minio_proc_map.items():
             while True:
-                line = proc.stdout.readline().decode('utf-8')
-                if not line:
+                if exit_flag.is_set():
+                    # shutdown ustat collector
+                    self.shutdown_ustat_collector(proc)
                     break
-                line = line.strip()
+
+                line = proc.stdout.readline().decode('utf-8')
+                if not line or len(line) <= 2 or ('=' not in line):
+                    continue
+
                 if line:
                     try:
+                        line = line.strip()
                         full_key, value = line.split('=')
                         whitelist_match = False
 
@@ -132,11 +138,13 @@ class MinioUSTATCollector(object):
                     except Exception as error:
                         print('Failed to handle line %s, Error: %s', line,
                               str(error))
-            try:
-                proc.terminate()
-            except Exception:
-                print('ustat process termination exception ', exc_info=True)
-                proc.kill()
+
+    def shutdown_ustat_collector(self, proc):
+        try:
+            proc.terminate()
+        except Exception:
+            print('ustat process termination exception ', exc_info=True)
+            proc.kill()
 
     def get_minio_instances(self):
         proc_name = re.compile(r"^minio$")
