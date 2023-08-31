@@ -81,27 +81,31 @@ class MinioRESTCollector(object):
         return False
 
     def get_miniocluster_endpoint_map(self):
-        get_hosts_cmd = self.mc + " " + "config host list"
-        proc = subprocess.Popen(get_hosts_cmd.split(' '),
-                                stdout=subprocess.PIPE)
+        proc = subprocess.Popen(
+            [self.mc, 'config', 'host', 'list'],
+            stdout=subprocess.PIPE
+        )
         local_minio_host = None
-        miniocluster_endpoint_map = {}  # {<miniocluster> : {<endpoints>} }
-
-        for line in proc.stdout.readlines():
-            # find local minio host or endpoint
-            decoded_line = line.decode('utf-8').strip("\n")
-            if decoded_line.startswith('local_'):
-                local_minio_host = decoded_line
-                break
+        miniocluster_endpoint_map = dict()  # {<miniocluster> : {<endpoints>} }
+        try:
+            for line in proc.stdout.readlines():
+                # find local minio host or endpoint
+                decoded_line = line.decode('utf-8').strip("\n")
+                if decoded_line.startswith('local_'):
+                    local_minio_host = decoded_line.strip()
+                    break
+        except Exception as error:
+            print(f"Unable to read host list: {str(error)}")
+            return {}
 
         if local_minio_host:
             conf_json_path = local_minio_host + self.conf_json_bucket_suffix
-            get_conf_json_cmd = self.mc + " cat " + conf_json_path
-            proc = subprocess.Popen(get_conf_json_cmd.split(' '),
-                                    stdout=subprocess.PIPE)
-            dss_conf_dict = json.loads(proc.communicate()[0].decode('utf-8'))
-
             try:
+                proc = subprocess.Popen([self.mc, 'cat', conf_json_path],
+                                        stdout=subprocess.PIPE)
+                dss_conf_dict = json.loads(
+                    proc.communicate()[0].decode('utf-8'))
+
                 for cluster in dss_conf_dict["clusters"]:
                     minio_cluster_id = cluster["id"]
                     minio_endpoints = set()
@@ -116,6 +120,8 @@ class MinioRESTCollector(object):
                 print(
                     f"conf.json missing cluster information: {str(error)}"
                 )
+            except Exception as error:
+                print(f"Error when processing conf.json: {str(error)}")
         else:
             raise ValueError("Unable to find local minio host/endpoint")
 

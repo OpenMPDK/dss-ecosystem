@@ -42,6 +42,7 @@ import minio_rest_collector
 import nvmftarget_ustat_collector
 
 MetricInfo = namedtuple("MetricInfo", "key, name, value, tags, timestamp")
+COLLECTOR_TIMEOUT = 120
 
 
 class MetricsCollector(object):
@@ -109,7 +110,10 @@ class MetricsCollector(object):
         # wait for collectors to finish
         for proc in collector_procs:
             try:
-                proc.join()
+                proc.join(COLLECTOR_TIMEOUT)
+                if proc.is_alive():
+                    print(f"process {proc.name} is hanging, terminating..")
+                    proc.terminate()
             except Exception as error:
                 print(f"Failed to terminate process {proc.name}: {str(error)}")
 
