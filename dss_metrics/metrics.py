@@ -33,14 +33,16 @@ from collections import namedtuple
 from prometheus_client import start_http_server, Summary, REGISTRY, Metric
 import argparse
 import json
-import minio_collector
 import multiprocessing
-import nvmftarget_collector
 import time
 import utils
 
+import minio_ustat_collector
+import minio_rest_collector
+import nvmftarget_ustat_collector
 
 MetricInfo = namedtuple("MetricInfo", "key, name, value, tags, timestamp")
+COLLECTOR_TIMEOUT = 120
 
 
 class MetricsCollector(object):
@@ -48,11 +50,23 @@ class MetricsCollector(object):
         self.configs = configs
         self.filter = self.configs['filter']
         self.whitelist_patterns = utils.get_whitelist_keys()
+        self.exit_flag = multiprocessing.Event()
 
     def collect(self):
         metrics = self.get_metrics()
         for metric in metrics:
             yield metric
+
+    def create_collector_proc(self, name, obj, metrics_data_buffer, exit_flag):
+        try:
+            proc = multiprocessing.Process(
+                name=name,
+                target=obj.poll_statistics,
+                args=[metrics_data_buffer, exit_flag]
+            )
+            return proc
+        except Exception as error:
+            print(f"Error launching collector {error}")
 
     def get_metrics(self):
         manager = multiprocessing.Manager()
@@ -64,46 +78,54 @@ class MetricsCollector(object):
         num_seconds = self.configs['polling_interval_secs']
         num_iterations = 1
 
-        target_proc = None
-        minio_proc = None
+        collector_procs = []
 
-        try:
-            target_obj = nvmftarget_collector.NVMFTargetCollector(
-                self.configs, num_seconds, num_iterations,
-                self.whitelist_patterns, filter=self.filter
-            )
-            target_proc = multiprocessing.Process(
-                target=target_obj.poll_statistics,
-                args=[metrics_data_buffer]
-            )
-        except Exception as error:
-            print(f"Unable to instantiate target collector: {str(error)}")
+        # initialize collectors
+        target_ustat_obj = nvmftarget_ustat_collector.NVMFTargetUSTATCollector(
+            self.configs, num_seconds, num_iterations, self.whitelist_patterns,
+            filter=self.filter
+        )
+        minio_ustat_obj = minio_ustat_collector.MinioUSTATCollector(
+            self.configs, num_seconds, num_iterations, self.whitelist_patterns,
+            filter=self.filter
+        )
+        minio_rest_obj = minio_rest_collector.MinioRESTCollector(
+            self.configs, self.whitelist_patterns, filter=self.filter
+        )
 
-        try:
-            minio_obj = minio_collector.MinioCollector(
-                self.configs, num_seconds, num_iterations,
-                self.whitelist_patterns, filter=self.filter
-            )
-            minio_proc = multiprocessing.Process(
-                target=minio_obj.poll_statistics,
-                args=[metrics_data_buffer]
-            )
-        except Exception as error:
-            print(f"Unable to instantiate minio collector: {str(error)}")    
+        # initialize collector processes
+        collector_procs.append(self.create_collector_proc(
+            "target_ustat", target_ustat_obj, metrics_data_buffer,
+            self.exit_flag))
+        collector_procs.append(self.create_collector_proc(
+            "minio_ustat", minio_ustat_obj, metrics_data_buffer,
+            self.exit_flag))
+        collector_procs.append(self.create_collector_proc(
+            "minio_rest", minio_rest_obj, metrics_data_buffer,
+            self.exit_flag))
 
-        try:
-            print("\n launching collector processes.. \n")
-            if target_proc:
-                target_proc.start()
-            if minio_proc:
-                minio_proc.start()
+        # start collectors
+        for proc in collector_procs:
+            try:
+                proc.start()
+            except Exception as error:
+                print(f"Failed to start proccess {proc.name}: {str(error)}")
 
-            if target_proc:
-                target_proc.join()
-            if minio_proc:
-                minio_proc.join()
-        except Exception as error:
-            print(f"Failure in collector processes: {str(error)}")
+        # run collectors for specified duration
+        time.sleep(self.configs["metrics_agent_runtime_per_interval"])
+
+        # send exit flag to stop collectors
+        self.exit_flag.set()
+
+        # wait for collectors to finish and kill any remaining collectors
+        for proc in collector_procs:
+            try:
+                proc.join(COLLECTOR_TIMEOUT)
+                if proc.is_alive():
+                    print(f"process {proc.name} is hanging, terminating..")
+                    proc.terminate()
+            except Exception as error:
+                print(f"Failed to terminate process {proc.name}: {str(error)}")
 
         # populate Prometheus metric objects
         for m in metrics_data_buffer:
