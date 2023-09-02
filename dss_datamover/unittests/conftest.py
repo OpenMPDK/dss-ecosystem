@@ -78,11 +78,6 @@ def get_config_dict(get_config_object):
     return get_config_object.get_config()
 
 
-@pytest.fixture(scope="session")
-def get_system_config_dict(get_system_config_object):
-    return get_system_config_object.get_config()
-
-
 @pytest.fixture
 def get_multiprocessing_logger(tmpdir):
     logger_status = Value('i', 0)  # 0=NOT-STARTED, 1=RUNNING, 2=STOPPED
@@ -267,12 +262,12 @@ def get_mock_serversocket(mocker):
 
 
 @pytest.fixture
-def get_master_dryrun(get_system_config_dict, get_pytest_configs):
+def get_master_dryrun(get_config_dict, get_pytest_configs):
     def instantiate_master_object(operation):
-        get_system_config_dict["config"] = get_pytest_configs["config"]
-        get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
-        get_system_config_dict["dryrun"] = True
-        master = Master(operation, get_system_config_dict)
+        get_config_dict["config"] = get_pytest_configs["config"]
+        get_config_dict["dest_path"] = get_pytest_configs["dest_path"]
+        get_config_dict["dryrun"] = True
+        master = Master(operation, get_config_dict)
         print("instantiated master obj")
         master.start()
         print("successfully started master obj")
@@ -281,11 +276,11 @@ def get_master_dryrun(get_system_config_dict, get_pytest_configs):
 
 
 @pytest.fixture
-def get_master(get_system_config_dict, get_pytest_configs):
+def get_master(get_config_dict, get_pytest_configs):
     def instantiate_master_object(operation):
-        get_system_config_dict["config"] = get_pytest_configs["config"]
-        get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
-        master = Master(operation, get_system_config_dict)
+        get_config_dict["config"] = get_pytest_configs["config"]
+        get_config_dict["dest_path"] = get_pytest_configs["dest_path"]
+        master = Master(operation, get_config_dict)
         print("instantiated master obj")
         master.start()
         print("successfully started master obj")
@@ -294,10 +289,10 @@ def get_master(get_system_config_dict, get_pytest_configs):
 
 
 @pytest.fixture
-def get_master_for_indexing(get_system_config_dict, get_pytest_configs):
-    get_system_config_dict["config"] = get_pytest_configs["config"]
-    get_system_config_dict["dest_path"] = get_pytest_configs["dest_path"]
-    master = Master("PUT", get_system_config_dict)
+def get_master_for_indexing(get_config_dict, get_pytest_configs):
+    get_config_dict["config"] = get_pytest_configs["config"]
+    get_config_dict["dest_path"] = get_pytest_configs["dest_path"]
+    master = Master("PUT", get_config_dict)
     return master
 
 

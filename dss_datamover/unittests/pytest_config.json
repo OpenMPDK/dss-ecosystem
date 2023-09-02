@@ -62,5 +62,6 @@
             "required": true
         }
     },
-    "compaction": "yes"
+    "compaction": "yes",
+    "ip_address_family": "IPV4"
 }
