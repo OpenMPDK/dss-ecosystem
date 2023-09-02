@@ -79,12 +79,6 @@ def get_config_dict(get_config_object):
 
 
 @pytest.fixture(scope="session")
-def get_system_config_object():
-    config_obj = config.Config({}, config_filepath="/etc/dss/datamover/config.json")
-    return config_obj
-
-
-@pytest.fixture(scope="session")
 def get_system_config_dict(get_system_config_object):
     return get_system_config_object.get_config()
 
