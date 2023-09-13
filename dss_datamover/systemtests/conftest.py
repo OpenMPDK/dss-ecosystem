@@ -43,7 +43,6 @@ import os
 import pytest
 from multiprocessing import Queue, Value, Lock, Manager, Event
 import shutil
-import random
 
 
 @pytest.fixture(scope="session")
@@ -221,7 +220,7 @@ def setup_large_file(get_pytest_configs):
     if not os.path.exists(path):
         os.mkdir(path)
     file = path + "/" + name
-    count = get_pytest_configs["large_file_size"]*1024*1024 // 4
+    count = get_pytest_configs["large_file_size"] * 1024 * 1024 // 4
     os.system(f"dd if=/dev/zero of={file} bs=4k count={count}")
     yield
     shutil.rmtree(path)
@@ -250,7 +249,7 @@ def get_nfs_cluster(get_system_config_dict, get_multiprocessing_logger):
 
 @pytest.fixture
 def get_client(get_system_config_dict, get_multiprocessing_logger):
-    client_ip = random.choice(get_system_config_dict["clients_hosts_or_ip_addresses"])
+    client_ip = get_system_config_dict["clients_hosts_or_ip_addresses"][0]
     client = Client(0, client_ip, "PUT", get_multiprocessing_logger, get_system_config_dict, get_system_config_dict["fs_config"]["server_as_prefix"])
     yield client
     client.stop(force_flag=True)

@@ -37,8 +37,8 @@ import pytest
 
 
 @pytest.mark.usefixtures(
-   "get_client",
-   "get_system_config_dict"
+    "get_client",
+    "get_system_config_dict"
 )
 class TestClient:
     """
@@ -54,12 +54,12 @@ class TestClient:
         get_client.operation = "GET"
         get_client.make_client_app_command()
         get_client.start()
-    
+
     def test_client_put(self, get_client):
         get_client.operation = "LIST"
         get_client.make_client_app_command()
         get_client.start()
-    
+
     def test_client_put(self, get_client):
         get_client.operation = "DEL"
         get_client.make_client_app_command()

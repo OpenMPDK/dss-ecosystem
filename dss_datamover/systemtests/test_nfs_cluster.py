@@ -37,9 +37,9 @@ import pytest
 
 
 @pytest.mark.usefixtures(
-   "get_nfs_cluster",
-   "get_system_config_dict",
-   "generate_full_ip_prefix"
+    "get_nfs_cluster",
+    "get_system_config_dict",
+    "generate_full_ip_prefix"
 )
 class TestNFSCluster:
     """
@@ -51,7 +51,7 @@ class TestNFSCluster:
         for cluster_ip in get_system_config_dict["nfs"]:
             for nfs_share in get_system_config_dict["nfs"][cluster_ip]:
                 nfs_share_mount = os.path.abspath("/" + cluster_ip + "/" + nfs_share) if \
-                get_nfs_cluster.server_as_prefix else os.path.abspath("/" + nfs_share)
+                    get_nfs_cluster.server_as_prefix else os.path.abspath("/" + nfs_share)
                 assert os.path.exists(nfs_share_mount)
 
     def test_nfs_mount_based_on_prefix(self, get_nfs_cluster, get_system_config_dict, generate_full_ip_prefix):
@@ -60,5 +60,5 @@ class TestNFSCluster:
             break
         get_nfs_cluster.mount_based_on_prefix(prefix)
         nfs_share_mount = os.path.abspath("/" + cluster_ip + "/" + prefix) if \
-                get_nfs_cluster.server_as_prefix else os.path.abspath("/" + prefix)
+            get_nfs_cluster.server_as_prefix else os.path.abspath("/" + prefix)
         assert os.path.exists(nfs_share_mount)
