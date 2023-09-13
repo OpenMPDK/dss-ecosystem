@@ -34,7 +34,8 @@
 
 from utils import config
 from logger import MultiprocessingLogger
-from master_application import Master
+from master_application import Master, Client
+from nfs_cluster import NFSCluster
 from multiprocessing import Queue, Value, Lock
 
 import json
@@ -42,6 +43,7 @@ import os
 import pytest
 from multiprocessing import Queue, Value, Lock, Manager, Event
 import shutil
+import random
 
 
 @pytest.fixture(scope="session")
@@ -102,7 +104,9 @@ def get_multiprocessing_logger(tmpdir):
     logging_path = tmpdir
     logging_level = "INFO"
 
-    logger = MultiprocessingLogger(logger_queue, logger_lock, logger_status)
+    logger = MultiprocessingLogger(logger_queue, logger_status)
+    logger.logging_level = logging_level
+    logger.create_logger_handle()
     logger.config(logging_path, __file__, logging_level)
     logger.start()
 
@@ -208,3 +212,45 @@ def reset_master_obj(get_master):
     # Get the directory prefix keys that are yet to be resumed for PUT operation
     obj.dir_prefixes_to_resume = list()
     obj.resume_flag = False
+
+
+@pytest.fixture
+def setup_large_file(get_pytest_configs):
+    path = get_pytest_configs["large_file_path"]
+    name = "large.file"
+    if not os.path.exists(path):
+        os.mkdir(path)
+    file = path + "/" + name
+    count = get_pytest_configs["large_file_size"]*1024*1024 // 4
+    os.system(f"dd if=/dev/zero of={file} bs=4k count={count}")
+    yield
+    shutil.rmtree(path)
+
+
+@pytest.fixture
+def setup_empty_file(get_pytest_configs):
+    path = get_pytest_configs["empty_file_path"]
+    name = "empty.file"
+    if not os.path.exists(path):
+        os.mkdir(path)
+    file = open(path + "/" + name, 'w')
+    file.close()
+    yield
+    shutil.rmtree(path)
+
+
+@pytest.fixture
+def get_nfs_cluster(get_system_config_dict, get_multiprocessing_logger):
+    get_system_config_dict["nfs"] = get_system_config_dict["fs_config"]["nfs"]
+    get_system_config_dict["server_as_prefix"] = get_system_config_dict["fs_config"]["server_as_prefix"]
+    nfs_cluster = NFSCluster(get_system_config_dict, "ansible", "ansible", get_multiprocessing_logger)
+    yield nfs_cluster
+    nfs_cluster.umount_all()
+
+
+@pytest.fixture
+def get_client(get_system_config_dict, get_multiprocessing_logger):
+    client_ip = random.choice(get_system_config_dict["clients_hosts_or_ip_addresses"])
+    client = Client(0, client_ip, "PUT", get_multiprocessing_logger, get_system_config_dict, get_system_config_dict["fs_config"]["server_as_prefix"])
+    yield client
+    client.stop(force_flag=True)
