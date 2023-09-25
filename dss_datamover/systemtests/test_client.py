@@ -49,22 +49,22 @@ class TestClient:
         get_client.operation = "PUT"
         get_client.make_client_app_command()
         get_client.start()
-	assert get_client.remote_client_status()
+        assert get_client.remote_client_status()
 
     def test_client_get(self, get_client):
         get_client.operation = "GET"
         get_client.make_client_app_command()
         get_client.start()
-	assert get_client.remote_client_status()
+        assert get_client.remote_client_status()
 
     def test_client_list(self, get_client):
         get_client.operation = "LIST"
         get_client.make_client_app_command()
         get_client.start()
-	assert get_client.remote_client_status()
+        assert get_client.remote_client_status()
 
     def test_client_del(self, get_client):
         get_client.operation = "DEL"
         get_client.make_client_app_command()
         get_client.start()
-	assert get_client.remote_client_status()
+        assert get_client.remote_client_status()
