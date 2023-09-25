@@ -97,15 +97,15 @@ class TestDataMover:
     def test_put_large_file(self, get_master, reset_master_obj, setup_data_dir, setup_large_file, get_pytest_configs):
         print("Testing PUT operation with large file")
         get_master.operation = "PUT"
-        get_master.fs_config['nfs'] = {'127.0.0.1': get_pytest_configs['large_file_path']}
-        get_master.prefix = '127.0.0.1' + get_pytest_configs['large_file_path'] + '/'
+        get_master.fs_config['nfs'] = {'localhost': get_pytest_configs['large_file_path']}
+        get_master.prefix = 'localhost' + get_pytest_configs['large_file_path'] + '/'
         get_master.start()
         assert get_master.testcase_passed.value
 
     def test_put_empty_file(self, get_master, reset_master_obj, setup_data_dir, setup_empty_file, get_pytest_configs):
         print("Testing PUT operation with empty file")
         get_master.operation = "PUT"
-        get_master.fs_config['nfs'] = {'127.0.0.1': get_pytest_configs['empty_file_path']}
-        get_master.prefix = '127.0.0.1' + get_pytest_configs['empty_file_path'] + '/'
+        get_master.fs_config['nfs'] = {'localhost': get_pytest_configs['empty_file_path']}
+        get_master.prefix = 'localhost' + get_pytest_configs['empty_file_path'] + '/'
         get_master.start()
         assert get_master.testcase_passed.value
