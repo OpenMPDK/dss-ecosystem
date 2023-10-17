@@ -42,3 +42,9 @@ the read access performance of the DSS Object storage through ML model training.
 A customized benchmark tool based on the original [Wasabi s3-benchmark](https://github.com/wasabi-tech/s3-benchmark) tool.
 
 [DSS s3-benchmark README](./dss_s3benchmark/README.md)
+
+#### DSS s3-benchmark dependencies
+
+Make sure bzip2-devel package is not installed
+Make sure following RPMs are installed CUnit(-devel), libzstd, golang, devtoolset-11 packages. Devtoolset-11 requires centos-release-scl package, aws-sdk-cpp-1.9 package (can also install artifact version of aws sdk)
+Dependencies are listed in `dss_s3benchmark/dependencies.txt`

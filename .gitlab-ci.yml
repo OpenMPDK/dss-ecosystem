@@ -27,6 +27,8 @@ build dss_client:
   script:
     - git config --global http.sslVerify false
     - ./dss_client/scripts/getrdddeps.sh
+    # Install Package Dependencies for S3 benchmark
+    - yum -y install $(cat dss_s3benchmark/dependencies.txt)
     - build-wrapper-linux-x86-64 --out-dir bw-output/ ./dss_client/scripts/build.sh
   artifacts:
     name: dss client build

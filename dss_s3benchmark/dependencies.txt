@@ -1,0 +1,8 @@
+centos-release-scl
+devtoolset-11
+bzip2
+bzip2-libs
+CUnit
+CUnit-devel
+libzstd
+golang

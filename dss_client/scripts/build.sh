@@ -36,6 +36,8 @@ set -e
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 DSS_CLIENT_DIR=$(realpath "$SCRIPT_DIR/..")
 DSS_ECOSYSTEM_DIR=$(realpath "$DSS_CLIENT_DIR/..")
+DSS_S3BENCHMARK_DIR="$DSS_ECOSYSTEM_DIR/dss_s3benchmark"
+S3BENCHPATH="$DSS_S3BENCHMARK_DIR/s3-benchmark"
 TOP_DIR="$DSS_ECOSYSTEM_DIR/.."
 BUILD_DIR="$DSS_CLIENT_DIR/build"
 STAGING_DIR="$BUILD_DIR/staging"
@@ -95,6 +97,15 @@ pushd "$BUILD_DIR"
     make -j
 popd
 
+# Build s3 benchmark
+pushd "$DSS_S3BENCHMARK_DIR"
+    bash scripts/build.sh
+    if [ ! -f "$S3BENCHPATH"]
+    then
+        die "S3 benchmark did not build properly"
+    fi
+popd
+
 # Create dss_client staging dir
 mkdir -p "$STAGING_DIR"
 
@@ -104,6 +115,9 @@ cp "$BUILD_DIR"/test_dss "$STAGING_DIR"
 
 # Copy Client benchmark directory to staging directory
 cp -r "$DSS_CLIENT_DIR/benchmark" "$STAGING_DIR"
+
+# Copy s3 benchmark directory to staging directory
+cp "$S3BENCHPATH" "$STAGING_DIR"
 
 # Copy Client data integrity test to staging directory
 mkdir "$STAGING_DIR/test"
