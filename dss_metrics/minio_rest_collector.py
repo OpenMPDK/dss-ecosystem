@@ -44,8 +44,10 @@ class MinioRESTCollector(object):
         self.configs = configs
         self.whitelist_patterns = whitelist_patterns
         self.filter = filter
-        self.minio_metrics = {'minio_disk_storage_used_bytes'}
-        self.metrics_url_prefix = "http://"
+        self.minio_metrics = {'minio_disk_storage_used_bytes',
+                              'minio_disk_storage_total_capacity_bytes'}
+        self.url_prefix = "http://"
+        self.cluster_id_url_suffix = "/minio/cluster_id"
         self.metrics_url_suffix = "/minio/prometheus/metrics"
         self.mc = configs['mc_binary_path']
         self.conf_json_bucket_suffix = configs['conf_json_bucket_suffix']
@@ -58,11 +60,12 @@ class MinioRESTCollector(object):
         while True:
             if exit_flag.is_set():
                 break
-            for id, endpts in cluster_endpoint_map.items():
+            for _, endpts in cluster_endpoint_map.items():
                 if not endpts or len(endpts) == 0:
                     continue
-                miniocluster_id = id
+
                 minio_endpoint = endpts.pop()
+                miniocluster_id = self.get_minio_cluster_uuid(minio_endpoint)
                 minio_metrics = self.get_minio_metrics_from_endpoint(
                     minio_endpoint)
 
@@ -134,7 +137,7 @@ class MinioRESTCollector(object):
         return miniocluster_endpoint_map
 
     def get_minio_metrics_from_endpoint(self, endpoint):
-        url = self.metrics_url_prefix + endpoint + self.metrics_url_suffix
+        url = self.url_prefix + endpoint + self.metrics_url_suffix
         r = requests.get(url)
         metrics_data = []
         for line in r.text.splitlines():
@@ -142,3 +145,10 @@ class MinioRESTCollector(object):
                 key, val = line.split(" ")
                 metrics_data.append((key, float(val)))
         return metrics_data
+
+    def get_minio_cluster_uuid(self, endpoint):
+        url = (self.url_prefix + endpoint
+               + self.cluster_id_url_suffix)
+        r = requests.get(url)
+        minio_uuid = dict(r.json())["UUID"]
+        return minio_uuid

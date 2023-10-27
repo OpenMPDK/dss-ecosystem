@@ -1,2 +1,3 @@
 pexpect
 prometheus_client
+requests
