@@ -99,8 +99,8 @@ popd
 
 # Build s3 benchmark
 pushd "$DSS_S3BENCHMARK_DIR"
-    bash scripts/build.sh
-    if [ ! -f "$S3BENCHPATH"]
+    scripts/build.sh
+    if [ ! -f "$S3BENCHPATH" ]
     then
         die "S3 benchmark did not build properly"
     fi
