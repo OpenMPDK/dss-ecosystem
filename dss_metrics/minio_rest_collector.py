@@ -64,24 +64,28 @@ class MinioRESTCollector(object):
                 if not endpts or len(endpts) == 0:
                     continue
 
-                minio_endpoint = endpts.pop()
-                miniocluster_id = self.get_minio_cluster_uuid(minio_endpoint)
-                minio_metrics = self.get_minio_metrics_from_endpoint(
-                    minio_endpoint)
+                for minio_endpoint in endpts:
+                    miniocluster_id = self.get_minio_cluster_uuid(
+                        minio_endpoint)
+                    minio_metrics = self.get_minio_metrics_from_endpoint(
+                        minio_endpoint)
 
-                tags = {}
-                tags['cluster_id'] = self.cluster_id
-                tags['target_id'] = socket.gethostname()
-                tags['minio_id'] = miniocluster_id
-                tags['type'] = self.TYPE
+                    tags = {}
+                    tags['cluster_id'] = self.cluster_id
+                    tags['target_id'] = socket.gethostname()
+                    tags['minio_id'] = miniocluster_id
+                    tags['minio_endpoint'] = minio_endpoint
+                    tags['type'] = self.TYPE
 
-                for metric in minio_metrics:
-                    if self.filter and not self.check_whitelist_key(metric[0]):
-                        continue
-                    metrics_data_buffer.append(
-                        metrics.MetricInfo(
-                            metric[0], metric[0], metric[1], tags, time.time())
-                    )
+                    for metric in minio_metrics:
+                        if (self.filter and not
+                                self.check_whitelist_key(metric[0])):
+                            continue
+                        metrics_data_buffer.append(
+                            metrics.MetricInfo(
+                                metric[0], metric[0], metric[1], tags,
+                                time.time())
+                        )
 
     def check_whitelist_key(self, key):
         for regex in self.whitelist_patterns:
