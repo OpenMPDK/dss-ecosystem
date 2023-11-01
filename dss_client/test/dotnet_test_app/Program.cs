@@ -62,7 +62,7 @@ unsafe public class Tester
                 string get_res0_fn = "get1.result";
                 string get_res1_fn = "get2.result";
                 int size = 1024*1024; // 1024 KB 1MB
-                string fname = "/home/pengfei.xu/wksp/data/random_2G.txt";
+                string fname = "path_of_your_local_file";
                 Console.WriteLine("---------------C#: test the creation of dss client -------------");
                 void* dss_client = DSSClientInit(end_point, name, psw, "12345", 256);
                 if (dss_client == null) {Console.WriteLine("Client creation Failed"); return;}
