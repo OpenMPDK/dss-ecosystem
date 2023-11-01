@@ -1272,6 +1272,50 @@ namespace dss {
 		return ret;
 	}
 
+	extern "C" int PutObject(DSSClient c, void* key_name, int key_len, char* src_file) 
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
+		std::string key_str ((char*) key_name, key_len);
+		int ret = -1;
+
+		try {
+			ret = client->PutObject(key_str.c_str(), src_file);
+		} catch(...) {
+			printf("Exception caught in PutObject - %s\n", key_str.c_str());
+		}
+		return ret;
+	}
+
+	extern "C" char* ListObjects(DSSClient c, char* prefix, char* delimit) 
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr){
+			return nullptr;
+		}
+		std::unique_ptr<Objects> objs = client->GetObjects(prefix, delimit);
+		if (objs->GetObjKeys() < 0) {
+			printf("Exception caught in ListObjects - %s\n", prefix);
+			return nullptr;
+		}
+		std::string keys_concat = "";
+		std::string seperator("\n");
+		for (auto key: objs->GetPage()){
+			keys_concat += key + seperator;
+		}
+		char* keys = (char *) malloc(sizeof(char) * keys_concat.length());
+		// TODO: move the memory allocation to the caller (need to know the object name lengths in advance)
+		// the caller would need to free the memory after calling this function
+		if (keys == nullptr) {
+			printf("malloc failed in ListObjects - %s\n", prefix);
+			return nullptr;
+		}
+		strcpy(keys, keys_concat.c_str());
+		return keys;
+	}
+	
 	extern "C" int GetObjectBuffer(DSSClient c, void* key_name, int key_len, unsigned char* buffer, long int buffer_size)
 	{
 		Client *client = (Client*) c;
