@@ -11,7 +11,35 @@ To leverage this tool, the following prerequisites apply:
 *	Access to the appropriate AWS EC2 (or equivalent) compute resource (optimal performance is realized using m4.10xlarge EC2 Ubuntu with 10 GB ENA)
 *	Dependency: Download github.com/openMPDK/dss-sdk repo and compile
 
+Make sure bzip2-devel package is not installed
+Make sure following RPMs are installed CUnit(-devel), libzstd, golang, devtoolset-11 packages. Devtoolset-11 requires centos-release-scl package, aws-sdk-cpp-1.9 package (can also install artifact version of aws sdk)
+Dependencies are listed in `dss_s3benchmark/dependencies.txt`
+
+
 # Building the Program
+
+## To leverage build script
+clone top level DSS parent repository and run the dss_s3benchmark build script
+
+```
+git clone --recursive https://github.com/OpenMPDK/DSS.git
+cd DSS/dss-sdk/scripts/
+bash build_all.sh kdd-samsung-remote
+cd ../../dss-ecosystem/dss_client/scripts
+bash build.sh
+cd ../../dss_s3benchmark/
+bash scripts/build.sh
+```
+
+After building and attempting to run the binary, you may receive an error if libdss.so is not properly
+installed on the same machine because s3 benchmark depends on the dss client library which is dependent 
+on the aws-sdk v1.9 package.
+
+To resolve this a runtime issue of missing libdss.so, 
+you can create a ```/etc/ld.so.conf.d/s3-benchmark.conf``` 
+and add the path of the libdss.so file to that and run ldconfig
+
+## To build from scratch
 Obtain a local copy of the repository using the following git command with any directory that is convenient:
 
 ```
@@ -89,46 +117,46 @@ Loop 1: GET time 60.1 secs, objects = 5483, speed = 91.3MB/sec, 91.3 operations/
 Loop 1: DELETE time 1.9 secs, 2923.4 deletes/sec.
 Benchmark completed.
 
-./s3-benchmark -a minio -b som4 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 10M -n 100 -o 1
+./s3-benchmark -a minio -b som4 -s minio123 -u <url> -t 100 -z 10M -n 100 -o 1
 Wasabi benchmark program v2.0
-Parameters: url=http://10.1.51.21:9000, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=1, loops=1, size=10M
+Parameters: url=<url>, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=1, loops=1, size=10M
 2021/01/05 18:22:52 WARNING: createBucket som4 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
         status code: 409, request id: 1657835058733E40, host id:
 Loop 1: PUT time 38.9 secs, objects = 10000, speed = 2.5GB/sec, 257.1 operations/sec. Slowdowns = 0
 
-./s3-benchmark -a minio -b som4 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 10M -n 100 -o 2
+./s3-benchmark -a minio -b som4 -s minio123 -u <url> -t 100 -z 10M -n 100 -o 2
 Wasabi benchmark program v2.0
-Parameters: url=http://10.1.51.21:9000, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=2, loops=1, size=10M
+Parameters: url=<url>, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=2, loops=1, size=10M
 2021/01/05 18:23:39 WARNING: createBucket som4 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
         status code: 409, request id: 1657835B38D61A94, host id:
 Loop 1: GET time 14.9 secs, objects = 10000, speed = 6.6GB/sec, 672.1 operations/sec. Slowdowns = 0
 
-./s3-benchmark -a minio -b som4 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 10M -n 100 -o 3
+./s3-benchmark -a minio -b som4 -s minio123 -u <url> -t 100 -z 10M -n 100 -o 3
 Wasabi benchmark program v2.0
-Parameters: url=http://10.1.51.21:9000, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=3, loops=1, size=10M
+Parameters: url=<url>, bucket=som4, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=3, loops=1, size=10M
 2021/01/05 18:24:04 WARNING: createBucket som4 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
         status code: 409, request id: 16578360FD53602A, host id:
 Loop 1: DELETE time 4.3 secs, 2342.4 deletes/sec. Slowdowns = 0
 
 //Prefix based run
-root@msl-ssg-si04 s3-bench]./s3-benchmark -a minio -b som10 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 1M -n 100 -o 1 -p samsung-s3-bench
+root@msl-ssg-si04 s3-bench]./s3-benchmark -a minio -b som10 -s minio123 -u <url> -t 100 -z 1M -n 100 -o 1 -p samsung-s3-bench
 Wasabi benchmark program v2.0
-Parameters: url=http://10.1.51.21:9000, bucket=som10, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=1, loops=1, size=1M
+Parameters: url=<url>, bucket=som10, region=us-east-1, duration=60, threads=100, num_ios=100, op_type=1, loops=1, size=1M
 2021/02/17 17:08:12 WARNING: createBucket som10 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
         status code: 409, request id: 1664B231AFA7F9A4, host id:
 Loop 1: PUT time 4.6 secs, objects = 10000, speed = 2.1GB/sec, 2157.8 operations/sec. Slowdowns = 0
 
 //Time based read
 
-root@msl-ssg-si04 s3-bench]./s3-benchmark -a minio -b som10 -s minio123 -u http://10.1.51.21:9000 -t 100 -z 1M -d 30 -c 100 -o 2 -p samsung-s3-bench
+root@msl-ssg-si04 s3-bench]./s3-benchmark -a minio -b som10 -s minio123 -u <url> -t 100 -z 1M -d 30 -c 100 -o 2 -p samsung-s3-bench
 Wasabi benchmark program v2.0
-Parameters: url=http://10.1.51.21:9000, bucket=som10, region=us-east-1, duration=30, threads=100, num_ios=0, op_type=2, loops=1, size=1M
+Parameters: url=<url>, bucket=som10, region=us-east-1, duration=30, threads=100, num_ios=0, op_type=2, loops=1, size=1M
 2021/02/17 17:06:55 WARNING: createBucket som10 error, ignoring BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
         status code: 409, request id: 1664B21FB5A67930, host id:
 Loop 1: GET time 30.0 secs, objects = 201106, speed = 6.5GB/sec, 6700.2 operations/sec. Slowdowns = 0
 
 //Gen2 RDD way
-./s3-benchmark -a minio -b rddtest207 -s minio123 -u http://208.0.0.33:9000 -t 100 -z 1M -c 1000 -d 20 -o 2 -p dss-gen2-test-207 -rdd 1 -rdd_ips 207.0.0.30,207.0.0.31,207.0.0.32,207.0.0.33 -rdd_port 1234 -instance_id 3
+./s3-benchmark -a minio -b rddtest207 -s minio123 -u <url> -t 100 -z 1M -c 1000 -d 20 -o 2 -p dss-gen2-test-207 -rdd 1 -rdd_ips <rddip>,<rddip>,<rddip>,<rddip> -rdd_port 1234 -instance_id 3
 
 ```
 
