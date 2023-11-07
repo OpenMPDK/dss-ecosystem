@@ -33,7 +33,10 @@ from collections import namedtuple
 from prometheus_client import start_http_server, Summary, REGISTRY, Metric
 import argparse
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 import multiprocessing
+import os
 import time
 import utils
 
@@ -51,6 +54,7 @@ class MetricsCollector(object):
         self.filter = self.configs['filter']
         self.whitelist_patterns = utils.get_whitelist_keys()
         self.exit_flag = multiprocessing.Event()
+        self.logger = logging.getLogger('root')
 
     def collect(self):
         metrics = self.get_metrics()
@@ -66,14 +70,14 @@ class MetricsCollector(object):
             )
             return proc
         except Exception as error:
-            print(f"Error launching collector {error}")
+            logger.error(f"Error launching collector {error}")
 
     def get_metrics(self):
         manager = multiprocessing.Manager()
         metrics_data_buffer = manager.list()
         metrics = []
 
-        print("collecting metrics from DSS cluster..")
+        logger.info("collecting metrics from DSS cluster..")
 
         num_seconds = self.configs['polling_interval_secs']
         num_iterations = 1
@@ -109,7 +113,7 @@ class MetricsCollector(object):
             try:
                 proc.start()
             except Exception as error:
-                print(f"Failed to start proccess {proc.name}: {str(error)}")
+                logger.error(f"Failed to start {proc.name}:{str(error)}")
 
         # run collectors for specified duration
         time.sleep(self.configs["metrics_agent_runtime_per_interval"])
@@ -122,10 +126,10 @@ class MetricsCollector(object):
             try:
                 proc.join(COLLECTOR_TIMEOUT)
                 if proc.is_alive():
-                    print(f"process {proc.name} is hanging, terminating..")
+                    logger.warning(f"process {proc.name} hanging, terminating")
                     proc.terminate()
             except Exception as error:
-                print(f"Failed to terminate process {proc.name}: {str(error)}")
+                logger.error(f"Failed to terminate {proc.name}: {str(error)}")
 
         # populate Prometheus metric objects
         for m in metrics_data_buffer:
@@ -141,6 +145,7 @@ class MetricsCollector(object):
 
 
 if __name__ == '__main__':
+
     # load CLI args
     parser = argparse.ArgumentParser(description='DSS Metrics Agent CLI')
     parser.add_argument(
@@ -167,8 +172,34 @@ if __name__ == '__main__':
     # merge configs
     configs.update(cli_args)
 
+    # create logger
+    logfile_path = configs["logging_file"]
+    if not logfile_path:
+        raise ValueError("Missing logging_file parameter in config file")
+
+    os.makedirs(os.path.dirname(logfile_path), exist_ok=True)
+    if not os.path.exists(logfile_path):
+        os.mknod(logfile_path)
+
+    log_format = (
+        logging.Formatter('%(asctime)s %(levelname)s:%(name)s %(message)s')
+    )
+    logger = logging.getLogger('root')
+    logger.setLevel(logging.INFO)
+
+    # max size of log file set to 100MB
+    file_handler = RotatingFileHandler(logfile_path, mode='a',
+                                       maxBytes=100*1024*1024, backupCount=1,
+                                       encoding=None, delay=0)
+    console_handler = logging.StreamHandler()
+    file_handler.setFormatter(log_format)
+    console_handler.setFormatter(log_format)
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    logger.info("Successfully created logger!")
+
     # expose metrics on promotheus endpoint
-    print("\n\n starting http server.... \n\n")
+    logger.info("\n\n starting http server.... \n\n")
     try:
         start_http_server(8000)
         REGISTRY.register(
@@ -177,4 +208,4 @@ if __name__ == '__main__':
         while True:
             time.sleep(1)
     except Exception as error:
-        print(f"Failed to start Metrics http server: {str(error)}")
+        logger.info(f"Failed to start Metrics http server: {str(error)}")

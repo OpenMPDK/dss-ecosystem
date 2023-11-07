@@ -31,6 +31,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import json
+import logging
 import metrics
 import os
 import re
@@ -52,6 +53,7 @@ class MinioUSTATCollector(object):
         self.whitelist_patterns = whitelist_patterns
         self.filter = filter
         self.TYPE = 'minio'
+        self.logger = logging.getLogger('root')
 
     def poll_statistics(self, metrics_data_buffer, exit_flag):
         minio_uuid = None
@@ -77,7 +79,7 @@ class MinioUSTATCollector(object):
                 stats_output['time'] = collection_time
                 minio_proc_map[minio_uuid] = proc
             except Exception as error:
-                print(f'Caught exception while running USTAT {str(error)}')
+                self.logger.error(f'Error while running USTAT {str(error)}')
 
         device_subsystem_map = utils.get_device_subsystem_map()
         for minio_uuid, proc in minio_proc_map.items():
@@ -136,14 +138,14 @@ class MinioUSTATCollector(object):
                                                    value, tags, time.time())
                             )
                     except Exception as error:
-                        print('Failed to handle line %s, Error: %s', line,
-                              str(error))
+                        self.logger.error('Error handling line %s, Error: %s',
+                                          line, str(error))
 
     def shutdown_ustat_collector(self, proc):
         try:
             proc.terminate()
         except Exception:
-            print('ustat process termination exception ', exc_info=True)
+            self.logger.warning('failed to terminate ustat', exc_info=True)
             proc.kill()
 
     def get_minio_instances(self):
@@ -153,7 +155,7 @@ class MinioUSTATCollector(object):
         try:
             pid_list = utils.find_process_pid(proc_name, cmds)
         except Exception as error:
-            print(
+            self.logger.error(
                 f'Error: unable to get MINIO PID list {str(error)}'
             )
         return pid_list

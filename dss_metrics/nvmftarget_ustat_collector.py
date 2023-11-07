@@ -30,6 +30,7 @@ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+import logging
 import metrics
 import re
 import socket
@@ -50,6 +51,7 @@ class NVMFTargetUSTATCollector(object):
         self.whitelist_patterns = whitelist_patterns
         self.filter = filter
         self.TYPE = 'target'
+        self.logger = logging.getLogger('root')
 
     def poll_statistics(self, metrics_data_buffer, exit_flag):
         try:
@@ -61,7 +63,7 @@ class NVMFTargetUSTATCollector(object):
             )
             proc = subprocess.Popen(cmd.split(' '), stdout=subprocess.PIPE)
         except Exception as e:
-            print(f'Caught exception while running USTAT {str(e)}')
+            self.logger.error(f'Error while running USTAT {str(e)}')
             return
 
         subsystem_num_to_nqn_map = {}
@@ -134,14 +136,14 @@ class NVMFTargetUSTATCollector(object):
                 }
                 raw_data_queue.append(data)
 
-            except Exception as error:
-                print(f'Failed to handle line {line}, Error: {str(error)}')
+            except Exception as e:
+                self.logger.error(f'Failed to handle {line}, Error: {str(e)}')
 
     def shutdown_ustat_collector(self, proc):
         try:
             proc.terminate()
         except Exception:
-            print('ustat process termination exception ', exc_info=True)
+            self.logger.warning('failed to terminate ustat', exc_info=True)
             proc.kill()
 
     def store_metrics(self, raw_data_queue, subsystem_num_to_nqn_map,

@@ -31,6 +31,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import json
+import logging
 import metrics
 import re
 import requests
@@ -53,22 +54,35 @@ class MinioRESTCollector(object):
         self.conf_json_bucket_suffix = configs['conf_json_bucket_suffix']
         self.cluster_id = self.configs['cluster_id']
         self.TYPE = 'minio'
+        self.logger = logging.getLogger('root')
 
     def poll_statistics(self, metrics_data_buffer, exit_flag):
         cluster_endpoint_map = self.get_miniocluster_endpoint_map()
+        cluster_endpoint_map_items = cluster_endpoint_map.items()
 
-        while True:
-            if exit_flag.is_set():
-                break
-            for _, endpts in cluster_endpoint_map.items():
-                if not endpts or len(endpts) == 0:
-                    continue
+        if (not cluster_endpoint_map_items or
+           len(cluster_endpoint_map_items) == 0):
+            self.logger.error("No MINIO endpoints found")
+            raise ValueError("No MINIO endpoints found")
 
-                for minio_endpoint in endpts:
+        all_minio_endpoints = []
+        for _, endpts in cluster_endpoint_map_items:
+            all_minio_endpoints.extend(list(endpts))
+
+        try:
+            while True:
+                if exit_flag.is_set():
+                    break
+
+                for minio_endpoint in all_minio_endpoints:
                     miniocluster_id = self.get_minio_cluster_uuid(
                         minio_endpoint)
                     minio_metrics = self.get_minio_metrics_from_endpoint(
                         minio_endpoint)
+
+                    if not miniocluster_id or not minio_metrics:
+                        self.logger.error("Failed to retrieve MINIO metadata")
+                        raise ValueError("Failed to retrieve MINIO metadata")
 
                     tags = {}
                     tags['cluster_id'] = self.cluster_id
@@ -86,6 +100,10 @@ class MinioRESTCollector(object):
                                 metric[0], metric[0], metric[1], tags,
                                 time.time())
                         )
+                        self.logger.debug(f"{__file__} captured {metric}")
+        except Exception as error:
+            self.logger.error(
+                f"Error: {str(error)} during MINIO REST collection")
 
     def check_whitelist_key(self, key):
         for regex in self.whitelist_patterns:
