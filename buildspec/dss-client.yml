@@ -13,8 +13,6 @@ phases:
     commands:
       # Download and extract RDD libs from prior dss-sdk target artifact for this branch
       - ./dss_client/scripts/getrdddeps.sh
-      # Install Package Dependencies for S3 benchmark
-      - yum -y install $(cat dss_s3benchmark/dependencies.txt)
   build:
     commands:
       # Build dss-client with Sonar build-wrapper for C/C++ static analysis
