@@ -32,17 +32,23 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import json
 import logging
-import metrics
 import re
 import requests
 import socket
 import subprocess
 import time
 
+import metrics
 
-class MinioRESTCollector(object):
-    def __init__(self, configs, whitelist_patterns, filter=False):
+from prometheus_client import Metric
+from prometheus_client.registry import Collector
+
+
+class MinioRESTCollector(Collector):
+    def __init__(self, configs, metrics_scopes, whitelist_patterns,
+                 filter=False):
         self.configs = configs
+        self.metrics_scopes = metrics_scopes
         self.whitelist_patterns = whitelist_patterns
         self.filter = filter
         self.minio_metrics = {'minio_disk_storage_used_bytes',
@@ -53,10 +59,12 @@ class MinioRESTCollector(object):
         self.mc = configs['mc_binary_path']
         self.conf_json_bucket_suffix = configs['conf_json_bucket_suffix']
         self.cluster_id = self.configs['cluster_id']
-        self.TYPE = 'minio'
-        self.logger = logging.getLogger('root')
+        self.TYPE = 'minio_rest'
+        self.logger = logging.getLogger(metrics.APP_NAME)
 
-    def poll_statistics(self, metrics_data_buffer, exit_flag):
+    def collect(self):
+        self.logger.debug("--- MINIO REST COLLECTOR ---")
+
         cluster_endpoint_map = self.get_miniocluster_endpoint_map()
         cluster_endpoint_map_items = cluster_endpoint_map.items()
 
@@ -70,40 +78,53 @@ class MinioRESTCollector(object):
             all_minio_endpoints.extend(list(endpts))
 
         try:
-            while True:
-                if exit_flag.is_set():
-                    break
+            for minio_endpoint in all_minio_endpoints:
+                miniocluster_id = self.get_minio_cluster_uuid(
+                    minio_endpoint)
+                minio_metrics = self.get_minio_metrics_from_endpoint(
+                    minio_endpoint)
 
-                for minio_endpoint in all_minio_endpoints:
-                    miniocluster_id = self.get_minio_cluster_uuid(
-                        minio_endpoint)
-                    minio_metrics = self.get_minio_metrics_from_endpoint(
-                        minio_endpoint)
+                if not miniocluster_id or not minio_metrics:
+                    self.logger.error("Failed to retrieve MINIO metadata")
+                    raise ValueError("Failed to retrieve MINIO metadata")
 
-                    if not miniocluster_id or not minio_metrics:
-                        self.logger.error("Failed to retrieve MINIO metadata")
-                        raise ValueError("Failed to retrieve MINIO metadata")
+                tags = {}
+                tags['cluster_id'] = self.cluster_id
+                tags['target_id'] = socket.gethostname()
+                tags['minio_id'] = miniocluster_id
+                tags['minio_endpoint'] = minio_endpoint
+                tags['type'] = self.TYPE
 
-                    tags = {}
-                    tags['cluster_id'] = self.cluster_id
-                    tags['target_id'] = socket.gethostname()
-                    tags['minio_id'] = miniocluster_id
-                    tags['minio_endpoint'] = minio_endpoint
-                    tags['type'] = self.TYPE
+                for key, value in minio_metrics:
+                    if (self.filter and not
+                            self.check_whitelist_key(key)):
+                        continue
 
-                    for metric in minio_metrics:
-                        if (self.filter and not
-                                self.check_whitelist_key(metric[0])):
-                            continue
-                        metrics_data_buffer.append(
-                            metrics.MetricInfo(
-                                metric[0], metric[0], metric[1], tags,
-                                time.time())
-                        )
-                        self.logger.debug(f"{__file__} captured {metric}")
+                    # check if scope applies to metric
+                    scope = self.get_metric_scope(key)
+                    if scope:
+                        tags['scope'] = scope
+
+                    name = key
+                    metric = Metric(name, key, 'gauge')
+                    metric.add_sample(
+                        name,
+                        value=value,
+                        labels=tags,
+                        timestamp=time.time()
+                    )
+                    self.logger.debug(f"collected: {metric}")
+                    yield metric
+
         except Exception as error:
             self.logger.error(
                 f"Error: {str(error)} during MINIO REST collection")
+
+    def get_metric_scope(self, key):
+        for regex in self.metrics_scopes.keys():
+            if re.match(regex, key):
+                return self.metrics_scopes[regex]
+        return None
 
     def check_whitelist_key(self, key):
         for regex in self.whitelist_patterns:
@@ -126,7 +147,7 @@ class MinioRESTCollector(object):
                     local_minio_host = decoded_line.strip()
                     break
         except Exception as error:
-            print(f"Unable to read host list: {str(error)}")
+            self.logger.error(f"Unable to read host list: {str(error)}")
             return {}
 
         if local_minio_host:
@@ -148,12 +169,14 @@ class MinioRESTCollector(object):
                     miniocluster_endpoint_map[minio_cluster_id] = (
                         minio_endpoints)
             except KeyError as error:
-                print(
+                self.logger.error(
                     f"conf.json missing cluster information: {str(error)}"
                 )
             except Exception as error:
-                print(f"Error when processing conf.json: {str(error)}")
+                self.logger.error(
+                    f"Error when processing conf.json: {str(error)}")
         else:
+            self.logger.error("Unable to find local minio host/endpoint")
             raise ValueError("Unable to find local minio host/endpoint")
 
         return miniocluster_endpoint_map

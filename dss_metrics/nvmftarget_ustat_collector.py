@@ -31,18 +31,23 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 import logging
-import metrics
 import re
 import socket
 import subprocess
 import time
 import utils
 
+import metrics
 
-class NVMFTargetUSTATCollector(object):
-    def __init__(self, configs, seconds, num_iterations,
+from prometheus_client import Metric
+from prometheus_client.registry import Collector
+
+
+class NVMFTargetUSTATCollector(Collector):
+    def __init__(self, configs, metrics_scopes, seconds, num_iterations,
                  whitelist_patterns, filter=False):
         self.configs = configs
+        self.metrics_scopes = metrics_scopes
         self.ustat_path = self.configs['ustat_binary_path']
         self.cluster_id = self.configs['cluster_id']
         self.nvmf_pid, status = utils.check_spdk_running()
@@ -50,10 +55,12 @@ class NVMFTargetUSTATCollector(object):
         self.num_iterations = num_iterations
         self.whitelist_patterns = whitelist_patterns
         self.filter = filter
-        self.TYPE = 'target'
-        self.logger = logging.getLogger('root')
+        self.TYPE = 'target_ustat'
+        self.logger = logging.getLogger(metrics.APP_NAME)
 
-    def poll_statistics(self, metrics_data_buffer, exit_flag):
+    def collect(self):
+        self.logger.debug("--- NVMF Target USTAT COLLECTOR ---")
+
         try:
             cmd = (
                 self.ustat_path + ' -p '
@@ -71,19 +78,16 @@ class NVMFTargetUSTATCollector(object):
         raw_data_queue = []
 
         while True:
-            if exit_flag.is_set():
-                # shutdown USTAT collector
-                self.shutdown_ustat_collector(proc)
-                # store captured metrics
-                self.store_metrics(raw_data_queue,
-                                   subsystem_num_to_nqn_map,
-                                   metrics_data_buffer)
-                break
-
-            line = proc.stdout.readline().decode('utf-8')
-
-            if not line or len(line) <= 2 or ('=' not in line):
-                continue
+            # loop until no more output left in USTAT
+            try:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                line = line.decode('utf-8')
+                if len(line) <= 2 or ('=' not in line):
+                    continue
+            except Exception as e:
+                self.logger.error(f"error processing Target USTAT: {str(e)}")
 
             # process nvmf target USTAT line
             try:
@@ -135,19 +139,13 @@ class NVMFTargetUSTATCollector(object):
                     "time": time.time()
                 }
                 raw_data_queue.append(data)
-
             except Exception as e:
                 self.logger.error(f'Failed to handle {line}, Error: {str(e)}')
 
-    def shutdown_ustat_collector(self, proc):
-        try:
-            proc.terminate()
-        except Exception:
-            self.logger.warning('failed to terminate ustat', exc_info=True)
-            proc.kill()
+        # shutdown USTAT collector subprocess
+        self.shutdown_ustat_collector(proc)
 
-    def store_metrics(self, raw_data_queue, subsystem_num_to_nqn_map,
-                      metrics_data_buffer):
+        # All of USTAT output processed, now Metric objects can be populated
         for data in raw_data_queue:
             if (
                 data['valid_value_flag'] and
@@ -160,8 +158,31 @@ class NVMFTargetUSTATCollector(object):
                     data['tags']['subsystem_id'] = (
                         subsystem_num_to_nqn_map[data['subsystem_num']]
                     )
-                metrics_data_buffer.append(
-                    metrics.MetricInfo(data['full_key'], data['metric_name'],
-                                       data['value'], data['tags'],
-                                       data['time'])
+
+                # check if scope applies to metric
+                scope = self.get_metric_scope(data['full_key'])
+                if scope:
+                    data['tags']['scope'] = scope
+
+                metric = Metric(data['metric_name'], data['full_key'], 'gauge')
+                metric.add_sample(
+                    data['metric_name'],
+                    value=data['value'],
+                    labels=data['tags'],
+                    timestamp=data['time']
                 )
+                self.logger.debug(f"collected: {metric}")
+                yield metric
+
+    def shutdown_ustat_collector(self, proc):
+        try:
+            proc.terminate()
+        except Exception:
+            self.logger.warning('failed to terminate ustat', exc_info=True)
+            proc.kill()
+
+    def get_metric_scope(self, key):
+        for regex in self.metrics_scopes.keys():
+            if re.match(regex, key):
+                return self.metrics_scopes[regex]
+        return None
