@@ -56,9 +56,7 @@ LOGGING_LEVEL = {
     "FATAL": logging.FATAL
 }
 
-
 if __name__ == '__main__':
-
     # load CLI args
     parser = argparse.ArgumentParser(description='DSS Metrics Agent CLI')
     parser.add_argument(
