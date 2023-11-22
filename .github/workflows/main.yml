@@ -42,5 +42,6 @@ jobs:
     with:
       component: sonar-scanner
       project-name: OpenMPDK_dss-ecosystem
+      image: sonarsource/sonar-scanner-cli:latest
     secrets: inherit
     needs: [unit, build]
