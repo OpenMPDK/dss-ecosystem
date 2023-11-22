@@ -32,7 +32,7 @@ phases:
           -Dsonar.host.url=https://sonarcloud.io \
           -Dsonar.pullrequest.github.summary_comment=true \
           -Dsonar.pullrequest.github.repository=OpenMPDK/dss-ecosystem \
-          -Dsonar.pullrequest.key=$(echo $GITHUB_REF | grep -oE "^refs/pull/\K[^/]+") \
+          -Dsonar.pullrequest.key=$(echo $GITHUB_REF | sed -r "s|^refs/pull/([[:digit:]]+)/.+|\1|g") \
           -Dsonar.pullrequest.base=$GITHUB_BASE_REF \
           -Dsonar.pullrequest.branch=$GITHUB_HEAD_REF \
           -Dsonar.python.coverage.reportPaths=.coverage-reports/coverage-datamover.xml
