@@ -28,8 +28,8 @@ phases:
       - echo "***** DEBUGGING *****"
       - pwd
       - ls -al
-      - ls dss_client/
-      - ls dss_client/build/
+      - ls "$CODEBUILD_SRC_DIR/dss_client/"
+      - ls "$CODEBUILD_SRC_DIR/dss_client/build/"
       # Run sonar-scanner and ingest coverage report(s)
       - |
         sonar-scanner \
