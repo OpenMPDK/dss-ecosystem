@@ -25,6 +25,11 @@ phases:
       - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" .coverage-reports/*.xml
   build:
     commands:
+      - echo "***** DEBUGGING *****"
+      - pwd
+      - ls -al
+      - ls dss_client/
+      - ls dss_client/build/
       # Run sonar-scanner and ingest coverage report(s)
       - |
         sonar-scanner \
