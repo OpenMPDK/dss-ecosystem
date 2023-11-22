@@ -11,7 +11,7 @@ phases:
   pre_build:
     commands:
       # Install aws-cli
-      apk add --no-cache aws-cli
+      - apk add --no-cache aws-cli
       # Download build wrapper output from dss-client build job
       - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/sonar" . --only-show-errors
       # Download unit test coverage report(s)
