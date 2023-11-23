@@ -30,13 +30,12 @@ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import json
 import logging
 import re
 import requests
 import socket
-import subprocess
 import time
+import utils
 
 import metrics
 
@@ -65,7 +64,8 @@ class MinioRESTCollector(Collector):
     def collect(self):
         self.logger.debug("--- MINIO REST COLLECTOR ---")
 
-        cluster_endpoint_map = self.get_miniocluster_endpoint_map()
+        cluster_endpoint_map = utils.get_miniocluster_endpoint_map(self.mc,
+                                                                   self.logger)
         cluster_endpoint_map_items = cluster_endpoint_map.items()
 
         if (not cluster_endpoint_map_items or
@@ -79,8 +79,9 @@ class MinioRESTCollector(Collector):
 
         try:
             for minio_endpoint in all_minio_endpoints:
-                miniocluster_id = self.get_minio_cluster_uuid(
-                    minio_endpoint)
+                miniocluster_id = utils.get_minio_cluster_uuid(
+                    minio_endpoint, self.url_prefix,
+                    self.cluster_id_url_suffix)
                 minio_metrics = self.get_minio_metrics_from_endpoint(
                     minio_endpoint)
 
@@ -132,55 +133,6 @@ class MinioRESTCollector(Collector):
                 return True
         return False
 
-    def get_miniocluster_endpoint_map(self):
-        proc = subprocess.Popen(
-            [self.mc, 'config', 'host', 'list'],
-            stdout=subprocess.PIPE
-        )
-        local_minio_host = None
-        miniocluster_endpoint_map = dict()  # {<miniocluster> : {<endpoints>} }
-        try:
-            for line in proc.stdout.readlines():
-                # find local minio host or endpoint
-                decoded_line = line.decode('utf-8').strip("\n")
-                if decoded_line.startswith('local_'):
-                    local_minio_host = decoded_line.strip()
-                    break
-        except Exception as error:
-            self.logger.error(f"Unable to read host list: {str(error)}")
-            return {}
-
-        if local_minio_host:
-            conf_json_path = local_minio_host + self.conf_json_bucket_suffix
-            try:
-                proc = subprocess.Popen([self.mc, 'cat', conf_json_path],
-                                        stdout=subprocess.PIPE)
-                dss_conf_dict = json.loads(
-                    proc.communicate()[0].decode('utf-8'))
-
-                for cluster in dss_conf_dict["clusters"]:
-                    minio_cluster_id = cluster["id"]
-                    minio_endpoints = set()
-                    for endpoint_info in cluster["endpoints"]:
-                        minio_endpoints.add(
-                            endpoint_info["ipv4"] + ":"
-                            + str(endpoint_info["port"])
-                        )
-                    miniocluster_endpoint_map[minio_cluster_id] = (
-                        minio_endpoints)
-            except KeyError as error:
-                self.logger.error(
-                    f"conf.json missing cluster information: {str(error)}"
-                )
-            except Exception as error:
-                self.logger.error(
-                    f"Error when processing conf.json: {str(error)}")
-        else:
-            self.logger.error("Unable to find local minio host/endpoint")
-            raise ValueError("Unable to find local minio host/endpoint")
-
-        return miniocluster_endpoint_map
-
     def get_minio_metrics_from_endpoint(self, endpoint):
         url = self.url_prefix + endpoint + self.metrics_url_suffix
         r = requests.get(url)
@@ -190,10 +142,3 @@ class MinioRESTCollector(Collector):
                 key, val = line.split(" ")
                 metrics_data.append((key, float(val)))
         return metrics_data
-
-    def get_minio_cluster_uuid(self, endpoint):
-        url = (self.url_prefix + endpoint
-               + self.cluster_id_url_suffix)
-        r = requests.get(url)
-        minio_uuid = dict(r.json())["UUID"]
-        return minio_uuid
