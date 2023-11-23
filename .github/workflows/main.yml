@@ -38,10 +38,9 @@ jobs:
       project-name: OpenMPDK_dss-ecosystem
     secrets: inherit
   scan:
-    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@32e2895a71f6387a65435388406c414c68086216
+    uses: OpenMPDK/DSS/.github/workflows/build-aws.yml@master
     with:
       component: sonar-scanner
       project-name: OpenMPDK_dss-ecosystem
-      ext_image: sonarsource/sonar-scanner-cli:latest
     secrets: inherit
     needs: [unit, build]
