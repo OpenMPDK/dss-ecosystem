@@ -23,8 +23,8 @@ phases:
       - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" .coverage-reports/*.xml
       # Download the latest sonar-scanner
       - rm -rf /sonar-scanner*
-      - wget --content-disposition -E -c "https://search.maven.org/remote_content?g=org.sonarsource.scanner.cli&a=sonar-scanner-cli&v=LATEST&c=linux&e=zip"
-      - unzip sonar-scanner-cli-*.zip -d /
+      - wget --no-verbose --content-disposition -E -c "https://search.maven.org/remote_content?g=org.sonarsource.scanner.cli&a=sonar-scanner-cli&v=LATEST&c=linux&e=zip"
+      - unzip -q sonar-scanner-cli-*.zip -d /
       - rm -f sonar-scanner-cli*.zip
   build:
     commands:
