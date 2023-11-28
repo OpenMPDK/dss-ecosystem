@@ -16,8 +16,6 @@ phases:
       - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/pytest" . --only-show-errors
       # Download dss_client/build
       - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/dss_client" dss_client/ --only-show-errors
-      # Temporary just to debug
-      - echo "$CODEBUILD_SRC_DIR"
       # replace the old CODEBUILD_SRC_DIR with the current one in bw-output and pytest cov
       - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" bw-output/build-wrapper-dump.json
       - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" .coverage-reports/*.xml
