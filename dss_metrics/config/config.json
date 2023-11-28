@@ -8,7 +8,7 @@
     "prometheus_port_num": 8000,
     "polling_interval_secs": 1,
     "cluster_id": "c01",
-    "logging_level": "info",
+    "logging_level": "INFO",
     "logging_file": "/var/log/dss/metrics_agent.log",
     "metric_categories": ["minio", "target"]
 }
