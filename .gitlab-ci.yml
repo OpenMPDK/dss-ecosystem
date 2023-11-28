@@ -25,9 +25,16 @@ stages:
 build dss_client:
   stage: build
   script:
+    # Download build wrapper from local SonarQube
+    - rm -rf /build-wrapper-linux-x86
+    - wget --no-verbose --content-disposition -E -c "$SONAR_HOST_URL/static/cpp/build-wrapper-linux-x86.zip"
+    - unzip -q build-wrapper-linux-x86.zip -d /
+    # Disable ssl verify from docker build env
     - git config --global http.sslVerify false
+    # Download RDD deps
     - ./dss_client/scripts/getrdddeps.sh
-    - build-wrapper-linux-x86-64 --out-dir bw-output/ ./dss_client/scripts/build.sh
+    # Build client with build-wrapper
+    - /build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir bw-output/ ./dss_client/scripts/build.sh
   artifacts:
     name: dss client build
     expire_in: 300 seconds
@@ -71,7 +78,12 @@ datamover unit test:
 
 sonar-scanner:
   stage: scan
-  script: sonar-scanner $SONAR_BRANCH -Dsonar.python.coverage.reportPaths=$PYTEST_COV_REPORT
+  script:
+    # Download sonar-scanner from local SonarQube
+    - rm -rf /sonar-scanner*
+    - wget --no-verbose --content-disposition -E -c "https://search.maven.org/remote_content?g=org.sonarsource.scanner.cli&a=sonar-scanner-cli&v=LATEST&c=linux&e=zip"
+    - unzip -q sonar-scanner-cli-*.zip -d /
+    - /sonar-scanner-*-linux/bin/sonar-scanner $SONAR_BRANCH -Dsonar.python.coverage.reportPaths=$PYTEST_COV_REPORT
   allow_failure: true
   dependencies:
     - datamover unit test

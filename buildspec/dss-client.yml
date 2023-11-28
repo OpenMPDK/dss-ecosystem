@@ -13,10 +13,14 @@ phases:
     commands:
       # Download and extract RDD libs from prior dss-sdk target artifact for this branch
       - ./dss_client/scripts/getrdddeps.sh
+      # Download latest build-wrapper
+      - rm -rf /build-wrapper-linux-x86
+      - wget --no-verbose --content-disposition -E -c "https://sonarcloud.io/static/cpp/build-wrapper-linux-x86.zip"
+      - unzip -q build-wrapper-linux-x86.zip -d /
   build:
     commands:
       # Build dss-client with Sonar build-wrapper for C/C++ static analysis
-      - build-wrapper-linux-x86-64 --out-dir bw-output ./dss_client/scripts/build.sh
+      - /build-wrapper-linux-x86/build-wrapper-linux-x86-64 --out-dir bw-output ./dss_client/scripts/build.sh
   post_build:
     commands:
       # Copy artifacts to branch dir if this is a merge
