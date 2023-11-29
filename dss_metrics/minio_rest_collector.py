@@ -50,8 +50,13 @@ class MinioRESTCollector(Collector):
         self.metrics_scopes = metrics_scopes
         self.whitelist_patterns = whitelist_patterns
         self.filter = filter
-        self.minio_metrics = {'minio_disk_storage_used_bytes',
-                              'minio_disk_storage_total_capacity_bytes'}
+        # self.minio_metrics = {'minio_disk_storage_used_bytes',
+        #                       'minio_disk_storage_total_capacity_bytes'}
+        self.ignored_minio_metrics = {
+            'minio_http_requests_duration_seconds_bucket',
+            'minio_http_requests_duration_seconds_sum',
+            'minio_http_requests_duration_seconds_count'}
+
         self.url_prefix = "http://"
         self.cluster_id_url_suffix = "/minio/cluster_id"
         self.metrics_url_suffix = "/minio/prometheus/metrics"
@@ -138,7 +143,9 @@ class MinioRESTCollector(Collector):
         r = requests.get(url)
         metrics_data = []
         for line in r.text.splitlines():
-            if (any(line.startswith(metric) for metric in self.minio_metrics)):
+            if (line.startswith("minio")
+                and not (any(line.startswith(x)
+                             for x in self.ignored_minio_metrics))):
                 key, val = line.split(" ")
                 metrics_data.append((key, float(val)))
         return metrics_data
