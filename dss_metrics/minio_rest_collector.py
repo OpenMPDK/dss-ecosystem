@@ -51,7 +51,7 @@ class MinioRESTCollector(Collector):
         self.whitelist_patterns = whitelist_patterns
         self.filter = filter
 
-        self.ignored_minio_metrics = {
+        self.blacklist = {
             'minio_http_requests_duration_seconds_bucket',
             'minio_http_requests_duration_seconds_sum',
             'minio_http_requests_duration_seconds_count'}
@@ -142,9 +142,8 @@ class MinioRESTCollector(Collector):
         r = requests.get(url)
         metrics_data = []
         for line in r.text.splitlines():
-            if (line.startswith("minio")
-                and not (any(line.startswith(x)
-                             for x in self.ignored_minio_metrics))):
+            if line.startswith("minio") and not any(line.startswith(x)
+                                                    for x in self.blacklist):
                 key, val = line.split(" ")
                 metrics_data.append((key, float(val)))
         return metrics_data
