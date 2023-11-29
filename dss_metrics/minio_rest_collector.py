@@ -50,8 +50,7 @@ class MinioRESTCollector(Collector):
         self.metrics_scopes = metrics_scopes
         self.whitelist_patterns = whitelist_patterns
         self.filter = filter
-        # self.minio_metrics = {'minio_disk_storage_used_bytes',
-        #                       'minio_disk_storage_total_capacity_bytes'}
+
         self.ignored_minio_metrics = {
             'minio_http_requests_duration_seconds_bucket',
             'minio_http_requests_duration_seconds_sum',
