@@ -285,9 +285,9 @@ def get_minio_endpoint_from_process(pid, logger):
         stdout=subprocess.PIPE
     )
     minio_cmd = proc.stdout.read().decode("utf-8")
-    endpts_found = re.findall("--address(.*?)/", minio_cmd)
+    endpts_found = re.findall("--address(.*?)(?:http|/)", minio_cmd)
     if endpts_found:
-        minio_endpoint = endpts_found[0].rstrip('\x00').strip('\x00')
+        minio_endpoint = endpts_found[0].rstrip('\x00').strip('\x00').strip(' ')
     else:
         logger.error("Unable to find MINIO Endpt from MINIO process")
         raise ValueError("Unable to find MINIO Endpt from MINIO process")
