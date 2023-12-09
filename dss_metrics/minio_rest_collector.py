@@ -83,11 +83,16 @@ class MinioRESTCollector(Collector):
 
         try:
             for minio_endpoint in all_minio_endpoints:
-                miniocluster_id = utils.get_minio_cluster_uuid(
-                    minio_endpoint, self.url_prefix,
-                    self.cluster_id_url_suffix)
-                minio_metrics = self.get_minio_metrics_from_endpoint(
-                    minio_endpoint)
+                try:
+                    miniocluster_id = utils.get_minio_cluster_uuid(
+                        minio_endpoint, self.url_prefix,
+                        self.cluster_id_url_suffix)
+                    minio_metrics = self.get_minio_metrics_from_endpoint(
+                        minio_endpoint)
+                except Exception as error:
+                    self.logger.error(f"""MINIO ENDPT: {minio_endpoint}
+                                       not reachable, ERROR: {str(error)}""")
+                    continue
 
                 if not miniocluster_id or not minio_metrics:
                     self.logger.error("Failed to retrieve MINIO metadata")
