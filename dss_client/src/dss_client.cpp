@@ -1364,8 +1364,12 @@ namespace dss {
 			keys_concat += key + "\n"; // seperate each key by line assuming there is no "\n" in the object name or directory name or delimiter
 		}
 		if (keys_concat == "") return END_OF_LIST;
-		strncpy(keys, keys_concat.c_str(), keys_concat.length());
 		keys[keys_concat.length()] = '\0';
+		strncpy(keys, keys_concat.c_str(), keys_concat.length());
+		if (keys[keys_concat.length()] != '\0') {
+			printf("the buffer overflow for storing keys\n");
+			return FAILURE;
+		}
 		return cur_pg + 1;
 	}
 
