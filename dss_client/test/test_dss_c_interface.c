@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #include "dss.h"
 
@@ -18,6 +19,45 @@ int hexdump(unsigned char* buff, int size)
 	return 0;
 }
 
+int putRecursive(DSSClient c, char *basePath)
+{
+    int i;
+    char path[1000];
+    struct dirent *dp;
+    DIR *dir = opendir(basePath);
+
+    if (!dir){
+		return 0;
+	}
+
+    while ((dp = readdir(dir)) != NULL)
+    {
+        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0)
+        {
+            strcpy(path, basePath);
+            strcat(path, "/");
+            strcat(path, dp->d_name);
+            // printf("%s\n", path);
+			FILE* fp = fopen(path, "r");
+			if (fp == NULL) { 
+				return 0; 
+			} 
+			fseek(fp, 0L, SEEK_END); 
+			// calculating the size of the file 
+			long int fsize = ftell(fp); 
+			if (dp->d_type == DT_REG && fsize > 0){ // PutObject does not support empty files
+				if (PutObject(c, (void*) path, strlen(path), path) < 0 ){
+					printf("PutObject - %s failed.\n", path);
+					return -1;
+				}
+			}
+            if (putRecursive(c, path) < 0) return -1;
+        }
+    }
+    closedir(dir);
+	return 0;
+}
+
 int main(int argc, char* argv[]) {
 	DSSClient *c;
 	int fd = -1;
@@ -25,6 +65,9 @@ int main(int argc, char* argv[]) {
 	int size = 1024*1024;
 	unsigned char* buff;
 	unsigned char* buff1;
+	int cur_page = -1;
+	int max_key_len = 1024;
+	char* keys_list; 
 	char obj_name[256];
     	char uuid[] = "12345";
 
@@ -38,8 +81,9 @@ int main(int argc, char* argv[]) {
 		printf("Invalid endpoint URL\n");
 		return -1;
 	}
-	if (argc == 5)
+	if (argc >= 5)
 		size = atoi(argv[4]) * 1024;
+
 	buff = (unsigned char*)calloc(1, size);
 	buff1 = (unsigned char*)calloc(1, size);
 
@@ -77,10 +121,50 @@ int main(int argc, char* argv[]) {
 	ret = DeleteObject(c, (void*) obj_name, strlen(obj_name));
 	printf("Object testfile1 deleted\n");
 
+	// upload objects with a directory structure to test LIST
+	if (putRecursive(c, "/etc") < 0 ){
+		printf("Uploading directory failed.\n");
+		goto out;
+	}
+	//test the LIST
+	keys_list = (char*) malloc(sizeof(char) * max_key_len * GetPageSize());
+	if (keys_list == NULL) {
+		printf("malloc failed for allocating buffer to store the LIST results\n");
+		goto out;
+	}
+	while (1){
+		cur_page = ListObjects(c, "", "", keys_list, cur_page); // List all objects with prefix ""
+		if (cur_page == FAILURE){
+			printf("ListObjects failed.\n");
+			goto out;
+		}
+		if (cur_page == END_OF_LIST) break;
+		printf("page index = %d:\n[%s]\n", cur_page, keys_list);
+	}
+	//test the DeleteAll
+	ret = DeleteAll(c, "etc", "");
+	if (ret < 0) {
+		printf("DeleteAll failed.\n");
+		goto out;
+	}
+	//retest the LIST after DeleteAll
+	printf("After DeleteAll:\n");
+	cur_page = -1;
+	while (1){
+		cur_page = ListObjects(c, "", "", keys_list, cur_page); // List all objects with prefix=""
+		if (cur_page == FAILURE){
+			printf("ListObjects failed.\n");
+			goto out;
+		}
+		if (cur_page == END_OF_LIST) break;
+		printf("page index = %d:\n[%s]\n", cur_page, keys_list);
+	}
+
 out:
 	if (fd != -1)
 		close(fd);
 	free(buff);
 	free(buff1);
+	free(keys_list);
 	return ret;
 }

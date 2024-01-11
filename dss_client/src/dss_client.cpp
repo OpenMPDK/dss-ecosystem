@@ -1308,6 +1308,23 @@ namespace dss {
 		return ret;
 	}
 
+	extern "C" int PutObject(DSSClient c, void* key_name, int key_len, char* src_file) 
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr || (char*) key_name == nullptr){
+			return -1;
+		}
+		std::string key_str ((char*) key_name, key_len);
+		int ret = -1;
+
+		try {
+			ret = client->PutObject(key_str.c_str(), src_file);
+		} catch(...) {
+			printf("Exception caught in PutObject - %s\n", key_str.c_str());
+		}
+		return ret;
+	}
+
 	extern "C" int DeleteObject(DSSClient c, void* key_name, int key_len)
 	{
 		Client *client = (Client*) c;
@@ -1323,7 +1340,86 @@ namespace dss {
 			printf("Exception caught in DeleteObject for %s\n", key_str.c_str());
 		}
 		return ret;
-
 	}
+
+	extern "C" int ListObjects(DSSClient c, char* prefix, char* delimit, char* keys, int cur_pg) 
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr){
+			printf("the DSS client cannot be a null pointer.\n");
+			return FAILURE;
+		}
+		if (keys == nullptr){
+			printf("the buffer to store keys cannot be a null pointer.\n");
+			return FAILURE;
+		}
+		if (cur_pg == -1){ // for the first page of list
+			client->list_objs = client->GetObjects(prefix, delimit);
+		}
+		if (client->list_objs->GetObjKeys() < 0) { // reached the end of the pages for LIST
+			return END_OF_LIST;
+		}
+		std::string keys_concat = "";
+		for (std::string key: client->list_objs->GetPage()){
+			keys_concat += key + "\n"; // seperate each key by line assuming there is no "\n" in the object name or directory name or delimiter
+		}
+		if (keys_concat == "") return END_OF_LIST;
+		strncpy(keys, keys_concat.c_str(), keys_concat.length());
+		keys[keys_concat.length()] = '\0';
+		return cur_pg + 1;
+	}
+
+	extern "C" int DeleteAll(DSSClient c, char* prefix, char* delimit)
+	{
+		Client *client = (Client*) c;
+		if (client == nullptr){
+			printf("the DSS client cannot be a null pointer.\n");
+			return FAILURE;
+		}
+		if (prefix == nullptr){
+			printf("the prefix cannot be a null pointer.\n");
+			return FAILURE;
+		}
+		if (delimit == nullptr){
+			printf("the delimiter cannot be a null pointer.\n");
+			return FAILURE;
+		}
+		uint32_t pg_size = DSS_PAGINATION_DEFAULT;
+		int max_key_len = 1024;
+		char* keys = (char*) malloc(sizeof(char) * max_key_len * pg_size);
+		int pg;
+		while (true){
+			pg = ListObjects(client, prefix, delimit, keys, -1); // list the very first page
+			if (pg == FAILURE){
+				printf("ListObjects failed for prefix=\"%s\" and delimit=\"%s\".\n", prefix, delimit);
+				printf("DeleteAll failed for prefix=\"%s\" and delimit=\"%s\".\n", prefix, delimit);
+				free(keys);
+				return FAILURE;
+			}
+			if (pg == END_OF_LIST) break;
+			std::stringstream all_keys(keys);
+			std::string each_key;
+			while (std::getline(all_keys, each_key, '\n')){ // retrieve each key by line
+				try {
+					if (client->DeleteObject(each_key.c_str()) < 0 ){ // delete the very first page listed
+						printf("DeleteObject failed for %s.\n", each_key.c_str());
+						free(keys);
+						return FAILURE;
+					}
+					// printf("Deleting %s\n", each_key.c_str());
+				} catch(...) {
+					printf("Exception caught in DeleteObject for %s.\n", each_key.c_str());
+					free(keys);
+					return FAILURE;
+				}
+			}
+		}
+		free(keys);
+		return 0;
+	}
+	extern "C" int GetPageSize() {
+		return DSS_PAGINATION_DEFAULT;
+	}
+
 } // namespace dss
 

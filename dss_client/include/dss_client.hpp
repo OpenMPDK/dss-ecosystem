@@ -206,6 +206,7 @@ namespace dss {
 					uint32_t page_size = DSS_PAGINATION_DEFAULT);
 			std::set<std::string>&& ListObjects(const std::string& prefix, const std::string& delimiter);
 			std::set<std::string> ListBuckets();
+			std::unique_ptr<Objects> list_objs;
 
 		private:
 
