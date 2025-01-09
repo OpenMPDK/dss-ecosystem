@@ -8,6 +8,9 @@ phases:
   pre_build:
     commands:
       # Install dependencies to execute Datamover unit tests
+      - sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
+      - sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+      - sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
       - yum install libcap-devel -y
       - python3 -m pip install -r dss_datamover/requirements.txt
       - python3 -m pip install -r dss_datamover/unittests/requirements.txt
