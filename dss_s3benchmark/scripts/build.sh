@@ -36,9 +36,13 @@ set -e
 SCRIPT_DIR=$(readlink -f "$(dirname "$0")")
 DSS_S3BENCHMARK_DIR=$(realpath "$SCRIPT_DIR/..")
 DSS_ECOSYSTEM_DIR=$(realpath "$DSS_S3BENCHMARK_DIR/..")
+GIT_DIR=$(realpath "$DSS_ECOSYSTEM_DIR/..")
 DSS_SDK_DIR="$DSS_ECOSYSTEM_DIR/../dss-sdk/host_out"
 LIB_DIR="-L$DSS_SDK_DIR/lib -L$DSS_ECOSYSTEM_DIR/dss_client/build"
 INCLUDE_DIR="-I$DSS_SDK_DIR/include -I$DSS_ECOSYSTEM_DIR/dss_client/include"
+GOVER='1.12'
+GOTGZ="go$GOVER.linux-amd64.tar.gz"
+GOURL="https://dl.google.com/go/$GOTGZ"
 
 # Print a message to console and return non-zero
 die()
@@ -61,17 +65,21 @@ fi
 export CGO_CFLAGS="-std=gnu99 $INCLUDE_DIR"
 export CGO_LDFLAGS="$LIB_DIR -lrdmacm -libverbs -ldss -lrdd_cl"
 export GO111MODULE=off
-export GODIR="$DSS_ECOSYSTEM_DIR/go-repos"
-export GOPATH="$GODIR"
+export GODIR="$GIT_DIR/go_$GOVER"
+export GOPKG_DIR="$GODIR/go_repos"
 export PATH="$PATH:$GODIR/bin"
 export GOCACHE="$GODIR/cache"
 
-echo 'Downloading go repos'
-if [ -d "$GODIR" ]; then
-    rm -rf "$GODIR"
-    rm -rf "$GOCACHE"
+echo 'Downloading go'
+if [ ! -d "$GODIR" ]; then
+    mkdir "$GODIR"
+    if [ ! -e "./$GOTGZ" ]; then
+        wget "$GOURL" --no-check-certificate
+    fi
+    tar xzf "$GOTGZ" -C "$GODIR" --strip-components 1
+    rm -f "$GOTGZ"
 fi
-mkdir -p "$GODIR"
+mkdir -p "$GOPKG_DIR"
 mkdir -p "$GOCACHE"
 go get -u github.com/aws/aws-sdk-go/aws/...
 go get -u github.com/aws/aws-sdk-go/service/...
@@ -81,5 +89,5 @@ echo 'Building S3 benchmark'
 go build -o s3-benchmark s3-benchmark.go 
 
 echo 'cleaning cache and repos'
-rm -rf "$GODIR"
+rm -rf "$GOPKG_DIR"
 rm -rf "$GOCACHE"
