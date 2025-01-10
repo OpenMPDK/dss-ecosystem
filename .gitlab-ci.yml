@@ -83,7 +83,7 @@ sonar-scanner:
     - rm -rf /sonar-scanner*
     - wget --no-verbose --content-disposition -E -c "https://search.maven.org/remote_content?g=org.sonarsource.scanner.cli&a=sonar-scanner-cli&v=LATEST&c=linux&e=zip"
     - unzip -q sonar-scanner-cli-*.zip -d /
-    - /sonar-scanner-*-linux/bin/sonar-scanner $SONAR_BRANCH -Dsonar.python.coverage.reportPaths=$PYTEST_COV_REPORT
+    - /sonar-scanner-*-linux/bin/sonar-scanner $SONAR_BRANCH -Dsonar.python.coverage.reportPaths=$PYTEST_COV_REPORT -Dsonar.cfamily.build-wrapper-output=bw-output
   allow_failure: true
   dependencies:
     - datamover unit test
