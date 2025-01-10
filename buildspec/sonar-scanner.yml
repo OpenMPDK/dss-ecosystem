@@ -17,18 +17,21 @@ phases:
       # Download dss_client/build
       - aws s3 cp --recursive "$DSSS3URI/cache/dss-ecosystem/$GITHUB_RUN_NUMBER/dss_client" dss_client/ --only-show-errors
       # replace the old CODEBUILD_SRC_DIR with the current one in bw-output and pytest cov
-      - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" bw-output/build-wrapper-dump.json
+      - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" bw-output/compile_commands.json
       - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" .coverage-reports/*.xml
-      # Download the latest sonar-scanner
+      # Download sonar-scanner from SONAR_SCANNER_URL - Github-defined org var
       - rm -rf /sonar-scanner*
-      - wget --no-verbose --content-disposition -E -c "https://search.maven.org/remote_content?g=org.sonarsource.scanner.cli&a=sonar-scanner-cli&v=LATEST&c=linux&e=zip"
-      - unzip -q sonar-scanner-cli-*.zip -d /
-      - rm -f sonar-scanner-cli*.zip
+      - export SONAR_SCANNER_FILENAME="${SONAR_SCANNER_URL##*/}"
+      - wget --no-verbose --content-disposition -E -c "$SONAR_SCANNER_URL"
+      # Get sonar-scanner root dir filename from printed contents of zip file
+      - export SONAR_SCANNER_DIR=$(unzip -l "$SONAR_SCANNER_FILENAME" | awk '{print $4}' | grep '/' | cut -d '/' -f 1 | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+      - unzip -q "$SONAR_SCANNER_FILENAME" -d /
+      - rm -f "$SONAR_SCANNER_FILENAME"
   build:
     commands:
       # Run sonar-scanner and ingest coverage report(s)
       - |
-        /sonar-scanner-*-linux/bin/sonar-scanner \
+        /$SONAR_SCANNER_DIR/bin/sonar-scanner \
           -Dsonar.branch.name="$([[ "$GITHUB_REF_NAME" != *"/merge" ]] && echo "$GITHUB_REF_NAME")" \
           -Dsonar.host.url=https://sonarcloud.io \
           -Dsonar.pullrequest.github.summary_comment=true \
@@ -36,4 +39,5 @@ phases:
           -Dsonar.pullrequest.key=$(echo $GITHUB_REF | grep -oP "^refs/pull/\K[^/]+") \
           -Dsonar.pullrequest.base=$GITHUB_BASE_REF \
           -Dsonar.pullrequest.branch=$GITHUB_HEAD_REF \
-          -Dsonar.python.coverage.reportPaths=.coverage-reports/coverage-datamover.xml
+          -Dsonar.python.coverage.reportPaths=.coverage-reports/coverage-datamover.xml \
+          -Dsonar.cfamily.compile-commands=bw-output/compile_commands.json

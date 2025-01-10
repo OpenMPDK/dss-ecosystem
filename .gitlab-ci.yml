@@ -79,11 +79,13 @@ datamover unit test:
 sonar-scanner:
   stage: scan
   script:
-    # Download sonar-scanner from local SonarQube
-    - rm -rf /sonar-scanner*
-    - wget --no-verbose --content-disposition -E -c "https://search.maven.org/remote_content?g=org.sonarsource.scanner.cli&a=sonar-scanner-cli&v=LATEST&c=linux&e=zip"
-    - unzip -q sonar-scanner-cli-*.zip -d /
-    - /sonar-scanner-*-linux/bin/sonar-scanner $SONAR_BRANCH -Dsonar.python.coverage.reportPaths=$PYTEST_COV_REPORT
+    # Download sonar-scanner from URL defined in CICD variable SONAR_SCANNER_URL
+    - export SONAR_SCANNER_FILENAME="${SONAR_SCANNER_URL##*/}"
+    - curl --silent --remote-name $SONAR_SCANNER_URL
+    # Get sonar-scanner root dir from printed contents of zip file
+    - export SONAR_SCANNER_DIR=$(unzip -l "$SONAR_SCANNER_FILENAME" | awk '{print $4}' | grep '/' | cut -d '/' -f 1 | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+    - unzip -q $SONAR_SCANNER_FILENAME -d /
+    - /$SONAR_SCANNER_DIR/bin/sonar-scanner $SONAR_BRANCH -Dsonar.python.coverage.reportPaths=$PYTEST_COV_REPORT -Dsonar.cfamily.build-wrapper-output=bw-output
   allow_failure: true
   dependencies:
     - datamover unit test
