@@ -19,11 +19,14 @@ phases:
       # replace the old CODEBUILD_SRC_DIR with the current one in bw-output and pytest cov
       - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" bw-output/build-wrapper-dump.json
       - sed -i -r "s|/codebuild/output/src[^/]+/src/github.com/OpenMPDK/dss-ecosystem|$CODEBUILD_SRC_DIR|g" .coverage-reports/*.xml
-      # Download the latest sonar-scanner
+      # Download sonar-scanner from SONAR_SCANNER_URL - Github-defined org var
       - rm -rf /sonar-scanner*
-      - wget --no-verbose --content-disposition -E -c "https://search.maven.org/remote_content?g=org.sonarsource.scanner.cli&a=sonar-scanner-cli&v=LATEST&c=linux&e=zip"
-      - unzip -q sonar-scanner-cli-*.zip -d /
-      - rm -f sonar-scanner-cli*.zip
+      - export SONAR_SCANNER_FILENAME="${SONAR_SCANNER_URL##*/}"
+      - wget --no-verbose --content-disposition -E -c "$SONAR_SCANNER_URL"
+      # Get sonar-scanner root dir filename from printed contents of zip file
+      - export SONAR_SCANNER_DIR=$(unzip -l "$SONAR_SCANNER_FILENAME" | awk '{print $4}' | grep '/' | cut -d '/' -f 1 | sort | uniq -c | sort -nr | head -n 1 | awk '{print $2}')
+      - unzip -q "$SONAR_SCANNER_FILENAME" -d /
+      - rm -f "$SONAR_SCANNER_FILENAME"
   build:
     commands:
       # Run sonar-scanner and ingest coverage report(s)
